@@ -1,0 +1,45 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.DiffSectionView">
+  <UserControl.Resources><local:LineBrushConverter x:Key="LineBrush" /></UserControl.Resources>
+  <Grid x:Name="ContentGrid" ColumnDefinitions="290,5,*">
+    <Grid RowDefinitions="Auto,Auto,*" Margin="12,10">
+      <TextBlock Classes="label" Text="CHANGED FILES" Margin="4,0,0,12"/>
+      <TextBox Grid.Row="1" Text="{Binding Filter}" Watermark="Filter files…" Margin="0,0,0,10"/>
+      <ListBox Grid.Row="2" ItemsSource="{Binding Files}" SelectedItem="{Binding SelectedFile}" Background="Transparent" BorderThickness="0">
+        <ListBox.ItemTemplate><DataTemplate>
+          <StackPanel Spacing="5">
+            <TextBlock Text="{Binding DisplayPath}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayPath}"/>
+            <Grid ColumnDefinitions="*,Auto"><TextBlock Classes="muted" Text="{Binding Detail}" FontSize="11"/><TextBlock Grid.Column="1" Text="{Binding Stats}" FontSize="11"/></Grid>
+          </StackPanel>
+        </DataTemplate></ListBox.ItemTemplate>
+      </ListBox>
+    </Grid>
+    <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource SystemControlBackgroundBaseLowBrush}"/>
+    <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*" Margin="0,0,0,1">
+      <Border Padding="16,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SystemControlBackgroundBaseLowBrush}">
+        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+          <StackPanel><TextBlock Text="{Binding SelectedFile.DisplayPath}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Comparison}" Classes="muted" FontSize="11" Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/></StackPanel>
+          <Button Grid.Column="1" Content="Retry" Click="RetryClick" ToolTip.Tip="Reload this file"/>
+          <Button Grid.Column="2" Content="Copy patch" Click="CopyClick"/>
+          <Button Grid.Column="3" Content="{Binding ReviewAction}" IsVisible="{Binding HasPr}" Click="ReviewClick"/>
+        </Grid>
+      </Border>
+      <ProgressBar Grid.Row="1" IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="2"/>
+      <TextBlock Grid.Row="2" Text="{Binding Message}" Classes="muted" Margin="16,6" TextWrapping="Wrap"/>
+      <ListBox x:Name="DiffLines" SelectionMode="Multiple" Grid.Row="3" ItemsSource="{Binding Lines}" Background="Transparent" BorderThickness="0" Padding="0" FontFamily="Menlo,Consolas,monospace" FontSize="12" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto">
+        <ListBox.Styles><Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="MinHeight" Value="21"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style></ListBox.Styles>
+        <ListBox.ItemTemplate><DataTemplate>
+          <Border Background="{Binding Kind, Converter={StaticResource LineBrush}}" MinHeight="21">
+            <StackPanel>
+            <Grid ColumnDefinitions="50,50,*" Margin="0,1">
+              <TextBlock Text="{Binding OldLineNumber}" Opacity="0.45" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+              <TextBlock Grid.Column="1" Text="{Binding NewLineNumber}" Opacity="0.45" HorizontalAlignment="Right" Margin="0,0,10,0"/>
+              <local:SyntaxText Grid.Column="2" Line="{Binding}" Margin="10,0,24,0"/>
+            </Grid>
+            <TextBlock Text="{Binding ThreadText}" IsVisible="{Binding HasThread}" TextWrapping="Wrap" Margin="110,8,16,12" MaxWidth="620" FontFamily="Inter"/>
+            </StackPanel>
+          </Border>
+        </DataTemplate></ListBox.ItemTemplate>
+      </ListBox>
+    </Grid>
+  </Grid>
+</UserControl>

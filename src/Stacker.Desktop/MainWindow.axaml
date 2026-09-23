@@ -1,0 +1,83 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.MainWindow" Title="Stacker" Width="1400" Height="880" MinWidth="1060" MinHeight="640">
+  <Window.Resources>
+    <DataTemplate x:Key="StackGroupTemplate">
+      <StackPanel Margin="0,0,0,16">
+        <Border Classes.selected="{Binding IsSelected}" CornerRadius="5" Padding="2">
+          <Grid ColumnDefinitions="30,*">
+            <ToggleButton Content="⌄" IsChecked="{Binding IsExpanded}" Padding="5" Background="Transparent" BorderThickness="0" ToolTip.Tip="Expand or collapse stack"/>
+            <Button Grid.Column="1" Click="StackClick" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Padding="5,8">
+              <StackPanel Spacing="4"><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding Summary}" Classes="muted" FontSize="11"/></StackPanel>
+            </Button>
+          </Grid>
+        </Border>
+        <StackPanel IsVisible="{Binding IsExpanded}">
+          <TextBlock Text="{Binding BaseLabel}" Classes="muted" FontSize="11" Margin="38,4,0,8"/>
+          <ItemsControl ItemsSource="{Binding Layers}"><ItemsControl.ItemTemplate><DataTemplate>
+            <Border Classes.selected="{Binding IsSelected}" CornerRadius="4" Margin="0,2">
+              <Grid ColumnDefinitions="28,26,*" Margin="4,0">
+                <CheckBox IsChecked="{Binding IsChecked}" Click="LayerChecked" MinWidth="24" ToolTip.Tip="Select this layer for comparison"/>
+                <TextBlock Grid.Column="1" Text="{Binding Number}" VerticalAlignment="Center" Opacity="0.6" FontWeight="SemiBold"/>
+                <Button Grid.Column="2" Click="LayerClick" PointerPressed="LayerPointerPressed" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="Transparent" BorderThickness="0" Padding="4,8">
+                  <StackPanel Spacing="4"><TextBlock Text="{Binding Title}" TextWrapping="Wrap"/><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Warning}" IsVisible="{Binding HasWarning}" Foreground="#D49A4A" TextWrapping="Wrap" FontSize="11"/></StackPanel>
+                </Button>
+              </Grid>
+            </Border>
+          </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+        </StackPanel>
+      </StackPanel>
+    </DataTemplate>
+  </Window.Resources>
+  <Window.Styles><Style Selector="Border.selected"><Setter Property="Background" Value="#28526BEA"/></Style></Window.Styles>
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+    <Border Padding="20,14" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SystemControlBackgroundBaseLowBrush}">
+      <Grid ColumnDefinitions="135,*,Auto,Auto,Auto,Auto" ColumnSpacing="8">
+        <TextBlock Text="Stacker" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center"/>
+        <TextBox Grid.Column="1" Text="{Binding RepositoryPath}" Watermark="Repository folder" VerticalAlignment="Center" KeyDown="PathKeyDown"/>
+        <Button Grid.Column="2" Content="Open folder" Classes="primary" Click="OpenFolderClick"/>
+        <Button Grid.Column="3" Content="Open demo" Command="{Binding OpenDemoCommand}"/>
+        <Button Grid.Column="4" Content="Refresh" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh local refs without resetting the view"/>
+        <Button Grid.Column="5" Content="Settings" Click="SettingsClick"/>
+      </Grid>
+    </Border>
+    <ProgressBar Grid.Row="1" IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="2"/>
+    <Border Grid.Row="2" IsVisible="{Binding HasError}" Background="#25DD6955" Padding="16,10"><TextBlock Text="{Binding Error}" TextWrapping="Wrap"/></Border>
+    <Grid Grid.Row="3" x:Name="Workspace" ColumnDefinitions="300,5,*">
+      <Grid RowDefinitions="Auto,*,Auto" Margin="12,14,12,10">
+        <StackPanel Spacing="10" Margin="0,0,0,14">
+          <TextBlock Text="{Binding RepositoryTitle}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+          <ComboBox x:Name="RecentBox" ItemsSource="{Binding RecentRepositories}" PlaceholderText="Recent repositories" HorizontalAlignment="Stretch" SelectionChanged="RecentChanged"/>
+        </StackPanel>
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel>
+            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10"><TextBlock Text="LOCAL STACKS" Classes="label" VerticalAlignment="Center"/><Button Grid.Column="1" Content="+ New" Click="NewStackClick" IsEnabled="{Binding CanEdit}"/></Grid>
+            <ItemsControl ItemsSource="{Binding LocalGroups}" ItemTemplate="{StaticResource StackGroupTemplate}"/>
+            <TextBlock Text="GITHUB STACKS" Classes="label" Margin="0,14,0,8"/>
+            <TextBlock Text="{Binding GitHubStatus}" TextWrapping="Wrap" FontSize="11" Classes="muted" Margin="0,0,0,8"/>
+            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,10"><Button Content="Refresh GitHub" Command="{Binding RefreshGitHubCommand}"/><Button Content="Configure" Click="GitHubSettingsClick"/></StackPanel>
+            <ProgressBar IsIndeterminate="True" IsVisible="{Binding GitHubBusy}" Height="2" Margin="0,0,0,8"/>
+            <ItemsControl ItemsSource="{Binding RemoteGroups}" ItemTemplate="{StaticResource StackGroupTemplate}"/>
+            <TextBlock Text="OTHER PULL REQUESTS" IsVisible="{Binding HasOtherGroups}" Classes="label" Margin="0,14,0,10"/>
+            <ItemsControl ItemsSource="{Binding OtherGroups}" ItemTemplate="{StaticResource StackGroupTemplate}"/>
+          </StackPanel>
+        </ScrollViewer>
+        <StackPanel Grid.Row="2" Spacing="8" Margin="0,10,0,0"><Button Content="Edit local stack" HorizontalAlignment="Stretch" Click="EditStackClick" IsEnabled="{Binding IsLocalSelected}"/><Button Content="Save GitHub stack as local" Click="SaveAsLocalClick"/><Button Content="How comparisons work" Click="HelpClick"/></StackPanel>
+      </Grid>
+      <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource SystemControlBackgroundBaseLowBrush}"/>
+      <Grid Grid.Column="2" RowDefinitions="Auto,*">
+        <Border Padding="16,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SystemControlBackgroundBaseLowBrush}">
+          <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8"><TextBlock Text="{Binding ComparisonTitle}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/><Button Grid.Column="1" Content="This layer" Click="ThisLayerClick" IsVisible="{Binding HasSelectedLayer}"/><Button Grid.Column="2" Content="Through this layer" Click="ThroughLayerClick" IsVisible="{Binding HasSelectedLayer}" ToolTip.Tip="All changes from the stack base through this layer. At the last layer this equals Entire stack."/><Button Grid.Column="3" Content="Restore layer selection" Command="{Binding RestoreSelectionCommand}" IsVisible="{Binding HasSavedSelection}"/></Grid>
+        </Border>
+        <TextBlock Grid.Row="1" Text="{Binding EmptyMessage}" IsVisible="{Binding HasNoSections}" HorizontalAlignment="Center" VerticalAlignment="Center" Classes="muted" TextWrapping="Wrap" MaxWidth="450"/>
+        <ScrollViewer Grid.Row="1" x:Name="SectionScroll" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+          <ItemsControl ItemsSource="{Binding Sections}"><ItemsControl.ItemTemplate><DataTemplate>
+            <Expander IsExpanded="{Binding IsExpanded}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,0,0,8">
+              <Expander.Header><Grid ColumnDefinitions="*,Auto" ColumnSpacing="20"><TextBlock Text="{Binding Title}" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding Summary}" Classes="muted"/></Grid></Expander.Header>
+              <Grid RowDefinitions="Auto,*"><TextBlock Text="{Binding Warning}" IsVisible="{Binding HasWarning}" Foreground="#D49A4A" Margin="16,8" TextWrapping="Wrap"/><local:DiffSectionView Grid.Row="1" Height="{Binding PanelHeight}"/></Grid>
+            </Expander>
+          </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+        </ScrollViewer>
+      </Grid>
+    </Grid>
+    <Border Grid.Row="4" Padding="18,9" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SystemControlBackgroundBaseLowBrush}"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Status}" FontSize="11" Classes="muted"/><TextBlock Grid.Column="1" Text="v0.2 · Git history stays local" FontSize="10" Classes="muted"/></Grid></Border>
+  </Grid>
+</Window>

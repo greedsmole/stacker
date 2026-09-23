@@ -1,0 +1,14 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Stacker.Desktop.StackEditorWindow" Title="Edit stack" Width="650" Height="660" MinWidth="520" MinHeight="580" WindowStartupLocation="CenterOwner">
+  <Grid Margin="24" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto" RowSpacing="14">
+    <StackPanel Spacing="6"><TextBlock Text="Stack definition" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="Order describes dependencies. Git branches stay unchanged." Classes="muted"/></StackPanel>
+    <Grid Grid.Row="1" ColumnDefinitions="80,*"><TextBlock Text="Name" VerticalAlignment="Center"/><TextBox Grid.Column="1" x:Name="NameInput" Watermark="e.g. Authorization"/></Grid>
+    <Grid Grid.Row="2" ColumnDefinitions="80,*"><TextBlock Text="Base" VerticalAlignment="Center"/><ComboBox Grid.Column="1" x:Name="BaseInput" HorizontalAlignment="Stretch"/></Grid>
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" ColumnSpacing="8"><ComboBox x:Name="BranchInput" HorizontalAlignment="Stretch" PlaceholderText="Choose a branch to add"/><Button Grid.Column="1" Content="Add layer" Click="AddClick"/></Grid>
+    <Grid Grid.Row="4" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+      <ListBox x:Name="BranchList" DragDrop.AllowDrop="True"><ListBox.ItemTemplate><DataTemplate><Border Background="Transparent" PointerPressed="LayerPointerPressed"><Grid ColumnDefinitions="24,*"><TextBlock Text="⠿" Opacity="0.5"/><TextBlock Grid.Column="1" Text="{Binding}" TextTrimming="CharacterEllipsis"/></Grid></Border></DataTemplate></ListBox.ItemTemplate></ListBox>
+      <StackPanel Grid.Column="1" Spacing="8"><Button Content="↑" Click="UpClick" ToolTip.Tip="Move up"/><Button Content="↓" Click="DownClick" ToolTip.Tip="Move down"/><Button Content="−" Click="RemoveClick" ToolTip.Tip="Remove layer"/></StackPanel>
+    </Grid>
+    <TextBlock Grid.Row="5" x:Name="ErrorLabel" Foreground="#D49A4A" TextWrapping="Wrap"/>
+    <Grid Grid.Row="6" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8"><Button x:Name="DeleteButton" Content="Delete stack" Click="DeleteClick" HorizontalAlignment="Left"/><Button Grid.Column="1" Content="Cancel" Click="CancelClick"/><Button Grid.Column="2" Content="Save stack" Classes="primary" Click="SaveClick"/></Grid>
+  </Grid>
+</Window>

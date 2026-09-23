@@ -1,0 +1,31 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Stacker.Desktop.ReviewWindow" Title="PR review" Width="1100" Height="780" MinWidth="900" MinHeight="640" WindowStartupLocation="CenterOwner">
+  <Grid Margin="20" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
+    <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"/><Button Grid.Column="1" Content="Reload discussion" Command="{Binding ReloadCommand}"/></Grid>
+    <TextBlock Grid.Row="1" Text="{Binding Message}" Foreground="#D49A4A" TextWrapping="Wrap"/>
+    <Grid Grid.Row="2" IsEnabled="{Binding !IsBusy}" ColumnDefinitions="*,12,*">
+      <TabControl>
+        <TabItem Header="Discussion"><ListBox ItemsSource="{Binding Comments}"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="6" Margin="4,8"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><SelectableTextBlock Text="{Binding Body}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox></TabItem>
+        <TabItem Header="Reviews"><ListBox ItemsSource="{Binding Reviews}"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="6" Margin="4,8"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><TextBlock Text="{Binding State}" Classes="muted"/><SelectableTextBlock Text="{Binding Body}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox></TabItem>
+        <TabItem Header="Code threads"><Grid RowDefinitions="*,Auto"><ListBox ItemsSource="{Binding Threads}" SelectedItem="{Binding SelectedThread}"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="6" Margin="4,8"><TextBlock Text="{Binding Label}" FontWeight="SemiBold" TextWrapping="Wrap"/><SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox><Button Grid.Row="1" Content="Resolve / reopen selected thread" Command="{Binding ToggleResolvedCommand}" IsEnabled="{Binding CanPublish}"/></Grid></TabItem>
+      </TabControl>
+      <ScrollViewer Grid.Column="2"><StackPanel Spacing="12">
+        <TextBlock Text="LOCAL REVIEW DRAFT" Classes="label"/>
+        <TextBlock Text="{Binding SelectionLabel}" Classes="muted" TextWrapping="Wrap"/>
+        <TextBox Text="{Binding Composer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" Watermark="Comment text…"/>
+        <WrapPanel>
+          <Button Content="Add line comment to draft" Command="{Binding AddToDraftCommand}" Margin="0,0,6,6"/>
+          <Button Content="Post line comment" Command="{Binding PostInlineCommand}" IsEnabled="{Binding CanPublish}" Margin="0,0,6,6"/>
+          <Button Content="Post PR comment" Command="{Binding PostCommentCommand}" IsEnabled="{Binding CanPublish}" Margin="0,0,6,6"/>
+          <Button Content="Reply to selected thread" Command="{Binding ReplyCommand}" IsEnabled="{Binding CanPublish}" Margin="0,0,6,6"/>
+        </WrapPanel>
+        <ItemsControl ItemsSource="{Binding DraftComments}"><ItemsControl.ItemTemplate><DataTemplate><Border Padding="10" Margin="0,4" Background="#18526BEA"><StackPanel Spacing="4"><TextBlock Text="{Binding Anchor.Path}" FontWeight="SemiBold"/><TextBlock Text="{Binding Body}" TextWrapping="Wrap"/><Button Content="Remove from draft" Click="RemoveDraftClick" HorizontalAlignment="Left"/></StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+        <TextBox Text="{Binding Summary}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" Watermark="Review summary…"/>
+        <ComboBox ItemsSource="{Binding Decisions}" SelectedItem="{Binding Decision}" HorizontalAlignment="Stretch"/>
+        <Button Content="Submit review" Classes="primary" Command="{Binding SubmitReviewCommand}" IsEnabled="{Binding CanPublish}" HorizontalAlignment="Stretch"/>
+        <Button Content="Use current PR version (summary only)" Command="{Binding UseCurrentVersionCommand}"/>
+        <Button Content="I checked GitHub — unlock retry" Command="{Binding UnlockRetryCommand}" ToolTip.Tip="Use only after verifying the uncertain publication did not reach GitHub."/>
+      </StackPanel></ScrollViewer>
+    </Grid>
+    <TextBlock Grid.Row="3" Text="Drafts stay on this Mac. Only explicit Post / Submit publishes. Select lines in the PR diff before opening this window to attach a code comment." Classes="muted" TextWrapping="Wrap" FontSize="11"/>
+  </Grid>
+</Window>
