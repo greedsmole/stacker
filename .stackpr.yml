@@ -1,0 +1,15 @@
+version: 1
+stacks:
+  - id: repo-demo-auth
+    name: Demo · Authorization
+    base: refs/heads/master
+    branches:
+      - refs/heads/demo/auth-model
+      - refs/heads/demo/auth-api
+      - refs/heads/demo/auth-ui
+  - id: repo-demo-payments
+    name: Demo · Payments
+    base: refs/heads/master
+    branches:
+      - refs/heads/demo/payment-model
+      - refs/heads/demo/payment-validation
