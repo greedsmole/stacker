@@ -15,6 +15,7 @@ public sealed class ProcessRunner : IProcessRunner
         {
             UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true,
             RedirectStandardOutput = true, RedirectStandardError = true,
+            StandardInputEncoding = new UTF8Encoding(false),
             WorkingDirectory = request.WorkingDirectory ?? Environment.CurrentDirectory
         };
         foreach (var arg in request.Arguments) info.ArgumentList.Add(arg);

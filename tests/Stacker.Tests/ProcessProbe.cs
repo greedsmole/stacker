@@ -3,6 +3,8 @@ public static class ProcessProbe
 {
     public static async Task Main(string[] args)
     {
+        Console.InputEncoding = new System.Text.UTF8Encoding(false);
+        Console.OutputEncoding = new System.Text.UTF8Encoding(false);
         switch (args.FirstOrDefault())
         {
             case "delay": await Task.Delay(TimeSpan.FromMinutes(2)); break;

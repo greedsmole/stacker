@@ -41,7 +41,20 @@ public sealed class GitObjectCache(IProcessRunner runner, GitExecutable git, GhE
     public async Task ClearAsync(GitHubRepositoryContext context, CancellationToken ct = default)
     {
         await _gate.WaitAsync(ct);
-        try { var path = DirectoryFor(context); if (Directory.Exists(path)) Directory.Delete(path, true); }
+        try
+        {
+            var path = DirectoryFor(context);
+            if (Directory.Exists(path))
+            {
+                // Git stores read-only object files on Windows. Clear only our private cache.
+                foreach (var file in Directory.EnumerateFiles(path, "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint }))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    File.SetAttributes(file, File.GetAttributes(file) & ~FileAttributes.ReadOnly);
+                }
+                Directory.Delete(path, true);
+            }
+        }
         finally { _gate.Release(); }
     }
     private async Task<bool> Exists(string root, string sha, CancellationToken ct)

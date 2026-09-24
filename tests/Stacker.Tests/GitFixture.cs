@@ -37,6 +37,11 @@ public sealed class GitFixture : IAsyncDisposable
         foreach (var path in _worktrees) { await Git("worktree", "remove", "--force", path); }
         // Git object files can be read-only on Windows.
         foreach (var path in Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories)) File.SetAttributes(path, FileAttributes.Normal);
-        Directory.Delete(Root, true);
+        // Cancelled ViewModel loads release their process working directories asynchronously.
+        for (var attempt = 0; ; attempt++)
+        {
+            try { Directory.Delete(Root, true); break; }
+            catch (IOException) when (OperatingSystem.IsWindows() && attempt < 20) { await Task.Delay(100); }
+        }
     }
 }
