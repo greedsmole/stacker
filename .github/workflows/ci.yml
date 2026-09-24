@@ -6,23 +6,17 @@ on:
 permissions:
   contents: read
 jobs:
-  test:
-    runs-on: macos-14
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-      - name: Test
-        run: dotnet test -c Release --logger "trx;LogFileName=results.trx"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: tests-macos-arm64
-          path: '**/TestResults/*.trx'
-  package:
-    needs: test
-    runs-on: macos-14
+  build:
+    name: ${{ matrix.rid }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            rid: osx-arm64
+          - os: windows-2022
+            rid: win-x64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -31,10 +25,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - run: python scripts/package.py osx-arm64
+      - name: Test
+        run: dotnet test -c Release --logger "trx;LogFileName=results.trx"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tests-${{ matrix.rid }}
+          path: '**/TestResults/*.trx'
+      - name: Package self-contained application
+        run: python scripts/package.py ${{ matrix.rid }}
       - uses: actions/upload-artifact@v4
         with:
-          name: Stacker-osx-arm64
+          name: Stacker-${{ matrix.rid }}
           path: |
             artifacts/Stacker-*.zip
             artifacts/Stacker-*.tar.gz
+          if-no-files-found: error

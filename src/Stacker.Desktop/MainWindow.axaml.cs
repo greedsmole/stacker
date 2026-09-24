@@ -108,18 +108,19 @@ public partial class MainWindow : Window
         {
             var git = new TextBox { Text = Vm.Settings.GitPath, Watermark = "Auto-detect Git" };
             var gh = new TextBox { Text = Vm.Settings.GhPath, Watermark = "Auto-detect gh" };
+            var savedCredentials = new CheckBox { Content = "Use saved gh credentials (ignore environment tokens)", IsChecked = Vm.Settings.UseSavedGhCredentials };
             var theme = new ComboBox { ItemsSource = new[] { "Dark", "Light" }, SelectedItem = Vm.Settings.Theme, HorizontalAlignment = HorizontalAlignment.Stretch };
             var save = new Button { Content = "Save settings", HorizontalAlignment = HorizontalAlignment.Right };
             var window = new Window
             {
-                Title = "Settings", Width = 540, Height = 390, CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Title = "Settings", Width = 580, Height = 460, CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Content = new StackPanel { Margin = new Thickness(24), Spacing = 14, Children =
                 {
                     new TextBlock { Text = "Git executable", FontWeight = Avalonia.Media.FontWeight.SemiBold }, git, new TextBlock { Text = "GitHub CLI executable" }, gh,
-                    new TextBlock { Text = "Theme" }, theme, save
+                    savedCredentials, new TextBlock { Text = "Applies only to Stacker. Then click Refresh GitHub.", FontSize = 12 }, new TextBlock { Text = "Theme" }, theme, save
                 } }
             };
-            save.Click += async (_, _) => { Vm.Settings.GitPath = string.IsNullOrWhiteSpace(git.Text) ? null : git.Text.Trim(); Vm.Settings.GhPath = string.IsNullOrWhiteSpace(gh.Text) ? null : gh.Text.Trim(); Vm.Settings.Theme = theme.SelectedItem as string ?? "Dark"; await Vm.SaveSettingsAsync(); ApplyTheme(); foreach (var section in Vm.Sections) { section.Theme = Vm.Settings.Theme; await section.LoadAsync(section.SelectedFile); } window.Close(); };
+            save.Click += async (_, _) => { Vm.Settings.GitPath = string.IsNullOrWhiteSpace(git.Text) ? null : git.Text.Trim(); Vm.Settings.GhPath = string.IsNullOrWhiteSpace(gh.Text) ? null : gh.Text.Trim(); Vm.Settings.UseSavedGhCredentials = savedCredentials.IsChecked == true; Vm.Settings.Theme = theme.SelectedItem as string ?? "Dark"; await Vm.SaveSettingsAsync(); ApplyTheme(); foreach (var section in Vm.Sections) { section.Theme = Vm.Settings.Theme; await section.LoadAsync(section.SelectedFile); } window.Close(); };
             await window.ShowDialog(this);
         }
         catch (Exception ex) { Vm.Error = ex.Message; }

@@ -1,13 +1,13 @@
 # Verification — Stacker v0.2
 
-Scope: macOS ARM64. Recorded locally on 2026-09-24 with .NET SDK 10.0.201 and Git 2.42.0.
+Scope: macOS ARM64 and Windows x64 packaging. Recorded locally on 2026-09-24 with .NET SDK 10.0.201 and Git 2.42.0.
 
 ## Automated checks
 
-- `dotnet test -c Release --nologo`: **51 passed, 0 failed, 0 skipped** on the final source, including restored nonadjacent layer selections.
+- `dotnet test -c Release --nologo`: **54 passed, 0 failed, 0 skipped** on the final source, including restored nonadjacent layer selections.
 - Release compilation completed without reported warnings/errors.
 - `python3 scripts/package.py osx-arm64`: self-contained application and `Stacker-0.2.0-osx-arm64.tar.gz` package.
-- CI is configured for macOS ARM64 tests and packaging; no remote CI run is claimed.
+- CI runs tests and packaging on macOS ARM64 and Windows x64. Release publishing checks the run for its target commit.
 
 Coverage includes real temporary Git histories and worktrees; all four comparisons; divergence, missing refs and multiple/no merge bases; filename/patch edge cases; configuration revisions; process cancellation, timeout, stdin and output bounds; multiple stacks and repository isolation; no-change/failed refresh; activation without reload; view-state/selection restoration; deterministic demo manifest; PR graph boundaries/forks/cycles/ambiguity; gh JSON authentication/pagination; isolated Git cache behavior; review draft persistence, stale anchors, access denial and uncertain publication reconciliation; real TextMate tokenization and fallback.
 
@@ -35,4 +35,4 @@ Live GitHub authentication, network fetching and publication were not exercised 
 
 TextMate was exercised on ARM64 with actual grammars and bounded input; this is not a comprehensive performance benchmark across all languages and pathological files.
 
-The app is not Developer ID signed or notarized. No Windows, Linux or Intel Mac native validation is claimed.
+The app is not Developer ID signed or notarized. Windows x64 is additionally cross-published locally; interactive Windows execution has not been checked on this Mac. Linux and Intel Mac validation remain out of scope.

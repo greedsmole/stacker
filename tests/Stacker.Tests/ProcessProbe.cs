@@ -11,6 +11,7 @@ public static class ProcessProbe
                 break;
             case "args": foreach (var arg in args.Skip(1)) Console.WriteLine(arg); break;
             case "exit": Console.Error.Write("intentional error"); Environment.ExitCode = 7; break;
+            case "env": Console.Write(Environment.GetEnvironmentVariable(args[1]) ?? "absent"); break;
             case "stdin": Console.Write(await Console.In.ReadToEndAsync()); break;
         }
     }

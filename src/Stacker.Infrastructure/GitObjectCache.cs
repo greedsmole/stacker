@@ -53,7 +53,7 @@ public sealed class GitObjectCache(IProcessRunner runner, GitExecutable git, GhE
     private async Task<ProcessResult> Run(string root, string[] args, CancellationToken ct, TimeSpan? timeout = null)
     {
         var response = await runner.RunAsync(new(git.Resolve(), ["-c", "core.hooksPath=/dev/null", .. args], root, timeout,
-            Environment: new Dictionary<string, string> { ["STACKER_GH"] = gh.Resolve(), ["GIT_TERMINAL_PROMPT"] = "0", ["GH_PROMPT_DISABLED"] = "1", ["GH_DEBUG"] = "" }), ct);
+            Environment: new Dictionary<string, string> { ["STACKER_GH"] = gh.Resolve(), ["GIT_TERMINAL_PROMPT"] = "0", ["GH_PROMPT_DISABLED"] = "1", ["GH_DEBUG"] = "" }, UnsetEnvironment: gh.UnsetEnvironment), ct);
         if (response.ExitCode != 0) throw new StackerException("Git cache: " + response.StdErr.Trim());
         return response;
     }

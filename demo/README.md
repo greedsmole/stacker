@@ -24,4 +24,14 @@ No GitHub PRs or remote branches are needed.
 - Switch between stacks to check independent file/filter state.
 
 Remain on master throughout. The files need not exist in the working tree for the viewer to show their committed contents.
-Branches are local; no push or PR creation is part of this demo.
+The release publishes these demo branches. After a fresh clone, create their local refs once without switching away from master:
+
+```sh
+git branch --track demo/auth-model origin/demo/auth-model
+git branch --track demo/auth-api origin/demo/auth-api
+git branch --track demo/auth-ui origin/demo/auth-ui
+git branch --track demo/payment-model origin/demo/payment-model
+git branch --track demo/payment-validation origin/demo/payment-validation
+```
+
+These are ordinary Git branches; no GitHub PRs are required.

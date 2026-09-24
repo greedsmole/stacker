@@ -29,6 +29,15 @@ public sealed class ProcessRunnerTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(Probe("delay"), cts.Token));
     }
     [Fact]
+    public async Task Environment_removal_is_limited_to_child_process()
+    {
+        var request = Probe("env", "STACKER_TEST_TOKEN") with { Environment = new Dictionary<string,string> { ["STACKER_TEST_TOKEN"] = "test-value" } };
+        var runner = new ProcessRunner();
+        Assert.Equal("test-value", (await runner.RunAsync(request)).StdOut);
+        Assert.Equal("absent", (await runner.RunAsync(request with { UnsetEnvironment = ["STACKER_TEST_TOKEN"] })).StdOut);
+        Assert.Equal("test-value", (await runner.RunAsync(request)).StdOut);
+    }
+    [Fact]
     public async Task Missing_executable_has_actionable_error()
     {
         var exception = await Assert.ThrowsAsync<StackerException>(() => new ProcessRunner().RunAsync(new("stacker-missing-" + Guid.NewGuid(), [])));

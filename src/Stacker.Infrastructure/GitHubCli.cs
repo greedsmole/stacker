@@ -6,6 +6,8 @@ namespace Stacker.Infrastructure;
 
 public sealed class GhExecutable
 {
+    public bool UseSavedCredentials { get; set; }
+    public IReadOnlyList<string> UnsetEnvironment => UseSavedCredentials ? ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"] : [];
     public string? Override { get; set; }
     public string Resolve() => !string.IsNullOrWhiteSpace(Override) ? Override :
         (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator).Where(p => !string.IsNullOrWhiteSpace(p))
@@ -40,7 +42,7 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
     private async Task<JsonElement> RunJsonAsync(string[] args, CancellationToken ct, string? body = null)
     {
         var response = await runner.RunAsync(new(gh.Resolve(), args, Timeout: TimeSpan.FromSeconds(60), MaxOutputBytes: 32 * 1024 * 1024,
-            Environment: new Dictionary<string, string> { ["GH_PROMPT_DISABLED"] = "1", ["GH_PAGER"] = "cat", ["GH_DEBUG"] = "" }, StandardInput: body), ct);
+            Environment: new Dictionary<string, string> { ["GH_PROMPT_DISABLED"] = "1", ["GH_PAGER"] = "cat", ["GH_DEBUG"] = "" }, StandardInput: body, UnsetEnvironment: gh.UnsetEnvironment), ct);
         if (response.ExitCode != 0) throw new StackerException($"GitHub request failed ({response.ExitCode}): {response.StdErr.Trim()}");
         try { return JsonDocument.Parse(string.IsNullOrWhiteSpace(response.StdOut) ? "{}" : response.StdOut).RootElement.Clone(); }
         catch (JsonException) { throw new StackerException("gh returned invalid JSON. Check the GitHub host and CLI version."); }
@@ -53,7 +55,11 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
         var status = await RunJsonAsync(["auth", "status", "--active", "--hostname", host, "--json", "hosts"], ct);
         if (status.TryGetProperty("hosts", out var hosts) && hosts.TryGetProperty(host, out var accounts))
             foreach (var entry in accounts.EnumerateArray())
+            {
+                if (Bool(entry, "active") && Str(entry, "state") != "success" && Str(entry, "tokenSource") is "GH_TOKEN" or "GITHUB_TOKEN" or "GH_ENTERPRISE_TOKEN" or "GITHUB_ENTERPRISE_TOKEN")
+                    throw new StackerException($"{host}: {Str(entry, "tokenSource")} is invalid and overrides saved gh accounts. Enable Settings → Use saved gh credentials, then Refresh GitHub; or fix the environment token and restart Stacker.");
                 if (Bool(entry, "active") && Str(entry, "state") == "success" && !string.IsNullOrEmpty(Str(entry, "login"))) return Str(entry, "login");
+            }
         throw new StackerException($"Not authenticated for {host}. Run: gh auth login --hostname {host}, then retry.");
     }
     public async Task<GitHubRepositoryContext> ConnectAsync(string root, string? repositoryOverride, CancellationToken ct = default)

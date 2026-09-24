@@ -19,7 +19,7 @@ is_mac = args.rid.startswith("osx")
 publish = output / "Stacker.app" / "Contents" / "MacOS" if is_mac else output / "Stacker"
 subprocess.run([
     "dotnet", "publish", str(ROOT / "src/Stacker.Desktop"), "-c", "Release", "-r", args.rid,
-    "--self-contained", "true", "-p:PublishSingleFile=false", "-p:PublishTrimmed=false", "-o", str(publish)
+    "--self-contained", "true", "-p:Version=0.2.0", "-p:PublishSingleFile=false", "-p:PublishTrimmed=false", "-o", str(publish)
 ], check=True, cwd=ROOT)
 if is_mac:
     info = {

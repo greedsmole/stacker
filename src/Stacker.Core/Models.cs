@@ -35,7 +35,7 @@ public sealed record FileDiff(FileChange File, string Patch, IReadOnlyList<DiffH
 public sealed record StackDocument(IReadOnlyList<StackDefinition> Stacks, string? Revision);
 public sealed record ProcessRequest(string Executable, IReadOnlyList<string> Arguments, string? WorkingDirectory = null,
     TimeSpan? Timeout = null, int MaxOutputBytes = 16 * 1024 * 1024,
-    IReadOnlyDictionary<string, string>? Environment = null, string? StandardInput = null);
+    IReadOnlyDictionary<string, string>? Environment = null, string? StandardInput = null, IReadOnlyList<string>? UnsetEnvironment = null);
 public sealed record ProcessResult(int ExitCode, string StdOut, string StdErr);
 public class StackerException(string message) : Exception(message);
 public sealed class OutputLimitException() : StackerException("Output exceeds the display limit. Select a smaller file or comparison.");
@@ -45,6 +45,7 @@ public sealed class AppSettings
     public List<string> RecentRepositories { get; set; } = [];
     public string? GitPath { get; set; }
     public string? GhPath { get; set; }
+    public bool UseSavedGhCredentials { get; set; }
     public string Theme { get; set; } = "Dark";
     public double NavigationWidth { get; set; } = 270;
     public double FilesWidth { get; set; } = 290;

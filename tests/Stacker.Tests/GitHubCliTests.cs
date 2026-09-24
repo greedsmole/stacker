@@ -33,6 +33,22 @@ public sealed class GitHubCliTests
         var error=await Assert.ThrowsAsync<StackerException>(()=>cli.ConnectAsync(".","enterprise.example/team/repo")); Assert.Contains("gh auth login --hostname enterprise.example",error.Message);
         Assert.Single(runner.Calls); Assert.DoesNotContain("--show-token",runner.Calls[0].Arguments);
     }
+    [Fact] public async Task Invalid_environment_token_explains_saved_account_override()
+    {
+        var runner = new ScriptedRunner(_ => new(0, """{"hosts":{"github.com":[{"active":true,"state":"error","tokenSource":"GITHUB_TOKEN"}]}}""", ""));
+        var error = await Assert.ThrowsAsync<StackerException>(() => new GitHubCli(runner, new(), new()).ConnectAsync(".", "github.com/team/repo"));
+        Assert.Contains("GITHUB_TOKEN is invalid", error.Message);
+        Assert.Contains("Use saved gh credentials", error.Message);
+    }
+    [Fact] public async Task Saved_credentials_policy_applies_to_auth_and_api_without_switching_accounts()
+    {
+        var runner = new ScriptedRunner(r => r.Arguments[0] == "auth"
+            ? new(0, """{"hosts":{"enterprise.example":[{"active":true,"state":"success","login":"alice","tokenSource":"keyring"}]}}""", "")
+            : new(0, """{"id":1,"owner":{"login":"team"},"name":"repo","clone_url":"https://enterprise.example/team/repo.git","default_branch":"main"}""", ""));
+        await new GitHubCli(runner, new(), new() { UseSavedCredentials = true }).ConnectAsync(".", "enterprise.example/team/repo");
+        Assert.Equal(2, runner.Calls.Count);
+        foreach (var call in runner.Calls) { Assert.Contains("GITHUB_TOKEN", call.UnsetEnvironment!); Assert.Contains("GH_ENTERPRISE_TOKEN", call.UnsetEnvironment!); Assert.DoesNotContain("switch", call.Arguments); }
+    }
     [Fact] public async Task Authenticated_host_still_requires_repository_access()
     {
         var runner=new ScriptedRunner(r=>r.Arguments[0]=="auth" ? new(0,"{\"hosts\":{\"enterprise.example\":[{\"active\":true,\"state\":\"success\",\"login\":\"alice\"}]}}","") : new(1,"","HTTP 404"));

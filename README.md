@@ -1,6 +1,6 @@
 # Stacker v0.2
 
-A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Current release target: **macOS Apple Silicon**. Windows, Linux and Intel Mac release work is deferred.
+A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Release targets: **macOS Apple Silicon** and **Windows x64**. Linux and Intel Mac release work is deferred.
 
 ## Run
 
@@ -14,7 +14,7 @@ dotnet run --project src/Stacker.Desktop -- --demo
 dotnet run --project src/Stacker.Desktop -- /path/to/repository
 ```
 
-Build an ARM64 package with `python3 scripts/package.py osx-arm64`. The archive is written to `artifacts/Stacker-0.2.0-osx-arm64.tar.gz`. The `.app` is not Developer ID signed or notarized. Public distribution signing requires the publisher's Apple credentials.
+Build a macOS ARM64 package with `python3 scripts/package.py osx-arm64`, or a Windows x64 package with `python scripts/package.py win-x64`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe`; keep its adjacent files. No separate .NET runtime is required. Git and optional GitHub CLI are installed separately. The archive is written to `artifacts/Stacker-0.2.0-osx-arm64.tar.gz`. The `.app` is not Developer ID signed or notarized. Public distribution signing requires the publisher's Apple credentials.
 
 ## Navigation and comparisons
 
@@ -52,6 +52,8 @@ Suggested walkthrough: click Authorization → layer 2 → Through this layer �
 Stacker uses the **fetch URL of origin**, not gh's default repository or some other logged-in host. HTTPS, SSH URLs and SCP-style remotes are supported. It verifies both the active account on that host and access to that repository. For an SSH alias, configure `host/owner/repo` in **GitHub → Configure**. Set executable paths for Git/gh in Settings if a Finder launch cannot find Homebrew tools.
 
 Authenticate in a terminal with `gh auth login --hostname HOST`; switch accounts with `gh auth switch --hostname HOST`. Stacker does not change your global gh account or run `gh auth setup-git`. Tokens remain owned by gh.
+
+If an invalid `GH_TOKEN` / `GITHUB_TOKEN` (or Enterprise equivalent) overrides a valid saved account, enable **Settings → Use saved gh credentials**, save, then **Refresh GitHub**. This removes the four token environment variables only from Stacker child processes, including the Git cache credential helper. It does not change shell variables or switch the global gh account. The setting is off by default so explicit environment credentials retain their normal precedence.
 
 Open PRs (including drafts) are fetched with pagination. A stack edge exists only when the child's base repository/branch matches another PR's head repository/branch. Names and commit history are not used as guesses. Fork repository identity matters. Ambiguous parents and cycles produce warnings.
 
@@ -102,6 +104,6 @@ dotnet test -c Release
 python3 scripts/package.py osx-arm64
 ```
 
-The solution has four projects: Core, Infrastructure, Desktop and Tests. GitHub Actions builds/tests/packages macOS ARM64 only. Tests exercise real temporary Git repositories, the demo manifest, headless Avalonia windows, recorded/fake gh JSON responses, review failure/reconciliation scenarios and isolated object caches. A successful contract test is not a claim of live GitHub publishing verification.
+The solution has four projects: Core, Infrastructure, Desktop and Tests. GitHub Actions builds, tests and packages on macOS ARM64 and Windows x64 runners. Tests exercise real temporary Git repositories, the demo manifest, headless Avalonia windows, recorded/fake gh JSON responses, review failure/reconciliation scenarios and isolated object caches. A successful contract test is not a claim of live GitHub publishing verification.
 
 See VERIFICATION.md for the actual local verification record and THIRD_PARTY_NOTICES.md for dependency notices.

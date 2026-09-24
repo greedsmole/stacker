@@ -20,6 +20,8 @@ public sealed class ProcessRunner : IProcessRunner
         foreach (var arg in request.Arguments) info.ArgumentList.Add(arg);
         if (request.Environment is not null)
             foreach (var (key, value) in request.Environment) info.Environment[key] = value;
+        if (request.UnsetEnvironment is not null)
+            foreach (var key in request.UnsetEnvironment) info.Environment.Remove(key);
         using var process = new Process { StartInfo = info };
         try { process.Start(); }
         catch (System.ComponentModel.Win32Exception ex) { throw new StackerException($"Cannot start {request.Executable}. Check its installation and path. {ex.Message}"); }

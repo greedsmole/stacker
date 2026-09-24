@@ -68,7 +68,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             Settings = await _settingsStore.LoadAsync(); _executable.Override = Settings.GitPath;
-            if (_ghExecutable is not null) _ghExecutable.Override = Settings.GhPath;
+            if (_ghExecutable is not null) { _ghExecutable.Override = Settings.GhPath; _ghExecutable.UseSavedCredentials = Settings.UseSavedGhCredentials; }
             foreach (var path in Settings.RecentRepositories.Take(10)) RecentRepositories.Add(path);
         }
         catch (Exception ex) { Error = "Cannot load settings: " + ex.Message; }
@@ -245,7 +245,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
     public async Task SaveSettingsAsync()
     {
-        try { _executable.Override = Settings.GitPath; if (_ghExecutable is not null) _ghExecutable.Override = Settings.GhPath; await _settingsStore.SaveAsync(Settings); }
+        try { _executable.Override = Settings.GitPath; if (_ghExecutable is not null) { _ghExecutable.Override = Settings.GhPath; _ghExecutable.UseSavedCredentials = Settings.UseSavedGhCredentials; } await _settingsStore.SaveAsync(Settings); }
         catch (Exception ex) { Error = "Cannot save settings: " + ex.Message; }
     }
     private void DisposeViews() { foreach (var section in _views.Values.SelectMany(v => v).Distinct()) section.Dispose(); _views.Clear(); }
