@@ -13,6 +13,8 @@ public sealed partial class ReviewViewModel : ObservableObject
     private readonly ApplicationStore _store;
     private readonly DiffSectionViewModel _section;
     private bool _loading;
+    private bool _switchingFile;
+    private readonly HashSet<string> _reviewableFiles = new(StringComparer.Ordinal);
     private Task _saveQueue = Task.CompletedTask;
     private string? _saveError;
     private ReviewDraft _draft = new();
@@ -21,11 +23,18 @@ public sealed partial class ReviewViewModel : ObservableObject
     public PullRequest PullRequest { get; private set; }
     public bool IsDemo { get; }
     public bool CanPublish => !IsDemo && !IsBusy && _draft.PendingOperation is null;
+    public bool CanPostFile => CanPublish && SelectedReviewFile is not null && _reviewableFiles.Contains(SelectedReviewFile);
+    public string FileThreadsLabel => SelectedReviewFile is null ? "Select a file to read its comments." : $"{SelectedReviewFile} · {FileThreads.Count} file threads";
     public string Title => PullRequest.Label + (IsDemo ? " · Demo / offline" : "");
     public string SelectionLabel => _selection is null ? "Select code lines in the diff to attach a comment." : $"{_selection.Path} · {_selection.Side} · lines {_selection.StartLine ?? _selection.Line}–{_selection.Line}";
     public ObservableCollection<DiscussionComment> Comments { get; } = [];
     public ObservableCollection<ReviewSummary> Reviews { get; } = [];
     public ObservableCollection<ReviewThread> Threads { get; } = [];
+    public ObservableCollection<ReviewThread> FileThreads { get; } = [];
+    public ObservableCollection<string> ReviewFiles { get; } = [];
+    public ObservableCollection<ReviewThread> CodeThreads { get; } = [];
+    [ObservableProperty] private string? _selectedReviewFile;
+    [ObservableProperty] private string _fileComposer = "";
     public ObservableCollection<DraftComment> DraftComments { get; } = [];
     public IReadOnlyList<string> Decisions { get; } = ["COMMENT", "APPROVE", "REQUEST_CHANGES"];
     [ObservableProperty] private string _summary = "";
@@ -41,7 +50,23 @@ public sealed partial class ReviewViewModel : ObservableObject
     partial void OnSummaryChanged(string value) { if (!_loading) { _draft.Summary = value; QueueSave(); } }
     partial void OnComposerChanged(string value) { if (!_loading) { _draft.Composer = value; QueueSave(); } }
     partial void OnDecisionChanged(string value) { if (!_loading) { _draft.Decision = value; QueueSave(); } }
-    partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(CanPublish));
+    private void NotifyPublicationState() { OnPropertyChanged(nameof(CanPublish)); OnPropertyChanged(nameof(CanPostFile)); }
+    partial void OnIsBusyChanged(bool value) => NotifyPublicationState();
+    partial void OnFileComposerChanged(string value)
+    {
+        if (!_loading && !_switchingFile && SelectedReviewFile is { } path) { _draft.FileComposers[path] = value; QueueSave(); }
+    }
+    partial void OnSelectedReviewFileChanged(string? value)
+    {
+        _switchingFile = true; FileComposer = value is not null && _draft.FileComposers.TryGetValue(value, out var text) ? text : ""; _switchingFile = false;
+        UpdateFileThreads();
+    }
+    private void UpdateFileThreads()
+    {
+        SelectedThread = null; FileThreads.Clear();
+        foreach (var thread in Threads.Where(t => t.IsFileLevel && t.Path == SelectedReviewFile)) FileThreads.Add(thread);
+        OnPropertyChanged(nameof(FileThreadsLabel)); OnPropertyChanged(nameof(CanPostFile));
+    }
     public async Task InitializeAsync(IEnumerable<RenderedDiffLine>? selection = null)
     {
         _loading = true;
@@ -49,6 +74,11 @@ public sealed partial class ReviewViewModel : ObservableObject
         {
             _draft = await _store.ReadAsync<ReviewDraft>("drafts", Key) ?? new() { ContextIdentity = Context.Identity, PullRequest = PullRequest.Number, BaseSha = PullRequest.BaseSha, HeadSha = PullRequest.HeadSha };
             Summary = _draft.Summary; Decision = _draft.Decision; Composer = _draft.Composer;
+            _draft.FileComposers ??= [];
+            IReadOnlyList<string> files = _section.IsPrSnapshot ? _section.Result.Files.Select(f => f.NewPath).ToArray()
+                : IsDemo ? [] : await _reader.ChangedFilePathsAsync(Context, PullRequest);
+            foreach (var file in files) { ReviewFiles.Add(file); _reviewableFiles.Add(file); }
+            SelectedReviewFile = _section.SelectedFile?.NewPath ?? ReviewFiles.FirstOrDefault();
             DraftComments.Clear(); foreach (var comment in _draft.Comments) DraftComments.Add(comment);
             if (selection is not null) SetSelection(selection);
             await ReloadAsync();
@@ -78,6 +108,10 @@ public sealed partial class ReviewViewModel : ObservableObject
             Reviews.Clear(); foreach (var review in discussion.Reviews) Reviews.Add(review);
             Threads.Clear(); foreach (var thread in discussion.Threads) Threads.Add(thread);
             _section.SetThreads(discussion.Threads);
+            CodeThreads.Clear(); foreach (var thread in discussion.Threads.Where(t => !t.IsFileLevel)) CodeThreads.Add(thread);
+            foreach (var path in discussion.Threads.Select(t => t.Path).OfType<string>().Concat(_draft.FileComposers.Keys).Distinct())
+                if (!ReviewFiles.Contains(path)) ReviewFiles.Add(path);
+            UpdateFileThreads();
             if (_draft.PendingOperation is { } pending)
             {
                 var parts = pending.Split('|'); var found = false;
@@ -87,10 +121,13 @@ public sealed partial class ReviewViewModel : ObservableObject
                     var marker = "<!-- stacker:" + parts[1] + " -->";
                     found = discussion.Comments.Any(c => c.Author == Context.User && c.Body.Contains(marker, StringComparison.Ordinal)) || discussion.Reviews.Any(r => r.Author == Context.User && r.Body.Contains(marker, StringComparison.Ordinal)) || discussion.Threads.SelectMany(t => t.Comments).Any(c => c.Author == Context.User && c.Body.Contains(marker, StringComparison.Ordinal));
                 }
-                if (found) { if (parts[0] == "review") ClearSubmittedDraft(); _draft.PendingOperation = null; Message = "Previous publication confirmed on GitHub."; QueueSave(); }
+                if (found) { if (parts[0] == "review") ClearSubmittedDraft();
+                    else if (parts[0] == "file" && _draft.PendingFilePath is { } path) { _draft.FileComposers[path] = ""; if (SelectedReviewFile == path) FileComposer = ""; }
+                    else if (parts[0] is "comment" or "inline" or "reply") Composer = "";
+                    _draft.PendingOperation = null; _draft.PendingFilePath = null; Message = "Previous publication confirmed on GitHub."; QueueSave(); }
                 else Message = "Publication result is uncertain. Check GitHub before unlocking a retry; no automatic resend will occur.";
             }
-            OnPropertyChanged(nameof(CanPublish));
+            NotifyPublicationState();
         }
         catch (Exception ex) { Message = ex.Message; }
         finally { IsBusy = false; }
@@ -108,11 +145,18 @@ public sealed partial class ReviewViewModel : ObservableObject
         try
         {
             var current = IsDemo ? PullRequest : await _reader.PullRequestAsync(Context, PullRequest.Number);
-            _draft.HeadSha = current.HeadSha; _draft.BaseSha = current.BaseSha; QueueSave(); await FlushAsync(); Message = "Draft summary now targets the current PR. Reopen PR changes to select new lines.";
+            _draft.HeadSha = current.HeadSha; _draft.BaseSha = current.BaseSha; QueueSave(); await FlushAsync(); Message = "Draft text now targets the current PR. Reopen PR changes to select new lines or files.";
         }
         catch (Exception ex) { Message = ex.Message; }
     }
     [RelayCommand] private async Task PostCommentAsync() => await PublishAsync("comment", [], async marker => await _writer.CommentAsync(Context, PullRequest.Number, Mark(Composer, marker)));
+    [RelayCommand] private async Task PostFileCommentAsync()
+    {
+        if (!CanPostFile) { Message = IsDemo ? "Demo is offline. Publishing is disabled." : "Select a current PR file before commenting. Reload PR changes if it is no longer available."; return; }
+        if (_draft.HeadSha != PullRequest.HeadSha || _draft.BaseSha != PullRequest.BaseSha) { Message = "File draft belongs to an older PR version. Recheck it before adopting the current version."; return; }
+        var path = SelectedReviewFile!; var body = FileComposer;
+        await PublishAsync("file", [], marker => _writer.FileCommentAsync(Context, PullRequest, path, Mark(body, marker)), path);
+    }
     [RelayCommand] private async Task PostInlineAsync()
     {
         if (_selection is null) { Message = "Select code lines first."; return; }
@@ -135,25 +179,26 @@ public sealed partial class ReviewViewModel : ObservableObject
         if (latest.HeadSha != PullRequest.HeadSha || latest.BaseSha != PullRequest.BaseSha) throw new StackerException("PR base/head changed. Refresh GitHub and reopen PR changes. Your draft is preserved.");
         await _reader.ValidateAnchorsAsync(Context, latest, anchors);
     }
-    private async Task PublishAsync(string kind, IReadOnlyList<ReviewAnchor> anchors, Func<string, Task> send)
+    private async Task PublishAsync(string kind, IReadOnlyList<ReviewAnchor> anchors, Func<string, Task> send, string? filePath = null)
     {
         if (!CanPublish) { Message = IsDemo ? "Demo is offline. Publishing is disabled." : "Resolve the pending publication before sending again."; return; }
-        if (kind != "review" && string.IsNullOrWhiteSpace(Composer)) { Message = "Enter a comment first."; return; }
+        if (kind != "review" && string.IsNullOrWhiteSpace(kind == "file" ? FileComposer : Composer)) { Message = "Enter a comment first."; return; }
         if (kind == "review" && (_draft.HeadSha != PullRequest.HeadSha || _draft.BaseSha != PullRequest.BaseSha)) { Message = "Draft version differs from this PR snapshot."; return; }
         if (kind == "review" && Decision != "APPROVE" && string.IsNullOrWhiteSpace(Summary) && DraftComments.Count == 0) { Message = "Add a summary or line comments."; return; }
         IsBusy = true;
         try
         {
             await VerifyAsync(anchors);
-            var marker = Guid.NewGuid().ToString("N"); _draft.PendingOperation = kind + "|" + marker; QueueSave(); await FlushAsync();
+            if (filePath is not null) await _reader.ValidateFileAsync(Context, PullRequest, filePath);
+            var marker = Guid.NewGuid().ToString("N"); _draft.PendingOperation = kind + "|" + marker; _draft.PendingFilePath = filePath; QueueSave(); await FlushAsync();
             await send(marker);
-            _draft.PendingOperation = null;
-            if (kind == "review") ClearSubmittedDraft(); else Composer = "";
+            _draft.PendingOperation = null; _draft.PendingFilePath = null;
+            if (kind == "review") ClearSubmittedDraft(); else if (kind == "file") FileComposer = ""; else Composer = "";
             QueueSave(); await FlushAsync(); Message = "Published.";
             await ReloadAsync();
         }
         catch (Exception ex) { Message = ex.Message + (_draft.PendingOperation is null ? "" : " Publication may have reached GitHub. Reload to reconcile before retrying."); }
-        finally { IsBusy = false; OnPropertyChanged(nameof(CanPublish)); }
+        finally { IsBusy = false; NotifyPublicationState(); }
     }
     [RelayCommand] private async Task ToggleResolvedAsync()
     {
@@ -168,7 +213,7 @@ public sealed partial class ReviewViewModel : ObservableObject
         catch (Exception ex) { Message = ex.Message; }
         finally { IsBusy = false; }
     }
-    [RelayCommand] private async Task UnlockRetryAsync() { if (IsBusy) return; _draft.PendingOperation = null; QueueSave(); await _saveQueue; OnPropertyChanged(nameof(CanPublish)); if (_saveError is null) Message = "Retry unlocked after your manual GitHub check."; }
+    [RelayCommand] private async Task UnlockRetryAsync() { if (IsBusy) return; _draft.PendingOperation = null; _draft.PendingFilePath = null; QueueSave(); await _saveQueue; NotifyPublicationState(); if (_saveError is null) Message = "Retry unlocked after your manual GitHub check."; }
     private void ClearSubmittedDraft() { _loading = true; Summary = ""; _loading = false; _draft.Summary = ""; _draft.Comments.Clear(); DraftComments.Clear(); }
     private static string Mark(string body, string marker) => body + "\n\n<!-- stacker:" + marker + " -->";
     private void QueueSave()

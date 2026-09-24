@@ -102,6 +102,18 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { Vm.Error = ex.Message; }
     }
+    private async void PrCommentsClick(object? sender, RoutedEventArgs e)
+    {
+        using var section = Vm.CreateDiscussionContext();
+        if (section is null || Vm.CreateReview(section) is not { } review) return;
+        try
+        {
+            await review.InitializeAsync();
+            await new ReviewWindow { DataContext = review }.ShowDialog(this);
+            await review.FlushAsync();
+        }
+        catch (Exception ex) { Vm.Error = ex.Message; }
+    }
     private async void SettingsClick(object? sender, RoutedEventArgs e)
     {
         try

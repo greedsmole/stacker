@@ -13,15 +13,22 @@ public sealed class FakeGitHub : IGitHubReader, IGitHubWriter
     public int Verifications { get; private set; }
     public List<DiscussionComment> Published { get; }=[];
     public List<ReviewSummary> Submitted { get; }=[];
+    public List<ReviewThread> FileThreads { get; }=[];
+    public bool RejectFile { get; set; }
     public Task<GitHubRepositoryContext> ConnectAsync(string root,string? repositoryOverride,CancellationToken ct=default)=>Task.FromResult(Context);
     public static GitHubRepositoryContext Context { get; }=new("github.example",1,"team","repo","https://github.example/team/repo.git","alice","main");
     public Task<GitHubSnapshot> SnapshotAsync(GitHubRepositoryContext context,CancellationToken ct=default)=>Task.FromResult(new GitHubSnapshot(context,[Current],DateTimeOffset.UtcNow));
     public Task<PullRequest> PullRequestAsync(GitHubRepositoryContext context,long number,CancellationToken ct=default)=>Task.FromResult(Current);
-    public Task<ReviewDiscussion> DiscussionAsync(GitHubRepositoryContext context,PullRequest pr,CancellationToken ct=default)=>Task.FromResult(new ReviewDiscussion(Published.ToArray(),Submitted.ToArray(),[]));
+    public Task<ReviewDiscussion> DiscussionAsync(GitHubRepositoryContext context,PullRequest pr,CancellationToken ct=default)=>Task.FromResult(new ReviewDiscussion(Published.ToArray(),Submitted.ToArray(),FileThreads.ToArray()));
     public Task VerifyAccessAsync(GitHubRepositoryContext context,CancellationToken ct=default){Verifications++;if(RejectAccess)throw new StackerException("HTTP 403");return Task.CompletedTask;}
     public Task ValidateAnchorsAsync(GitHubRepositoryContext context,PullRequest pr,IReadOnlyList<ReviewAnchor> anchors,CancellationToken ct=default)
     {if(anchors.Any(a=>a.Line!=1 || a.HeadSha!=pr.HeadSha))throw new StackerException("Invalid anchor");return Task.CompletedTask;}
     public Task CommentAsync(GitHubRepositoryContext context,long number,string body,CancellationToken ct=default){Writes++;Published.Add(new("1","alice",body,"",DateTimeOffset.UtcNow));if(FailAfterSend)throw new StackerException("Timed out after send");return Task.CompletedTask;}
+    public Task<IReadOnlyList<string>> ChangedFilePathsAsync(GitHubRepositoryContext context,PullRequest pr,CancellationToken ct=default) => Task.FromResult<IReadOnlyList<string>>(["renamed ü.png", "other.cs"]);
+    public Task ValidateFileAsync(GitHubRepositoryContext context,PullRequest pr,string path,CancellationToken ct=default)
+    { if(RejectFile) throw new StackerException("File disappeared"); return Task.CompletedTask; }
+    public Task FileCommentAsync(GitHubRepositoryContext context,PullRequest pr,string path,string body,CancellationToken ct=default)
+    { Writes++; FileThreads.Add(new("file-thread",false,false,true,null,[new("2","alice",body,"",DateTimeOffset.UtcNow)],path,true)); if(FailAfterSend)throw new StackerException("Timed out after send"); return Task.CompletedTask; }
     public Task InlineCommentAsync(GitHubRepositoryContext context,DraftComment comment,CancellationToken ct=default)=>CommentAsync(context,comment.Anchor.PullRequest,comment.Body,ct);
     public Task ReplyAsync(GitHubRepositoryContext context,long number,string commentId,string body,CancellationToken ct=default)=>CommentAsync(context,number,body,ct);
     public Task ResolveAsync(GitHubRepositoryContext context,string threadId,bool resolved,CancellationToken ct=default){Writes++;return Task.CompletedTask;}

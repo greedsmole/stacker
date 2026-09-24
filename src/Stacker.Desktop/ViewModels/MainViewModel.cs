@@ -166,6 +166,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _comparison?.Cancel(); var compare = new CancellationTokenSource(); _comparison = compare;
         var group = _activeGroup; var repo = _repository; var mode = Mode; var positions = _selectedPositions.ToArray();
         if (repo is null || group is null || _disposed) { compare.Dispose(); if (ReferenceEquals(_comparison, compare)) _comparison = null; return; }
+        OnPropertyChanged(nameof(HasPrDiscussion));
         IsBusy = true; Error = "";
         try
         {

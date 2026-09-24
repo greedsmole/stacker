@@ -24,9 +24,10 @@ public sealed record ReviewAnchor(long PullRequest, string HeadSha, string BaseS
 public sealed record DiscussionComment(string Id, string Author, string Body, string Url, DateTimeOffset CreatedAt);
 public sealed record ReviewSummary(string Id, string Author, string Body, string State, DateTimeOffset? SubmittedAt);
 public sealed record ReviewThread(string Id, bool IsResolved, bool IsOutdated, bool CanResolve, ReviewAnchor? Anchor,
-    IReadOnlyList<DiscussionComment> Comments)
+    IReadOnlyList<DiscussionComment> Comments, string? FilePath = null, bool IsFileLevel = false)
 {
-    public string Label => $"{Anchor?.Path ?? "File"}:{Anchor?.Line} · {(IsOutdated ? "Outdated" : IsResolved ? "Resolved" : "Open")}";
+    public string? Path => FilePath ?? Anchor?.Path;
+    public string Label => $"{Path ?? "Unknown file"}{(IsFileLevel ? " · File comment" : Anchor?.Line is { } line ? $":{line}" : " · Line comment")} · {(IsOutdated ? "Outdated" : IsResolved ? "Resolved" : "Open")}";
     public string Text => string.Join("\n\n", Comments.Select(c => $"@{c.Author}\n{c.Body}"));
 }
 public sealed record ReviewDiscussion(IReadOnlyList<DiscussionComment> Comments, IReadOnlyList<ReviewSummary> Reviews, IReadOnlyList<ReviewThread> Threads);
@@ -39,6 +40,8 @@ public sealed class ReviewDraft
     public string BaseSha { get; set; } = "";
     public string Summary { get; set; } = "";
     public string Composer { get; set; } = "";
+    public Dictionary<string, string> FileComposers { get; set; } = [];
+    public string? PendingFilePath { get; set; }
     public string Decision { get; set; } = "COMMENT";
     public List<DraftComment> Comments { get; set; } = [];
     public string? PendingOperation { get; set; }
@@ -50,11 +53,14 @@ public interface IGitHubReader
     Task<PullRequest> PullRequestAsync(GitHubRepositoryContext context, long number, CancellationToken ct = default);
     Task<ReviewDiscussion> DiscussionAsync(GitHubRepositoryContext context, PullRequest pr, CancellationToken ct = default);
     Task ValidateAnchorsAsync(GitHubRepositoryContext context, PullRequest pr, IReadOnlyList<ReviewAnchor> anchors, CancellationToken ct = default);
+    Task<IReadOnlyList<string>> ChangedFilePathsAsync(GitHubRepositoryContext context, PullRequest pr, CancellationToken ct = default);
+    Task ValidateFileAsync(GitHubRepositoryContext context, PullRequest pr, string path, CancellationToken ct = default);
     Task VerifyAccessAsync(GitHubRepositoryContext context, CancellationToken ct = default);
 }
 public interface IGitHubWriter
 {
     Task CommentAsync(GitHubRepositoryContext context, long number, string body, CancellationToken ct = default);
+    Task FileCommentAsync(GitHubRepositoryContext context, PullRequest pr, string path, string body, CancellationToken ct = default);
     Task InlineCommentAsync(GitHubRepositoryContext context, DraftComment comment, CancellationToken ct = default);
     Task ReplyAsync(GitHubRepositoryContext context, long number, string commentId, string body, CancellationToken ct = default);
     Task ResolveAsync(GitHubRepositoryContext context, string threadId, bool resolved, CancellationToken ct = default);

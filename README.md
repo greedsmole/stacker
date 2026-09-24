@@ -69,16 +69,17 @@ The cache verifies downloaded head/base SHA against the PR snapshot and rejects 
 
 ## Review workflow
 
-Each PR layer has a **Review PR** action. Local or aggregate comparisons instead offer **Open PR changes**: inline comments must target an actual PR snapshot, not a guessed layer in an aggregate diff.
+Select a PR layer and click the top-level **PR comments** button to read discussion or comment without downloading Git objects. Each PR diff also has a **Comments & review** action. Local or aggregate comparisons instead offer **Open PR changes**: inline comments must target an actual PR snapshot, not a guessed layer in an aggregate diff.
 
 1. Open PR changes and select a code line or contiguous range on one side of the diff.
-2. Open Review PR. Inspect Discussion, Reviews and Code threads.
+2. Open Comments & review. Inspect PR comments, File comments, Reviews and Code threads.
 3. Write a comment. Add it to the local draft, post it as a line comment, post a general PR comment, or reply to the selected thread.
-4. Add a review summary, choose COMMENT / APPROVE / REQUEST_CHANGES and explicitly Submit review.
+4. For a whole-file comment, open **File comments**, choose a path, enter text and click **Post file comment**. No line selection is required, including for binary files. File drafts are saved separately by path; current and outdated file threads retain their paths. Select a thread to reply using the comment box on the right.
+5. Add a review summary, choose COMMENT / APPROVE / REQUEST_CHANGES and explicitly Submit review.
 
-Current code threads appear alongside their anchored lines; outdated threads remain in the Code threads tab. Resolve/reopen is available when GitHub reports permission. Mixed deletion/addition ranges are rejected; select one side. Binary files and omitted GitHub patches cannot receive inline comments through Stacker.
+Current code threads appear alongside their anchored lines; outdated threads remain in the Code threads tab. Resolve/reopen is available when GitHub reports permission. Mixed deletion/addition ranges are rejected; select one side. Binary files and omitted GitHub patches cannot receive inline comments through Stacker; whole-file comments are supported.
 
-Draft summary, composer text, line comments and pending publication state are stored locally by account and PR, with the base/head version. Account, repository access, current PR SHA and server diff lines are verified before publication. A stale draft is retained for manual rechecking. Remove old anchors before adopting the current PR version for the summary.
+Draft summary, PR/line composer text, per-file composer text, line comments and pending publication state are stored locally by account and PR, with the base/head version. Account, repository access, current PR SHA and server diff lines are verified before publication. A stale draft is retained for manual rechecking. Remove old anchors before adopting the current PR version for the summary.
 
 Writes are never automatically retried. Publications carry a hidden operation marker so a timeout can be reconciled by reloading the discussion. If the outcome remains unknown, check GitHub before choosing “I checked GitHub — unlock retry”. Partial/uncertain operations preserve draft text. No live comments are posted by the automated test suite.
 

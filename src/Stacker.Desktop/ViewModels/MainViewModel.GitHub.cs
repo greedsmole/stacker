@@ -106,7 +106,7 @@ public sealed partial class MainViewModel
                 OnPropertyChanged(nameof(BaseLabel)); OnPropertyChanged(nameof(HasSelectedLayer)); OnPropertyChanged(nameof(IsLocalSelected));
             }
         }
-        OnPropertyChanged(nameof(HasRemoteGroups)); OnPropertyChanged(nameof(HasOtherGroups));
+        OnPropertyChanged(nameof(HasPrDiscussion)); OnPropertyChanged(nameof(HasRemoteGroups)); OnPropertyChanged(nameof(HasOtherGroups));
     }
     private static StackGroupViewModel RemoteGroup(string id, string name, IReadOnlyList<PullRequest> prs, bool shared)
     {
@@ -155,6 +155,16 @@ public sealed partial class MainViewModel
             await SaveStackAsync(new(Guid.NewGuid().ToString("N"), _activeGroup.Name, Resolve(prs[0].BaseRef, prs[0].BaseRepositoryId), prs.Select(p => Resolve(p.HeadRef, p.HeadRepositoryId)).ToArray()));
         }
         catch (Exception ex) { Error = ex.Message; }
+    }
+    public PullRequest? SelectedPrForDiscussion => _selectedPositions.Length != 1 || _activeGroup is null ? null
+        : _activeGroup.IsRemote ? _activeGroup.PullRequests.ElementAtOrDefault(_selectedPositions[0])
+        : FindLocalPr(_activeGroup.Layers.ElementAtOrDefault(_selectedPositions[0])?.Snapshot.Branch ?? "");
+    public bool HasPrDiscussion => _remoteSnapshot is not null && SelectedPrForDiscussion is not null;
+    public DiffSectionViewModel? CreateDiscussionContext()
+    {
+        if (SelectedPrForDiscussion is not { } pr || _remoteSnapshot is null || _repository is null) return null;
+        return new(_git, _repository.Root, new(pr.HeadRef, pr.BaseRef, pr.BaseSha, pr.HeadSha, null, []))
+        { AssociatedPr = pr, GitHubContext = _remoteSnapshot.Context, IsDemo = IsDemo };
     }
     public ReviewViewModel? CreateReview(DiffSectionViewModel section) => section.AssociatedPr is { } pr && section.GitHubContext is { } context && _github is not null && _writer is not null
         ? new(_github, _writer, _applicationStore, _git, context, pr, section, IsDemo) : null;

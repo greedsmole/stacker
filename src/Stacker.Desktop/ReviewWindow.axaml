@@ -1,17 +1,27 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Stacker.Desktop.ReviewWindow" Title="PR review" Width="1100" Height="780" MinWidth="900" MinHeight="640" WindowStartupLocation="CenterOwner">
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Stacker.Desktop.ReviewWindow" Title="PR comments &amp; review" Width="1100" Height="780" MinWidth="900" MinHeight="640" WindowStartupLocation="CenterOwner">
   <Grid Margin="20" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
     <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Title}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap"/><Button Grid.Column="1" Content="Reload discussion" Command="{Binding ReloadCommand}"/></Grid>
     <TextBlock Grid.Row="1" Text="{Binding Message}" Foreground="#D49A4A" TextWrapping="Wrap"/>
     <Grid Grid.Row="2" IsEnabled="{Binding !IsBusy}" ColumnDefinitions="*,12,*">
       <TabControl>
-        <TabItem Header="Discussion"><ListBox ItemsSource="{Binding Comments}"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="6" Margin="4,8"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><SelectableTextBlock Text="{Binding Body}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox></TabItem>
+        <TabItem Header="PR comments"><ListBox ItemsSource="{Binding Comments}"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="6" Margin="4,8"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><SelectableTextBlock Text="{Binding Body}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox></TabItem>
         <TabItem Header="Reviews"><ListBox ItemsSource="{Binding Reviews}"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="6" Margin="4,8"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><TextBlock Text="{Binding State}" Classes="muted"/><SelectableTextBlock Text="{Binding Body}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox></TabItem>
-        <TabItem Header="Code threads"><Grid RowDefinitions="*,Auto"><ListBox ItemsSource="{Binding Threads}" SelectedItem="{Binding SelectedThread}"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="6" Margin="4,8"><TextBlock Text="{Binding Label}" FontWeight="SemiBold" TextWrapping="Wrap"/><SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox><Button Grid.Row="1" Content="Resolve / reopen selected thread" Command="{Binding ToggleResolvedCommand}" IsEnabled="{Binding CanPublish}"/></Grid></TabItem>
+        <TabItem Header="File comments">
+          <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto" RowSpacing="8" Margin="4">
+            <ComboBox ItemsSource="{Binding ReviewFiles}" SelectedItem="{Binding SelectedReviewFile}" PlaceholderText="Select a file" HorizontalAlignment="Stretch"/>
+            <TextBlock Grid.Row="1" Text="{Binding FileThreadsLabel}" TextWrapping="Wrap" Classes="muted"/>
+            <ListBox Grid.Row="2" ItemsSource="{Binding FileThreads}" SelectedItem="{Binding SelectedThread}"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="6" Margin="4,8"><TextBlock Text="{Binding Label}" FontWeight="SemiBold" TextWrapping="Wrap"/><SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
+            <TextBox Grid.Row="3" Text="{Binding FileComposer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" MaxHeight="180" Watermark="Comment on this file — no line selection needed…"/>
+            <WrapPanel Grid.Row="4"><Button Content="Post file comment" Command="{Binding PostFileCommentCommand}" IsEnabled="{Binding CanPostFile}" Margin="0,0,6,6"/><Button Content="Resolve / reopen thread" Command="{Binding ToggleResolvedCommand}" IsEnabled="{Binding CanPublish}" Margin="0,0,6,6"/></WrapPanel>
+            <TextBlock Grid.Row="5" Text="To reply, select a thread and use the comment box on the right. File drafts are saved separately for each path." Classes="muted" TextWrapping="Wrap" FontSize="11"/>
+          </Grid>
+        </TabItem>
+        <TabItem Header="Code threads"><Grid RowDefinitions="*,Auto"><ListBox ItemsSource="{Binding CodeThreads}" SelectedItem="{Binding SelectedThread}"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="6" Margin="4,8"><TextBlock Text="{Binding Label}" FontWeight="SemiBold" TextWrapping="Wrap"/><SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox><Button Grid.Row="1" Content="Resolve / reopen selected thread" Command="{Binding ToggleResolvedCommand}" IsEnabled="{Binding CanPublish}"/></Grid></TabItem>
       </TabControl>
       <ScrollViewer Grid.Column="2"><StackPanel Spacing="12">
-        <TextBlock Text="LOCAL REVIEW DRAFT" Classes="label"/>
+        <TextBlock Text="PR / LINE COMMENT" Classes="label"/>
         <TextBlock Text="{Binding SelectionLabel}" Classes="muted" TextWrapping="Wrap"/>
-        <TextBox Text="{Binding Composer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" Watermark="Comment text…"/>
+        <TextBox Text="{Binding Composer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" Watermark="Comment on the PR, selected lines, or reply to a thread…"/>
         <WrapPanel>
           <Button Content="Add line comment to draft" Command="{Binding AddToDraftCommand}" Margin="0,0,6,6"/>
           <Button Content="Post line comment" Command="{Binding PostInlineCommand}" IsEnabled="{Binding CanPublish}" Margin="0,0,6,6"/>
@@ -22,10 +32,10 @@
         <TextBox Text="{Binding Summary}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" Watermark="Review summary…"/>
         <ComboBox ItemsSource="{Binding Decisions}" SelectedItem="{Binding Decision}" HorizontalAlignment="Stretch"/>
         <Button Content="Submit review" Classes="primary" Command="{Binding SubmitReviewCommand}" IsEnabled="{Binding CanPublish}" HorizontalAlignment="Stretch"/>
-        <Button Content="Use current PR version (summary only)" Command="{Binding UseCurrentVersionCommand}"/>
+        <Button Content="Use current PR version (after rechecking drafts)" Command="{Binding UseCurrentVersionCommand}"/>
         <Button Content="I checked GitHub — unlock retry" Command="{Binding UnlockRetryCommand}" ToolTip.Tip="Use only after verifying the uncertain publication did not reach GitHub."/>
       </StackPanel></ScrollViewer>
     </Grid>
-    <TextBlock Grid.Row="3" Text="Drafts stay on this Mac. Only explicit Post / Submit publishes. Select lines in the PR diff before opening this window to attach a code comment." Classes="muted" TextWrapping="Wrap" FontSize="11"/>
+    <TextBlock Grid.Row="3" Text="PR comments apply to the whole pull request. File comments need a file, not a line. Drafts stay on this Mac; only Post / Submit publishes." Classes="muted" TextWrapping="Wrap" FontSize="11"/>
   </Grid>
 </Window>

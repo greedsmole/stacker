@@ -107,7 +107,7 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
         var reviews = Pages(await Api(context.Host, $"{Repo(context)}/pulls/{pr.Number}/reviews?per_page=100", ct, paginate: true))
             .Select(c => new ReviewSummary(c.GetProperty("id").ToString(), Str(c.GetProperty("user"), "login"), Str(c, "body"), Str(c, "state"), Date(c, "submitted_at"))).ToArray();
         var threads = new List<ReviewThread>(); string? cursor = null;
-        const string fields = "id isResolved isOutdated viewerCanResolve viewerCanUnresolve path line startLine diffSide startDiffSide comments(first:100){nodes{id databaseId body url createdAt author{login} commit{oid}} pageInfo{hasNextPage endCursor}}";
+        const string fields = "id isResolved isOutdated viewerCanResolve viewerCanUnresolve subjectType path line startLine diffSide startDiffSide comments(first:100){nodes{id databaseId body url createdAt author{login} commit{oid}} pageInfo{hasNextPage endCursor}}";
         do
         {
             var data = await Graph(context.Host, "query($owner:String!,$name:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$cursor){nodes{" + fields + "} pageInfo{hasNextPage endCursor}}}}}",
@@ -124,15 +124,27 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
                     connectionComments = more.GetProperty("node").GetProperty("comments"); allComments.AddRange(connectionComments.GetProperty("nodes").EnumerateArray().Select(n => n.Clone()));
                 }
                 var line = Int(thread, "line"); var first = allComments.FirstOrDefault();
-                var anchor = line is null ? null : new ReviewAnchor(pr.Number,
+                var isFile = Str(thread, "subjectType") == "FILE";
+                var anchor = isFile || line is null ? null : new ReviewAnchor(pr.Number,
                     first.ValueKind == JsonValueKind.Object && first.TryGetProperty("commit", out var commit) && commit.ValueKind == JsonValueKind.Object ? Str(commit, "oid") : pr.HeadSha,
                     pr.BaseSha, Str(thread, "path"), Str(thread, "diffSide"), line.Value, Int(thread, "startLine"), NullableStr(thread, "startDiffSide"));
                 threads.Add(new(Str(thread, "id"), Bool(thread, "isResolved"), Bool(thread, "isOutdated"), Bool(thread, "isResolved") ? Bool(thread, "viewerCanUnresolve") : Bool(thread, "viewerCanResolve"), anchor,
-                    allComments.Select(c => new DiscussionComment(c.GetProperty("databaseId").ToString(), c.GetProperty("author").ValueKind == JsonValueKind.Object ? Str(c.GetProperty("author"), "login") : "deleted", Str(c, "body"), Str(c, "url"), Date(c, "createdAt"))).ToArray()));
+                    allComments.Select(c => new DiscussionComment(c.GetProperty("databaseId").ToString(), c.GetProperty("author").ValueKind == JsonValueKind.Object ? Str(c.GetProperty("author"), "login") : "deleted", Str(c, "body"), Str(c, "url"), Date(c, "createdAt"))).ToArray(), Str(thread, "path"), isFile));
             }
             var page = connection.GetProperty("pageInfo"); cursor = Bool(page, "hasNextPage") ? Str(page, "endCursor") : null;
         } while (cursor is not null);
         return new(comments, reviews, threads);
+    }
+    public async Task<IReadOnlyList<string>> ChangedFilePathsAsync(GitHubRepositoryContext context, PullRequest pr, CancellationToken ct = default)
+    {
+        var files = Pages(await Api(context.Host, $"{Repo(context)}/pulls/{pr.Number}/files?per_page=100", ct, paginate: true));
+        return files.Select(f => Str(f, "filename")).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.Ordinal).ToArray();
+    }
+    public async Task ValidateFileAsync(GitHubRepositoryContext context, PullRequest pr, string path, CancellationToken ct = default)
+    {
+        var files = await ChangedFilePathsAsync(context, pr, ct);
+        if (string.IsNullOrWhiteSpace(path) || !files.Contains(path, StringComparer.Ordinal))
+            throw new StackerException("This file is not in the current PR diff. Refresh GitHub and reopen PR changes.");
     }
     public async Task ValidateAnchorsAsync(GitHubRepositoryContext context, PullRequest pr, IReadOnlyList<ReviewAnchor> anchors, CancellationToken ct = default)
     {
@@ -160,6 +172,12 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
     }
     public async Task CommentAsync(GitHubRepositoryContext context, long number, string body, CancellationToken ct = default) =>
         _ = await Api(context.Host, $"{Repo(context)}/issues/{number}/comments", ct, new { body });
+    public async Task FileCommentAsync(GitHubRepositoryContext context, PullRequest pr, string path, string body, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(body)) throw new StackerException("Choose a file and enter a comment.");
+        _ = await Api(context.Host, $"{Repo(context)}/pulls/{pr.Number}/comments", ct,
+            new { body, commit_id = pr.HeadSha, path, subject_type = "file" });
+    }
     public async Task InlineCommentAsync(GitHubRepositoryContext context, DraftComment comment, CancellationToken ct = default)
     {
         var body = AnchorBody(comment); body["commit_id"] = comment.Anchor.HeadSha;

@@ -36,3 +36,9 @@ Live GitHub authentication, network fetching and publication were not exercised 
 TextMate was exercised on ARM64 with actual grammars and bounded input; this is not a comprehensive performance benchmark across all languages and pathological files.
 
 The app is not Developer ID signed or notarized. Windows x64 is additionally cross-published locally; interactive Windows execution has not been checked on this Mac. Linux and Intel Mac validation remain out of scope.
+
+## File and PR comments update
+
+The local update adds native whole-file comments, preserves file paths on file/outdated threads, exposes PR discussion independently of Git object downloads, and saves per-file comment drafts. Regression tests cover the distinct PR/file API payloads, binary/renamed file membership, paginated file/line thread parsing, separate drafts across files and restarts, stale PR rejection, uncertain-send reconciliation, and the real review-window tabs. External comment publication remains untested and is never performed by these tests.
+
+Local verification of the comments update: **62 tests passed**, Release build without warnings/errors, macOS ARM64 and Windows x64 self-contained archives rebuilt. Native macOS walkthrough opened PR comments directly, selected the File comments tab and Auth.cs, and displayed its file-level discussion and composer. Demo publication controls remained disabled. Windows was cross-published locally for this update; the previous release has separate native Windows CI coverage.

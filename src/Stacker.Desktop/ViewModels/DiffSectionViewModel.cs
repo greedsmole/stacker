@@ -33,7 +33,7 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     public bool IsPrSnapshot { get; set; }
     public bool IsDemo { get; set; }
     public bool HasPr => AssociatedPr is not null;
-    public string ReviewAction => IsPrSnapshot ? "Review PR" : "Open PR changes";
+    public string ReviewAction => IsPrSnapshot ? "Comments & review" : "Open PR changes";
     public string Title => AssociatedPr?.Label ?? Result.Layer.Replace("refs/heads/", "").Replace("refs/remotes/", "");
     public string Comparison => $"{(IsPrSnapshot ? AssociatedPr?.BaseRef : Result.ParentRef.Replace("refs/heads/", ""))} → {Title}   ·   {Result.BaseSha[..8]}…{Result.HeadSha[..8]}";
     public string Summary => $"{Result.Files.Count} files   +{Result.Additions}  −{Result.Deletions}";
