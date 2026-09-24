@@ -26,5 +26,47 @@ public sealed class GitCacheTests
         Assert.Contains("changed while downloading",error.Message);
         var fetch=Assert.Single(runner.Calls,c=>c.Arguments.Contains("fetch"));Assert.Contains("--no-write-fetch-head",fetch.Arguments);Assert.Contains("+refs/pull/42/head:refs/stacker/pr/42",fetch.Arguments);Assert.Contains("credential.helper=",fetch.Arguments);Assert.StartsWith(Path.Combine(store.Root,"objects"),fetch.WorkingDirectory);
         Assert.DoesNotContain(runner.Calls,c=>c.Arguments.Contains("setup-git"));Assert.DoesNotContain(fetch.Environment!.Keys,k=>k.Contains("TOKEN"));
+        Assert.Equal(OperatingSystem.IsWindows(), fetch.Arguments.Contains("http.sslBackend=schannel"));
+        Assert.DoesNotContain(runner.Calls.Where(c => !c.Arguments.Contains("fetch")), c => c.Arguments.Contains("http.sslBackend=schannel"));
+        Assert.DoesNotContain(fetch.Arguments, a => a.Contains("sslVerify=false") || a.Contains("schannelCheckRevoke=false"));
+        Assert.DoesNotContain("GIT_SSL_NO_VERIFY", fetch.Environment.Keys);
+        Assert.DoesNotContain(runner.Calls, c => c.Arguments.Contains("config"));
+    }
+
+    [Theory]
+    [InlineData("SSL certificate problem: unable to get local issuer certificate")]
+    [InlineData("SSL certificate problem: self-signed certificate in certificate chain")]
+    [InlineData("schannel: SEC_E_UNTRUSTED_ROOT (0x80090325)")]
+    [InlineData("schannel: CertGetCertificateChain trust error CERT_TRUST_IS_PARTIAL_CHAIN")]
+    public async Task Untrusted_certificate_explains_remediation_preserves_details_and_does_not_retry(string stderr)
+    {
+        await using var folder = new GitFixture();
+        var runner = new ScriptedRunner(request => request.Arguments.Contains("cat-file") ? new(1, "", "")
+            : request.Arguments.Contains("fetch") ? new(128, "", stderr) : new(0, "", ""));
+        var cache = new GitObjectCache(runner, new(), new() { UseSavedCredentials = true }, new ApplicationStore(folder.Root));
+
+        var error = await Assert.ThrowsAsync<StackerException>(() => cache.PrepareAsync(FakeGitHub.Context, [DiscoveryTests.Pr(42, "main", "feature")]));
+
+        Assert.Contains("certificate chain is not trusted", error.Message);
+        Assert.Contains(OperatingSystem.IsWindows() ? "Windows certificate store" : "Git certificate trust store", error.Message);
+        Assert.Contains(stderr, error.Message);
+        var fetch = Assert.Single(runner.Calls, request => request.Arguments.Contains("fetch"));
+        Assert.Contains("GITHUB_TOKEN", fetch.UnsetEnvironment!);
+        Assert.DoesNotContain(runner.Calls, request => request.Arguments.Contains("rev-parse"));
+    }
+
+    [Fact]
+    public async Task Other_fetch_failures_keep_the_original_error()
+    {
+        await using var folder = new GitFixture();
+        const string stderr = "fatal: Authentication failed";
+        var runner = new ScriptedRunner(request => request.Arguments.Contains("cat-file") ? new(1, "", "")
+            : request.Arguments.Contains("fetch") ? new(128, "", stderr) : new(0, "", ""));
+
+        var error = await Assert.ThrowsAsync<StackerException>(() => new GitObjectCache(runner, new(), new(), new ApplicationStore(folder.Root))
+            .PrepareAsync(FakeGitHub.Context, [DiscoveryTests.Pr(42, "main", "feature")]));
+
+        Assert.Equal("Git cache: " + stderr, error.Message);
+        Assert.Single(runner.Calls, request => request.Arguments.Contains("fetch"));
     }
 }

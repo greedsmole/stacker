@@ -19,13 +19,13 @@ is_mac = args.rid.startswith("osx")
 publish = output / "Stacker.app" / "Contents" / "MacOS" if is_mac else output / "Stacker"
 subprocess.run([
     "dotnet", "publish", str(ROOT / "src/Stacker.Desktop"), "-c", "Release", "-r", args.rid,
-    "--self-contained", "true", "-p:Version=0.2.0", "-p:PublishSingleFile=false", "-p:PublishTrimmed=false", "-o", str(publish)
+    "--self-contained", "true", "-p:Version=0.2.1", "-p:PublishSingleFile=false", "-p:PublishTrimmed=false", "-o", str(publish)
 ], check=True, cwd=ROOT)
 if is_mac:
     info = {
         "CFBundleName": "Stacker", "CFBundleDisplayName": "Stacker",
-        "CFBundleIdentifier": "dev.stacker.desktop", "CFBundleVersion": "0.2.0",
-        "CFBundleShortVersionString": "0.2.0", "CFBundleExecutable": "Stacker",
+        "CFBundleIdentifier": "dev.stacker.desktop", "CFBundleVersion": "0.2.1",
+        "CFBundleShortVersionString": "0.2.1", "CFBundleExecutable": "Stacker",
         "CFBundlePackageType": "APPL", "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "12.0"
     }
@@ -34,7 +34,7 @@ if is_mac:
     (publish / "Stacker").chmod(0o755)
 shutil.copy2(ROOT / "README.md", output / "README.md")
 shutil.copy2(ROOT / "THIRD_PARTY_NOTICES.md", output / "THIRD_PARTY_NOTICES.md")
-archive_base = ROOT / "artifacts" / f"Stacker-0.2.0-{args.rid}"
+archive_base = ROOT / "artifacts" / f"Stacker-0.2.1-{args.rid}"
 if is_mac:
     # Preserve executable permissions and symlinks for .app bundles.
     archive = str(archive_base) + ".tar.gz"

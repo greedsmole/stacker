@@ -25,7 +25,7 @@ public sealed class GitObjectCache(IProcessRunner runner, GitExecutable git, GhE
                     // Only the fixed helper program is interpreted by Git. Paths are supplied via a quoted environment variable.
                     await Run(root, ["-c", "credential.helper=", "-c", "credential.helper=!\"$STACKER_GH\" auth git-credential", "-c", "credential.interactive=false",
                         "fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", context.CloneUrl,
-                        $"+refs/pull/{pr.Number}/head:{headRef}", $"+refs/heads/{pr.BaseRef}:{baseRef}"], ct, TimeSpan.FromMinutes(3));
+                        $"+refs/pull/{pr.Number}/head:{headRef}", $"+refs/heads/{pr.BaseRef}:{baseRef}"], ct, TimeSpan.FromMinutes(3), isDownload: true);
                     var head = await Run(root, ["rev-parse", headRef], ct); var @base = await Run(root, ["rev-parse", baseRef], ct);
                     if (head.StdOut.Trim() != pr.HeadSha || @base.StdOut.Trim() != pr.BaseSha)
                         throw new StackerException($"PR #{pr.Number} changed while downloading. Refresh GitHub before comparing.");
@@ -63,11 +63,28 @@ public sealed class GitObjectCache(IProcessRunner runner, GitExecutable git, GhE
         var result = await runner.RunAsync(new(git.Resolve(), ["cat-file", "-e", sha + "^{commit}"], root), ct);
         return result.ExitCode == 0;
     }
-    private async Task<ProcessResult> Run(string root, string[] args, CancellationToken ct, TimeSpan? timeout = null)
+    private async Task<ProcessResult> Run(string root, string[] args, CancellationToken ct, TimeSpan? timeout = null, bool isDownload = false)
     {
-        var response = await runner.RunAsync(new(git.Resolve(), ["-c", "core.hooksPath=/dev/null", .. args], root, timeout,
+        // Git for Windows can otherwise use an OpenSSL bundle that lacks corporate CAs
+        // trusted by Windows (and gh). Scope the backend to this process, not Git config files.
+        string[] tlsOptions = isDownload && OperatingSystem.IsWindows() ? ["-c", "http.sslBackend=schannel"] : [];
+        var response = await runner.RunAsync(new(git.Resolve(), ["-c", "core.hooksPath=/dev/null", .. tlsOptions, .. args], root, timeout,
             Environment: new Dictionary<string, string> { ["STACKER_GH"] = gh.Resolve(), ["GIT_TERMINAL_PROMPT"] = "0", ["GH_PROMPT_DISABLED"] = "1", ["GH_DEBUG"] = "" }, UnsetEnvironment: gh.UnsetEnvironment), ct);
-        if (response.ExitCode != 0) throw new StackerException("Git cache: " + response.StdErr.Trim());
+        if (response.ExitCode != 0)
+        {
+            var detail = response.StdErr.Trim();
+            if (isDownload && IsCertificateTrustError(detail))
+            {
+                var trustStore = OperatingSystem.IsWindows() ? "Windows certificate store" : "Git certificate trust store";
+                throw new StackerException($"Git cache: the HTTPS certificate chain is not trusted. Ask your administrator to check the server's certificate chain and install the corporate root/intermediate CA in the {trustStore}. " +
+                    "Signing in to gh again will not fix certificate trust.\n\n" + detail);
+            }
+            throw new StackerException("Git cache: " + detail);
+        }
         return response;
     }
+
+    private static bool IsCertificateTrustError(string error) =>
+        new[] { "unable to get local issuer certificate", "self-signed certificate", "SEC_E_UNTRUSTED_ROOT", "CERT_E_UNTRUSTEDROOT", "CERT_TRUST_IS_UNTRUSTED_ROOT", "CERT_TRUST_IS_PARTIAL_CHAIN" }
+            .Any(message => error.Contains(message, StringComparison.OrdinalIgnoreCase));
 }

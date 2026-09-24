@@ -42,3 +42,9 @@ The app is not Developer ID signed or notarized. Windows x64 is additionally cro
 The local update adds native whole-file comments, preserves file paths on file/outdated threads, exposes PR discussion independently of Git object downloads, and saves per-file comment drafts. Regression tests cover the distinct PR/file API payloads, binary/renamed file membership, paginated file/line thread parsing, separate drafts across files and restarts, stale PR rejection, uncertain-send reconciliation, and the real review-window tabs. External comment publication remains untested and is never performed by these tests.
 
 Local verification of the comments update: **62 tests passed**, Release build without warnings/errors, macOS ARM64 and Windows x64 self-contained archives rebuilt. Native macOS walkthrough opened PR comments directly, selected the File comments tab and Auth.cs, and displayed its file-level discussion and composer. Demo publication controls remained disabled. Windows was cross-published locally for this update; the previous release has separate native Windows CI coverage.
+
+## Windows GHES certificate trust update
+
+Cache downloads now select Schannel on Windows without writing Git configuration or disabling TLS/revocation verification. Certificate-chain errors include remediation and retain the original Git diagnostic. Regression coverage checks process-scoped options, preserved saved-account handling, no automatic retries after certificate failures, and unchanged handling of unrelated fetch errors.
+
+Local verification: **67 tests passed** on macOS ARM64; Windows x64 self-contained archive cross-published successfully. The OS-specific backend assertion runs for the host platform; the new Windows branch and live corporate GHES certificate chain have not been exercised on a Windows machine in this local run. The GitHub release assets have not been updated with this change.

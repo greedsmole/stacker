@@ -14,7 +14,7 @@ dotnet run --project src/Stacker.Desktop -- --demo
 dotnet run --project src/Stacker.Desktop -- /path/to/repository
 ```
 
-Build a macOS ARM64 package with `python3 scripts/package.py osx-arm64`, or a Windows x64 package with `python scripts/package.py win-x64`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe`; keep its adjacent files. No separate .NET runtime is required. Git and optional GitHub CLI are installed separately. The archive is written to `artifacts/Stacker-0.2.0-osx-arm64.tar.gz`. The `.app` is not Developer ID signed or notarized. Public distribution signing requires the publisher's Apple credentials.
+Build a macOS ARM64 package with `python3 scripts/package.py osx-arm64`, or a Windows x64 package with `python scripts/package.py win-x64`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe`; keep its adjacent files. No separate .NET runtime is required. Git and optional GitHub CLI are installed separately. The archive is written to `artifacts/Stacker-0.2.1-osx-arm64.tar.gz`. The `.app` is not Developer ID signed or notarized. Public distribution signing requires the publisher's Apple credentials.
 
 ## Navigation and comparisons
 
@@ -64,6 +64,10 @@ Discovery does not rewrite `.stackpr.yml`. Save as local stack is an explicit ac
 ## Isolated Git cache
 
 Selecting a remote PR or stack downloads objects into an application-owned bare repository, partitioned by host, repository ID and account. It uses gh's credential helper only for that child Git invocation. User branches, refs, index, configuration and working tree are untouched.
+
+On Windows, cache downloads use Git's **Schannel** backend, which uses the Windows certificate store by default. This supports corporate GHES certificates already trusted by Windows. The backend is selected only for the download process; Stacker does not disable certificate/revocation checks or change global Git configuration. Existing explicit Schannel CA-bundle settings remain effective. Use Git for Windows with Schannel support.
+
+If a download still reports an untrusted certificate chain, ask your administrator to check that GHES serves its intermediate certificates and that the corporate root/intermediate CA is installed in the appropriate Windows certificate stores. Successful `gh` authentication does not establish trust for Git downloads. The cache also does not inherit repository-local Git configuration from your working repository. Do not work around trust errors by disabling `sslVerify`.
 
 The cache verifies downloaded head/base SHA against the PR snapshot and rejects a moving snapshot. Existing objects work offline; cached metadata is labeled with its timestamp. Configure → Clear downloaded Git objects removes only the selected connection's object cache. PR metadata and drafts are kept separately. Downloads can take longer than local diff commands and are cancelled when the selected comparison is superseded.
 
