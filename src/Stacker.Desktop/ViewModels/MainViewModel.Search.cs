@@ -1,3 +1,4 @@
+// Purpose: Search commands for filenames and textual changes, with navigation back to the matching diff line.
 using System.Collections.ObjectModel;
 using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -24,6 +25,7 @@ public sealed partial class MainViewModel
     [ObservableProperty] private bool _isSearchBusy;
     [ObservableProperty] private string _searchStatus = "Search files by name or added/removed code across this comparison.";
     public ObservableCollection<ChangeSearchHit> SearchResults { get; } = [];
+    /// <summary>Opens search in the requested scope (file names or visible textual changes).</summary>
     public void OpenSearch(string scope)
     { IsGitLogOpen = false; SearchScope = scope; IsSearchOpen = true; }
     public void CloseSearch() { _searchLoad?.Cancel(); IsSearchOpen = false; }
@@ -82,6 +84,7 @@ public sealed partial class MainViewModel
         catch (Exception ex) { SearchStatus = "Search failed: " + ex.Message; }
         finally { if (ReferenceEquals(_searchLoad, load)) { _searchLoad = null; IsSearchBusy = false; } }
     }
+    /// <summary>Navigates to a hit's comparison and file, then loads its patch before selecting a matching line.</summary>
     public async Task OpenSearchHitAsync(ChangeSearchHit hit)
     {
         if (!Sections.Contains(hit.Section)) return;

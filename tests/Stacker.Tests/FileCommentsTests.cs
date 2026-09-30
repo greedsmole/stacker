@@ -1,3 +1,4 @@
+// Purpose: Contract scenarios for file-level PR comments and their distinct anchoring semantics.
 using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -18,6 +19,7 @@ public sealed class FileCommentsTests
     private static ReviewViewModel View(FakeGitHub hub, ApplicationStore store, GitFixture f, DiffSectionViewModel section, bool demo = false) =>
         new(hub, hub, store, f.Reader, FakeGitHub.Context, section.AssociatedPr!, section, demo);
 
+    // Scenario: File and PR posts use distinct endpoints and file has no line anchor.
     [Fact] public async Task File_and_PR_posts_use_distinct_endpoints_and_file_has_no_line_anchor()
     {
         var runner = new ScriptedRunner(_ => new(0, "{}", "")); var cli = new GitHubCli(runner, new(), new()); var pr = DiscoveryTests.Pr(42, "main", "feature");
@@ -30,6 +32,7 @@ public sealed class FileCommentsTests
         Assert.Contains("repos/team/repo/issues/42/comments", runner.Calls[1].Arguments);
         Assert.Equal("PR comment", JsonDocument.Parse(runner.Calls[1].StandardInput!).RootElement.GetProperty("body").GetString());
     }
+    // Scenario: File validation accepts binary and new rename path but rejects old or absent path.
     [Fact] public async Task File_validation_accepts_binary_and_new_rename_path_but_rejects_old_or_absent_path()
     {
         var runner = new ScriptedRunner(_ => new(0, """[[{"filename":"renamed ü.png","previous_filename":"before ü.png","status":"renamed"}]]""", ""));
@@ -38,6 +41,7 @@ public sealed class FileCommentsTests
         await Assert.ThrowsAsync<StackerException>(() => cli.ValidateFileAsync(FakeGitHub.Context, pr, "before ü.png"));
         Assert.Contains("--paginate", runner.Calls[0].Arguments);
     }
+    // Scenario: Discussion preserves file subject path replies and outdated line identity.
     [Fact] public async Task Discussion_preserves_file_subject_path_replies_and_outdated_line_identity()
     {
         var page = 0;

@@ -1,3 +1,4 @@
+// Purpose: Maps diff line kinds to presentation brushes so additions, deletions, and context remain visually distinct.
 using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;

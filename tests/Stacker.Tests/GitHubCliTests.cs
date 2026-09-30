@@ -1,3 +1,4 @@
+// Purpose: Fixture-driven checks for gh origin parsing, authentication interpretation, and GitHub API payload handling.
 using System.Text.Json;
 using Stacker.Core;
 using Stacker.Infrastructure;
@@ -10,6 +11,7 @@ public sealed class ScriptedRunner(Func<ProcessRequest,ProcessResult> handler) :
 public sealed class GitHubCliTests
 {
     private static readonly GitHubRepositoryContext Context = new("enterprise.example",1,"team","repo","https://enterprise.example/team/repo.git","alice","main");
+    // Scenario: Origin parsing supports https ssh and enterprise.
     [Theory]
     [InlineData("https://github.com/team/repo.git","github.com")]
     [InlineData("git@github.com:team/repo.git","github.com")]
@@ -18,6 +20,7 @@ public sealed class GitHubCliTests
     {
         var result=GitHubCli.ParseOrigin(url); Assert.Equal(host,result.Host); Assert.Equal("team",result.Owner); Assert.Equal("repo",result.Name);
     }
+    // Scenario: Invalid origin is not guessed.
     [Theory]
     [InlineData("/local/repo")]
     [InlineData("https://github.com/team/repo/extra")]
@@ -26,6 +29,7 @@ public sealed class GitHubCliTests
     {
         Assert.Throws<StackerException>(()=>GitHubCli.ParseOrigin(url));
     }
+    // Scenario: Json auth failure with exit zero is rejected.
     [Fact] public async Task Json_auth_failure_with_exit_zero_is_rejected()
     {
         var runner=new ScriptedRunner(_=>new(0,"{\"hosts\":{\"enterprise.example\":[{\"active\":true,\"state\":\"error\",\"login\":\"alice\"}]}}",""));
@@ -33,6 +37,7 @@ public sealed class GitHubCliTests
         var error=await Assert.ThrowsAsync<GitHubAuthenticationException>(()=>cli.ConnectAsync(".","enterprise.example/team/repo")); Assert.Contains("gh auth login --hostname enterprise.example",error.Message);
         Assert.Single(runner.Calls); Assert.DoesNotContain("--show-token",runner.Calls[0].Arguments);
     }
+    // Scenario: Invalid environment token explains saved account override.
     [Fact] public async Task Invalid_environment_token_explains_saved_account_override()
     {
         var runner = new ScriptedRunner(_ => new(0, """{"hosts":{"github.com":[{"active":true,"state":"error","tokenSource":"GITHUB_TOKEN"}]}}""", ""));
@@ -40,6 +45,7 @@ public sealed class GitHubCliTests
         Assert.Contains("GITHUB_TOKEN is invalid", error.Message);
         Assert.Contains("Use saved gh credentials", error.Message);
     }
+    // Scenario: Saved credentials policy applies to auth and api without switching accounts.
     [Fact] public async Task Saved_credentials_policy_applies_to_auth_and_api_without_switching_accounts()
     {
         var runner = new ScriptedRunner(r => r.Arguments[0] == "auth"
@@ -49,11 +55,13 @@ public sealed class GitHubCliTests
         Assert.Equal(2, runner.Calls.Count);
         foreach (var call in runner.Calls) { Assert.Contains("GITHUB_TOKEN", call.UnsetEnvironment!); Assert.Contains("GH_ENTERPRISE_TOKEN", call.UnsetEnvironment!); Assert.DoesNotContain("switch", call.Arguments); }
     }
+    // Scenario: Authenticated host still requires repository access.
     [Fact] public async Task Authenticated_host_still_requires_repository_access()
     {
         var runner=new ScriptedRunner(r=>r.Arguments[0]=="auth" ? new(0,"{\"hosts\":{\"enterprise.example\":[{\"active\":true,\"state\":\"success\",\"login\":\"alice\"}]}}","") : new(1,"","HTTP 404"));
         await Assert.ThrowsAsync<StackerException>(()=>new GitHubCli(runner,new(),new()).ConnectAsync(".","enterprise.example/team/repo")); Assert.Equal(2,runner.Calls.Count);
     }
+    // Scenario: Snapshot flattens all pages and keeps drafts and repository ids.
     [Fact] public async Task Snapshot_flattens_all_pages_and_keeps_drafts_and_repository_ids()
     {
         object Pr(long n,bool draft)=>new { number=n,title="Title",@base=new {repo=new{id=1},@ref="main",sha=new string('a',40)},head=new {repo=new{id=2},@ref="feature",sha=new string('b',40)},draft,html_url="https://example.invalid"};
@@ -61,6 +69,7 @@ public sealed class GitHubCliTests
         var result=await new GitHubCli(runner,new(),new()).SnapshotAsync(Context); Assert.Equal(2,result.PullRequests.Count); Assert.True(result.PullRequests[1].IsDraft); Assert.Equal(2,result.PullRequests[0].HeadRepositoryId);
         Assert.Contains("--paginate",runner.Calls[0].Arguments); Assert.Contains(Context.Host,runner.Calls[0].Arguments);
     }
+    // Scenario: Inline payload uses stdin line side and ranges never position.
     [Fact] public async Task Inline_payload_uses_stdin_line_side_and_ranges_never_position()
     {
         var runner=new ScriptedRunner(_=>new(0,"{}","")); var cli=new GitHubCli(runner,new(),new());
@@ -68,6 +77,14 @@ public sealed class GitHubCliTests
         var call=Assert.Single(runner.Calls); Assert.Contains("--input",call.Arguments); Assert.DoesNotContain(call.Arguments,a=>a.Contains("literal"));
         var body=JsonDocument.Parse(call.StandardInput!).RootElement; Assert.Equal(12,body.GetProperty("line").GetInt32()); Assert.Equal(10,body.GetProperty("start_line").GetInt32()); Assert.Equal("LEFT",body.GetProperty("side").GetString()); Assert.False(body.TryGetProperty("position",out _));
     }
+    [Fact] public async Task Unchanged_context_is_reviewable_on_right_but_not_on_left()
+    {
+        var runner = new ScriptedRunner(_ => new(0, "[[{\"filename\":\"a.cs\",\"patch\":\"@@ -1,2 +1,2 @@\\n same\\n-old\\n+new\\n\"}]]", ""));
+        var cli = new GitHubCli(runner, new(), new()); var pr = DiscoveryTests.Pr(1, "main", "feature");
+        await cli.ValidateAnchorsAsync(Context, pr, [new(1, pr.HeadSha, pr.BaseSha, "a.cs", "RIGHT", 1)]);
+        await Assert.ThrowsAsync<StackerException>(() => cli.ValidateAnchorsAsync(Context, pr, [new(1, pr.HeadSha, pr.BaseSha, "a.cs", "LEFT", 1)]));
+    }
+    // Scenario: Server patch validation rejects unavailable lines.
     [Fact] public async Task Server_patch_validation_rejects_unavailable_lines()
     {
         var runner=new ScriptedRunner(_=>new(0,"[[{\"filename\":\"a.cs\",\"patch\":\"@@ -1 +1 @@\\n-old\\n+new\\n\"}]]","")); var cli=new GitHubCli(runner,new(),new()); var pr=DiscoveryTests.Pr(1,"main","a");

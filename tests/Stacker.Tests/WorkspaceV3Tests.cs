@@ -1,3 +1,4 @@
+// Purpose: Workspace scenarios for multiple independent stacks, saved view state, and selection-driven comparison modes.
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
@@ -112,6 +113,7 @@ public sealed class WorkspaceV3Tests
         Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.IsVisible && b.Content?.ToString() == "Restore layer selection");
         await vm.FlushReviewsAsync(); window.Close();
     }
+    // Scenario: Coordinator delays on activation pauses and backs off without overlapping.
     [Fact] public async Task Coordinator_delays_on_activation_pauses_and_backs_off_without_overlapping()
     {
         var clock = new ManualClock(); var calls = 0;
@@ -121,6 +123,7 @@ public sealed class WorkspaceV3Tests
         coordinator.SetActive(false); clock.Advance(TimeSpan.FromHours(1)); await Task.Delay(10); Assert.Equal(1, calls);
         coordinator.SetActive(true); Assert.Equal(1, calls); clock.Advance(TimeSpan.FromMinutes(2)); await Task.Delay(10); Assert.Equal(2, calls);
     }
+    // Scenario: Coordinator suspends auth errors until reset.
     [Fact] public async Task Coordinator_suspends_auth_errors_until_reset()
     {
         var clock = new ManualClock(); var calls = 0;
@@ -158,7 +161,7 @@ public sealed class WorkspaceV3Tests
         review.Summary = "New unsent summary"; await review.ReloadAsync();
         Assert.False(review.HasPendingPublication); Assert.Equal("New unsent summary", review.Summary); Assert.Equal(1, hub.Writes); await review.FlushAsync();
     }
-    [AvaloniaFact] public async Task Left_side_range_can_include_context_but_not_added_lines()
+    [AvaloniaFact] public async Task Left_side_range_rejects_context_and_added_lines_before_creating_a_draft()
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub();
         var file = new FileChange("old.cs", "new.cs", FileChangeKind.Renamed, 1, 1, "100644", "100644");
@@ -166,8 +169,14 @@ public sealed class WorkspaceV3Tests
         var review = new ReviewSession(hub, hub, new ApplicationStore(f.Root), f.Reader, FakeGitHub.Context, hub.Current, section, false); await review.InitializeAsync();
         var context = new RenderedDiffLine(new(DiffLineKind.Context, 1, 1, " same"));
         var removed = new RenderedDiffLine(new(DiffLineKind.Removed, 2, null, "-old"));
-        review.SetSelection([context, removed], "LEFT"); review.Composer = "Check old lines"; await review.AddToDraftCommand.ExecuteAsync(null);
-        var anchor = Assert.Single(review.DraftComments).Anchor; Assert.Equal("LEFT", anchor.Side); Assert.Equal(1, anchor.StartLine); Assert.Equal(2, anchor.Line); Assert.Equal("new.cs", anchor.Path);
+        review.SetSelection([context, removed], "LEFT"); Assert.False(review.HasSelection);
+        review.SetSelection([removed], "LEFT"); review.Composer = "Check old lines"; await review.AddToDraftCommand.ExecuteAsync(null);
+        var anchor = Assert.Single(review.DraftComments).Anchor; Assert.Equal("LEFT", anchor.Side); Assert.Null(anchor.StartLine); Assert.Equal(2, anchor.Line); Assert.Equal("new.cs", anchor.Path);
+        Assert.False(review.CanSuggestCodeChange);
+        review.SuggestCodeChangeCommand.Execute(null); Assert.Contains("Deleted lines", review.Message);
+        review.Composer = "```suggestion\nnot applicable\n```";
+        await review.AddToDraftCommand.ExecuteAsync(null); Assert.Single(review.DraftComments);
+        await review.PostInlineCommand.ExecuteAsync(null); Assert.Equal(0, hub.Writes);
         review.SetSelection([removed, new(new(DiffLineKind.Added, null, 2, "+new"))]); Assert.False(review.HasSelection); await review.FlushAsync();
     }
     [AvaloniaFact] public async Task Canceled_initialization_does_not_overwrite_an_existing_draft()

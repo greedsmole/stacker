@@ -1,3 +1,4 @@
+// Purpose: Desktop process entry point and Avalonia platform configuration.
 using Avalonia;
 namespace Stacker.Desktop;
 internal static class Program

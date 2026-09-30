@@ -1,8 +1,10 @@
+// Purpose: Persistence scenarios for YAML validation, atomic saves, optimistic revisions, and user settings recovery.
 using Stacker.Core;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 public sealed class StorageTests
 {
+    // Scenario: Roundtrip preserves order ids and missing refs.
     [Fact]
     public async Task Roundtrip_preserves_order_ids_and_missing_refs()
     {
@@ -13,6 +15,7 @@ public sealed class StorageTests
         Assert.Equal(written.Revision, read.Revision); Assert.Equal(f.Stack.Branches, read.Stacks[0].Branches); Assert.Equal("two", read.Stacks[1].Id);
         Assert.Empty(Directory.GetFiles(f.Root, "*.tmp")); Assert.False(File.Exists(Path.Combine(f.Root, ".stackpr.yml.lock")));
     }
+    // Scenario: Invalid configuration is never overwritten.
     [Theory]
     [InlineData("version: 99\nstacks: []")]
     [InlineData("version: 1\nstacks: [invalid")]
@@ -26,6 +29,7 @@ public sealed class StorageTests
         await Assert.ThrowsAsync<StackerException>(() => store.SaveAsync(f.Root, [f.Stack], null));
         Assert.Equal(text, await File.ReadAllTextAsync(path));
     }
+    // Scenario: External edits and new files require reload.
     [Fact]
     public async Task External_edits_and_new_files_require_reload()
     {
@@ -37,6 +41,7 @@ public sealed class StorageTests
         var fresh = await store.LoadAsync(f.Root); await store.SaveAsync(f.Root, [], fresh.Revision);
         Assert.Empty((await store.LoadAsync(f.Root)).Stacks);
     }
+    // Scenario: Validation rejects duplicates and base as layer but allows shared refs across stacks.
     [Fact]
     public void Validation_rejects_duplicates_and_base_as_layer_but_allows_shared_refs_across_stacks()
     {
@@ -46,6 +51,7 @@ public sealed class StorageTests
         Assert.Throws<StackerException>(() => StackValidation.Validate([stack with { Branches = ["refs/heads/A", "refs/heads/A"] }]));
         Assert.Throws<StackerException>(() => StackValidation.Validate([stack with { Branches = [stack.Base] }]));
     }
+    // Scenario: Settings survive restart and invalid dimensions are clamped.
     [Fact]
     public async Task Settings_survive_restart_and_invalid_dimensions_are_clamped()
     {

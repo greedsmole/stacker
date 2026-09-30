@@ -1,3 +1,4 @@
+// Purpose: Bounded, thread-safe log of Git invocations shown in the diagnostics tab; credentials are redacted before display.
 using System.Text.RegularExpressions;
 using Stacker.Core;
 

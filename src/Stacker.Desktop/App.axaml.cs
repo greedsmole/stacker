@@ -1,3 +1,4 @@
+// Purpose: Application composition root: loads Avalonia resources and registers the services shared by the desktop UI.
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;

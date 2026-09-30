@@ -1,3 +1,4 @@
+// Purpose: Runs external tools without a shell, concurrently drains streams, enforces cancellation/time/output bounds, and records Git diagnostics.
 using System.Diagnostics;
 using System.Text;
 using Stacker.Core;
@@ -6,6 +7,7 @@ namespace Stacker.Infrastructure;
 
 public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRunner
 {
+    /// <summary>Executes without a shell, logs Git-only diagnostics, and returns structured process output.</summary>
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {
         var started = DateTimeOffset.UtcNow;
@@ -23,6 +25,7 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
             throw;
         }
     }
+    // Both pipes must be drained concurrently: waiting on only one can deadlock when the other fills its OS buffer.
     private static async Task<ProcessResult> RunCoreAsync(ProcessRequest request, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -96,7 +99,9 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
 
 public sealed class GitExecutable
 {
+    /// <summary>Explicit executable path; null enables normal PATH and common-installation lookup.</summary>
     public string? Override { get; set; }
+    /// <summary>Finds Git without requiring a shell command or changing machine-wide configuration.</summary>
     public string Resolve()
     {
         if (!string.IsNullOrWhiteSpace(Override)) return Override;

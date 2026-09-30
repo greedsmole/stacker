@@ -1,3 +1,4 @@
+// Purpose: GitHub Enterprise/GitHub adapter implemented through gh; resolves origin identity, reads PR data, validates anchors, and publishes explicit reviews.
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Stacker.Core;
@@ -6,8 +7,10 @@ namespace Stacker.Infrastructure;
 
 public sealed class GhExecutable
 {
+    /// <summary>Ignores environment-provided tokens when the user explicitly chooses gh's saved account.</summary>
     public bool UseSavedCredentials { get; set; }
     public IReadOnlyList<string> UnsetEnvironment => UseSavedCredentials ? ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"] : [];
+    /// <summary>Optional executable path, primarily used when gh is installed outside PATH.</summary>
     public string? Override { get; set; }
     public string Resolve() => !string.IsNullOrWhiteSpace(Override) ? Override :
         (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator).Where(p => !string.IsNullOrWhiteSpace(p))
@@ -17,6 +20,8 @@ public sealed class GhExecutable
 
 public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecutable gh) : IGitHubReader, IGitHubWriter
 {
+    /// <summary>Extracts host and repository from HTTPS, SSH, or SCP-style Git remote syntax.</summary>
+    /// <remarks>Git aliases that do not identify a hostname must be configured explicitly by the user.</remarks>
     public static (string Host, string Owner, string Name) ParseOrigin(string origin)
     {
         string host, path;
@@ -30,6 +35,7 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
         }
         return ParseRepository($"{host}/{path}");
     }
+    /// <summary>Validates the explicit host/owner/repository override accepted by the settings UI.</summary>
     public static (string Host, string Owner, string Name) ParseRepository(string value)
     {
         var parts = value.Trim().TrimEnd('/').Split('/');
@@ -39,6 +45,7 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
         if (name.Length == 0) throw new StackerException("Repository name is empty.");
         return (parts[0].ToLowerInvariant(), parts[1], name);
     }
+    // JSON is parsed even after a successful exit: gh auth status can encode invalid credentials in its JSON payload.
     private async Task<JsonElement> RunJsonAsync(string[] args, CancellationToken ct, string? body = null)
     {
         var response = await runner.RunAsync(new(gh.Resolve(), args, Timeout: TimeSpan.FromSeconds(60), MaxOutputBytes: 32 * 1024 * 1024,
@@ -48,9 +55,11 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
         try { return JsonDocument.Parse(string.IsNullOrWhiteSpace(response.StdOut) ? "{}" : response.StdOut).RootElement.Clone(); }
         catch (JsonException) { throw new StackerException("gh returned invalid JSON. Check the GitHub host and CLI version."); }
     }
+    // All API calls pin the hostname. POST bodies go through stdin so review text is never interpreted as CLI arguments.
     private Task<JsonElement> Api(string host, string endpoint, CancellationToken ct, object? body = null, bool paginate = false) =>
         RunJsonAsync(["api", "--hostname", host, "--method", body is null ? "GET" : "POST", endpoint,
             .. (paginate ? new[] { "--paginate", "--slurp" } : []), .. (body is null ? [] : new[] { "--input", "-" })], ct, body is null ? null : JsonSerializer.Serialize(body));
+    /// <summary>Returns only the active, valid account for this host, while explaining environment-token precedence.</summary>
     private async Task<string> ActiveUser(string host, CancellationToken ct)
     {
         var status = await RunJsonAsync(["auth", "status", "--active", "--hostname", host, "--json", "hosts"], ct);
@@ -63,6 +72,7 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
             }
         throw new GitHubAuthenticationException($"Not authenticated for {host}. Run: gh auth login --hostname {host}, then retry.");
     }
+    /// <summary>Connects origin (or explicit override), validates the active account, then verifies repository access.</summary>
     public async Task<GitHubRepositoryContext> ConnectAsync(string root, string? repositoryOverride, CancellationToken ct = default)
     {
         (string Host, string Owner, string Name) parsed;
@@ -77,6 +87,7 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
         var repo = await Api(parsed.Host, $"repos/{parsed.Owner}/{parsed.Name}", ct);
         return new(parsed.Host, repo.GetProperty("id").GetInt64(), Str(repo.GetProperty("owner"), "login"), Str(repo, "name"), Str(repo, "clone_url"), user, Str(repo, "default_branch"));
     }
+    /// <summary>Revalidates both user identity and repository identity immediately before sensitive actions.</summary>
     public async Task VerifyAccessAsync(GitHubRepositoryContext context, CancellationToken ct = default)
     {
         var user = await ActiveUser(context.Host, ct);
@@ -84,11 +95,13 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
         var repository = await Api(context.Host, Repo(context), ct);
         if (repository.GetProperty("id").GetInt64() != context.RepositoryId) throw new StackerException("Repository identity changed. Reconnect before publishing.");
     }
+    /// <summary>Reads all open PR pages, retaining draft entries because drafts may still form a stack.</summary>
     public async Task<GitHubSnapshot> SnapshotAsync(GitHubRepositoryContext context, CancellationToken ct = default)
     {
         var json = await Api(context.Host, Repo(context) + "/pulls?state=open&per_page=100", ct, paginate: true);
         return new(context, Pages(json).Select(ParsePr).ToArray(), DateTimeOffset.UtcNow);
     }
+    /// <summary>Fetches one current open PR record and refuses a PR that closed since the last snapshot.</summary>
     public async Task<PullRequest> PullRequestAsync(GitHubRepositoryContext context, long number, CancellationToken ct = default)
     {
         var value = await Api(context.Host, $"{Repo(context)}/pulls/{number}", ct);
@@ -101,6 +114,7 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
         return new(p.GetProperty("number").GetInt64(), Str(p, "title"), RepoId(b), Str(b, "ref"), Str(b, "sha"), RepoId(h), Str(h, "ref"), Str(h, "sha"), Bool(p, "draft"), Str(p, "html_url"));
     }
     private static long RepoId(JsonElement p) => p.TryGetProperty("repo", out var repo) && repo.ValueKind == JsonValueKind.Object ? repo.GetProperty("id").GetInt64() : -1;
+    /// <summary>Loads conversation comments, review decisions, and code threads as separate UI concepts.</summary>
     public async Task<ReviewDiscussion> DiscussionAsync(GitHubRepositoryContext context, PullRequest pr, CancellationToken ct = default)
     {
         var comments = Pages(await Api(context.Host, $"{Repo(context)}/issues/{pr.Number}/comments?per_page=100", ct, paginate: true))
@@ -141,12 +155,15 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
         var files = Pages(await Api(context.Host, $"{Repo(context)}/pulls/{pr.Number}/files?per_page=100", ct, paginate: true));
         return files.Select(f => Str(f, "filename")).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.Ordinal).ToArray();
     }
+    /// <summary>Checks that a file is part of the current server-side PR diff before creating a file comment.</summary>
     public async Task ValidateFileAsync(GitHubRepositoryContext context, PullRequest pr, string path, CancellationToken ct = default)
     {
         var files = await ChangedFilePathsAsync(context, pr, ct);
         if (string.IsNullOrWhiteSpace(path) || !files.Contains(path, StringComparer.Ordinal))
             throw new StackerException("This file is not in the current PR diff. Refresh and reopen PR changes.");
     }
+    /// <summary>Verifies draft anchors against the live PR SHAs and actual changed lines before publication.</summary>
+    /// <remarks>This prevents a local or stale comparison from attaching a comment to the wrong server-side line.</remarks>
     public async Task ValidateAnchorsAsync(GitHubRepositoryContext context, PullRequest pr, IReadOnlyList<ReviewAnchor> anchors, CancellationToken ct = default)
     {
         if (anchors.Count == 0) return;
@@ -165,38 +182,46 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
                 throw new StackerException("The selected range is not present on this side of the GitHub diff.");
         }
     }
+    // GraphQL is used for review threads because REST does not expose resolution and outdated state consistently.
     private async Task<JsonElement> Graph(string host, string query, object variables, CancellationToken ct)
     {
         var json = await Api(host, "graphql", ct, new { query, variables });
         if (json.TryGetProperty("errors", out var errors)) throw new StackerException("GitHub GraphQL: " + errors.ToString());
         return json.GetProperty("data").Clone();
     }
+    /// <summary>Posts one ordinary PR conversation comment, not a review decision or code-thread comment.</summary>
     public async Task CommentAsync(GitHubRepositoryContext context, long number, string body, CancellationToken ct = default) =>
         _ = await Api(context.Host, $"{Repo(context)}/issues/{number}/comments", ct, new { body });
+    /// <summary>Posts a file-level review comment without fabricating a line number.</summary>
     public async Task FileCommentAsync(GitHubRepositoryContext context, PullRequest pr, string path, string body, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(body)) throw new StackerException("Choose a file and enter a comment.");
         _ = await Api(context.Host, $"{Repo(context)}/pulls/{pr.Number}/comments", ct,
             new { body, commit_id = pr.HeadSha, path, subject_type = "file" });
     }
+    /// <summary>Posts an inline comment using the current PR's line/side coordinates.</summary>
     public async Task InlineCommentAsync(GitHubRepositoryContext context, DraftComment comment, CancellationToken ct = default)
     {
         var body = AnchorBody(comment); body["commit_id"] = comment.Anchor.HeadSha;
         _ = await Api(context.Host, $"{Repo(context)}/pulls/{comment.Anchor.PullRequest}/comments", ct, body);
     }
+    /// <summary>Replies to an existing review thread after validating the server comment ID.</summary>
     public async Task ReplyAsync(GitHubRepositoryContext context, long number, string commentId, string body, CancellationToken ct = default)
     {
         if (!long.TryParse(commentId, out var id) || id <= 0) throw new StackerException("Invalid comment ID.");
         _ = await Api(context.Host, $"{Repo(context)}/pulls/{number}/comments/{id}/replies", ct, new { body });
     }
+    /// <summary>Changes thread resolution through GitHub's review-thread mutation.</summary>
     public async Task ResolveAsync(GitHubRepositoryContext context, string threadId, bool resolved, CancellationToken ct = default) =>
         _ = await Graph(context.Host, "mutation($id:ID!){" + (resolved ? "resolveReviewThread" : "unresolveReviewThread") + "(input:{threadId:$id}){thread{id isResolved}}}", new { id = threadId }, ct);
+    /// <summary>Submits a grouped review and its line comments only when explicitly requested by the user.</summary>
     public async Task SubmitReviewAsync(GitHubRepositoryContext context, ReviewDraft draft, CancellationToken ct = default)
     {
         if (draft.Decision is not ("COMMENT" or "APPROVE" or "REQUEST_CHANGES")) throw new StackerException("Invalid review decision.");
         _ = await Api(context.Host, $"{Repo(context)}/pulls/{draft.PullRequest}/reviews", ct,
             new { commit_id = draft.HeadSha, body = draft.Summary, @event = draft.Decision, comments = draft.Comments.Select(AnchorBody).ToArray() });
     }
+    // GitHub's current review-comment contract uses line/side and optional start_line/start_side, never legacy position.
     private static Dictionary<string, object> AnchorBody(DraftComment comment)
     {
         var a = comment.Anchor;

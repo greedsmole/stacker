@@ -1,3 +1,4 @@
+// Purpose: Read-only Git adapter that snapshots refs, calculates ancestry/file metadata, and loads bounded patches and source blobs.
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Stacker.Core;
@@ -6,12 +7,14 @@ namespace Stacker.Infrastructure;
 
 public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable executable) : IGitRepositoryReader, IBlobReader
 {
+    // These per-process settings keep interactive prompts, pagers, optional index writes, and locale-dependent parsing out of reads.
     private static readonly IReadOnlyDictionary<string, string> EnvironmentOverrides = new Dictionary<string, string>
     {
         ["GIT_TERMINAL_PROMPT"] = "0", ["GCM_INTERACTIVE"] = "Never", ["GIT_PAGER"] = "cat",
         ["GIT_OPTIONAL_LOCKS"] = "0", ["GIT_NO_LAZY_FETCH"] = "1", ["GIT_LITERAL_PATHSPECS"] = "1",
         ["LC_ALL"] = "C"
     };
+    /// <summary>Runs a non-interactive Git read and converts unexpected exit codes into an actionable UI error.</summary>
     private async Task<ProcessResult> Run(string root, string[] args, CancellationToken ct, int limit = 16 * 1024 * 1024, bool allowOne = false)
     {
         var result = await runner.RunAsync(new(executable.Resolve(),
@@ -21,6 +24,7 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
             throw new StackerException($"Git exited with code {result.ExitCode}: {result.StdErr.Trim()}");
         return result;
     }
+    /// <summary>Captures only direct local and remote-tracking refs plus the working-tree changed-file count.</summary>
     public async Task<RepositorySnapshot> OpenAsync(string path, CancellationToken ct = default)
     {
         if (!Directory.Exists(path)) throw new StackerException("The repository folder does not exist.");
@@ -40,11 +44,13 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
         }
         return new(root, refs, changed);
     }
+    /// <summary>Returns all merge bases because more than one best ancestor makes the comparison ambiguous.</summary>
     public async Task<IReadOnlyList<string>> MergeBasesAsync(string root, string left, string right, CancellationToken ct = default)
     {
         Sha(left); Sha(right);
         return (await Run(root, ["merge-base", "--all", left, right], ct, allowOne: true)).StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
+    /// <summary>Counts commits exclusive to the head and parent, used to show layer divergence rather than merge status.</summary>
     public async Task<(int Ahead, int Behind)> CountsAsync(string root, string parent, string head, CancellationToken ct = default)
     {
         Sha(parent); Sha(head);
@@ -52,6 +58,7 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
         return (int.Parse(values[1], CultureInfo.InvariantCulture), int.Parse(values[0], CultureInfo.InvariantCulture));
     }
     private static string[] DiffArgs(string @base, string head) => ["diff", "--no-color", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--no-relative", "--src-prefix=a/", "--dst-prefix=b/", "--find-renames=50%", "-l1000", @base, head];
+    // NUL-delimited name-status output keeps spaces, Unicode, and embedded newlines in paths unambiguous.
     public async Task<IReadOnlyList<FileChange>> FilesAsync(string root, string @base, string head, CancellationToken ct = default)
     {
         Sha(@base); Sha(head);
@@ -79,6 +86,7 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
         }
         return files;
     }
+    /// <summary>Loads a single file patch only after the file list has been shown, keeping large diffs lazy.</summary>
     public async Task<FileDiff> PatchAsync(string root, string @base, string head, FileChange file, CancellationToken ct = default)
     {
         Sha(@base); Sha(head);
@@ -93,6 +101,7 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
         if (patch.Count(c => c == '\n') > 50_000) throw new OutputLimitException();
         return PatchParser.Parse(file, patch);
     }
+    /// <summary>Reads immutable blob content for syntax highlighting; absent old/new blobs are normal for add/delete.</summary>
     public async Task<BlobContent?> ReadBlobAsync(string root, string commit, string path, CancellationToken ct = default)
     {
         Sha(commit);

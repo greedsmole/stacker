@@ -1,3 +1,4 @@
+// Purpose: Repository and stack workspace lifecycle: opening, refreshing, saving definitions, and preserving each stack’s view.
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -41,12 +42,15 @@ public sealed partial class MainViewModel
     public bool IsThroughLayer => Mode == DiffMode.Cumulative;
     private string GroupKey(StackGroupViewModel group) => (group.IsRemote ? "github:" + _remoteSnapshot?.Context.Identity : "local") + ":" + group.Definition.Id;
     private string ViewKey() => Mode + ":" + string.Join("|", _activeGroup?.Layers.Where(l => _selectedPositions.Contains(l.Snapshot.Position)).Select(l => l.Snapshot.Branch) ?? []);
+    /// <summary>Enables or suspends the background GitHub polling loop as the window gains or loses focus.</summary>
+    /// <remarks>Activation does not reopen the repository or recreate local diff sections.</remarks>
     public void SetWindowActive(bool active)
     {
         _windowActive = active;
         _coordinator ??= new(PollAsync);
         _coordinator.SetActive(active && Settings.BackgroundRefresh && !IsDemo && _repository is not null);
     }
+    /// <summary>Refreshes remote metadata in the background while retaining the currently displayed snapshot.</summary>
     public async Task PollAsync(CancellationToken ct = default)
     {
         if (_repository is null || IsDemo || !_syncGate.Wait(0)) return;
@@ -87,6 +91,7 @@ public sealed partial class MainViewModel
         }
         finally { _applyingChanges = false; }
     }
+    // A separate state key per repository and stack prevents one stack's file/filter/scroll choices leaking into another.
     private void CaptureWorkspace()
     {
         foreach (var group in LocalGroups.Concat(RemoteGroups).Concat(OtherGroups))
@@ -102,6 +107,7 @@ public sealed partial class MainViewModel
         if (_displayedStateKey is not null)
             active.Comparisons[_displayedStateKey] = Sections.Select(s => new SectionViewState(s.Result.Layer, s.SelectedFile?.NewPath, s.Filter, s.ScrollX, s.ScrollY, s.IsExpanded)).ToArray();
     }
+    /// <summary>Persists the active selection and per-stack view state in the application data directory.</summary>
     public async Task SaveWorkspaceAsync()
     {
         if (_repository is null) return;
@@ -134,6 +140,7 @@ public sealed partial class MainViewModel
                     section.ScrollX = view.X; section.ScrollY = view.Y; section.IsExpanded = view.Expanded;
                 }
     }
+    /// <summary>Opens a stack's aggregate comparison, the top-level action for reviewing the whole change.</summary>
     public async Task SelectOverviewAsync(StackGroupViewModel group)
     {
         await SaveWorkspaceAsync(); SetActiveGroup(group); _selectedPositions = [];

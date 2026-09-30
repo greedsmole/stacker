@@ -1,3 +1,4 @@
+// Purpose: Review workflow state: discussions, file/line comment composers, multi-line anchors, persisted drafts, and explicit publication.
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -6,6 +7,8 @@ using Stacker.Core;
 using Stacker.Infrastructure;
 namespace Stacker.Desktop.ViewModels;
 
+/// <summary>Owns draft editing and publication for one PR while sharing discussion data with its attached diff views.</summary>
+/// <remarks>Drafts are saved locally before network writes so timeout or permission failures do not discard user text.</remarks>
 public partial class ReviewViewModel : ObservableObject
 {
     private readonly IGitHubReader _reader;
@@ -21,6 +24,9 @@ public partial class ReviewViewModel : ObservableObject
     public bool HasRecoveredText => !string.IsNullOrEmpty(RecoveredText);
     public string RecoveredText => _draft.RecoveredText;
     public bool HasSelection => _selection is not null;
+    public bool HasSuggestionPreview => ReviewContent.Parse(Composer).Any(b => b.IsSuggestion);
+    public string? SelectedCode => GetSelectedCode();
+    public bool CanSuggestCodeChange => CanEditDraft && _selection?.Side == "RIGHT" && SelectedCode is not null;
     public string DecisionLabel { get => Decision switch { "APPROVE" => "Approve", "REQUEST_CHANGES" => "Request changes", _ => "Comment" }; set => Decision = value switch { "Approve" => "APPROVE", "Request changes" => "REQUEST_CHANGES", _ => "COMMENT" }; }
     public IReadOnlyList<string> DecisionLabels { get; } = ["Comment", "Approve", "Request changes"];
     [ObservableProperty] private int _panelTab;
@@ -51,7 +57,7 @@ public partial class ReviewViewModel : ObservableObject
             if (anchor is null || anchor.HeadSha == PullRequest.HeadSha && anchor.BaseSha == PullRequest.BaseSha) continue;
             _draft.RecoveredText += (_draft.RecoveredText.Length == 0 ? "" : "\n\n") + $"{anchor.Path}:{anchor.Line} (previous version)\n{text}";
             _draft.ContextComposers.Remove(key);
-            if (key == _composerKey) { _selection = null; OnPropertyChanged(nameof(HasSelection)); CloseInlineEditors(); }
+            if (key == _composerKey) { _selection = null; OnPropertyChanged(nameof(HasSelection)); OnPropertyChanged(nameof(CanSuggestCodeChange)); OnPropertyChanged(nameof(SelectedCode)); CloseInlineEditors(); }
         }
         OnPropertyChanged(nameof(RecoveredText)); OnPropertyChanged(nameof(HasRecoveredText)); QueueSave();
     }
@@ -62,8 +68,8 @@ public partial class ReviewViewModel : ObservableObject
         Composer = _draft.ContextComposers.GetValueOrDefault(key, ""); _switchingComposer = false;
     }
     public void CloseInlineEditors() { foreach (var view in _sections) foreach (var line in view.Lines) line.Editor = null; }
-    public void BeginPrComment() { if (IsBusy) return; CloseInlineEditors(); _selection = null; OnPropertyChanged(nameof(HasSelection)); SelectComposer("pr"); PanelTab = 0; }
-    public void BeginReply(ReviewThread thread) { if (IsBusy) return; CloseInlineEditors(); _selection = null; OnPropertyChanged(nameof(HasSelection)); SelectedThread = thread; SelectComposer("reply:" + thread.Id); PanelTab = 2; }
+    public void BeginPrComment() { if (IsBusy) return; CloseInlineEditors(); _selection = null; OnPropertyChanged(nameof(HasSelection)); OnPropertyChanged(nameof(CanSuggestCodeChange)); OnPropertyChanged(nameof(SelectedCode)); SelectComposer("pr"); PanelTab = 0; }
+    public void BeginReply(ReviewThread thread) { if (IsBusy) return; CloseInlineEditors(); _selection = null; OnPropertyChanged(nameof(HasSelection)); OnPropertyChanged(nameof(CanSuggestCodeChange)); OnPropertyChanged(nameof(SelectedCode)); SelectedThread = thread; SelectComposer("reply:" + thread.Id); PanelTab = 2; }
     [RelayCommand] private void RestoreRecoveredText()
     {
         Composer = string.IsNullOrEmpty(Composer) ? RecoveredText : Composer + "\n\n" + RecoveredText;
@@ -74,7 +80,7 @@ public partial class ReviewViewModel : ObservableObject
         if (IsBusy) return;
         CloseInlineEditors(); _selection = comment.Anchor; SelectComposer("line:" + JsonSerializer.Serialize(comment.Anchor));
         Composer = comment.Body; RemoveDraftComment(comment); PanelTab = 3;
-        OnPropertyChanged(nameof(HasSelection)); OnPropertyChanged(nameof(SelectionLabel));
+        OnPropertyChanged(nameof(HasSelection)); OnPropertyChanged(nameof(CanSuggestCodeChange)); OnPropertyChanged(nameof(SelectedCode)); OnPropertyChanged(nameof(SelectionLabel));
     }
     private bool _loading;
     private bool _draftLoaded;
@@ -121,9 +127,9 @@ public partial class ReviewViewModel : ObservableObject
     }
     private string Key => Context.Identity + "/" + PullRequest.Number;
     partial void OnSummaryChanged(string value) { if (!_loading) { _draft.Summary = value; QueueSave(); } }
-    partial void OnComposerChanged(string value) { if (!_loading && !_switchingComposer) { _draft.ContextComposers[_composerKey] = value; if (_composerKey == "pr") _draft.Composer = value; QueueSave(); } }
+    partial void OnComposerChanged(string value) { OnPropertyChanged(nameof(HasSuggestionPreview)); if (!_loading && !_switchingComposer) { _draft.ContextComposers[_composerKey] = value; if (_composerKey == "pr") _draft.Composer = value; QueueSave(); } }
     partial void OnDecisionChanged(string value) { OnPropertyChanged(nameof(DecisionLabel)); if (!_loading) { _draft.Decision = value; QueueSave(); } }
-    private void NotifyPublicationState() { OnPropertyChanged(nameof(CanPublish)); OnPropertyChanged(nameof(CanPostFile)); OnPropertyChanged(nameof(HasPendingPublication)); OnPropertyChanged(nameof(HasStaleDraft)); OnPropertyChanged(nameof(IsInitialized)); OnPropertyChanged(nameof(CanEditDraft)); }
+    private void NotifyPublicationState() { OnPropertyChanged(nameof(CanPublish)); OnPropertyChanged(nameof(CanPostFile)); OnPropertyChanged(nameof(HasPendingPublication)); OnPropertyChanged(nameof(HasStaleDraft)); OnPropertyChanged(nameof(IsInitialized)); OnPropertyChanged(nameof(CanEditDraft)); OnPropertyChanged(nameof(CanSuggestCodeChange)); OnPropertyChanged(nameof(SelectedCode)); }
     partial void OnIsBusyChanged(bool value) => NotifyPublicationState();
     partial void OnFileComposerChanged(string value)
     {
@@ -139,6 +145,7 @@ public partial class ReviewViewModel : ObservableObject
         Sync(FileThreads, Threads.Where(t => t.IsFileLevel && t.Path == SelectedReviewFile).ToArray(), t => t.Id);
         OnPropertyChanged(nameof(FileThreadsLabel)); OnPropertyChanged(nameof(CanPostFile));
     }
+    /// <summary>Restores the account/PR-specific draft, then loads server discussions and current reviewable files.</summary>
     public async Task InitializeAsync(IEnumerable<RenderedDiffLine>? selection = null, CancellationToken ct = default)
     {
         _loading = true;
@@ -164,18 +171,33 @@ public partial class ReviewViewModel : ObservableObject
         catch (Exception ex) { Message = ex.Message; }
         finally { _loading = false; NotifyPublicationState(); QueueSave(); }
     }
+    /// <summary>Creates a line or contiguous multi-line selection tied to this exact PR diff snapshot.</summary>
     public void SetSelection(IEnumerable<RenderedDiffLine> selected, string? side = null)
     {
         if (IsBusy) return;
-        CloseInlineEditors(); var lines = selected.ToArray(); _selection = null; OnPropertyChanged(nameof(HasSelection));
+        CloseInlineEditors(); var lines = selected.ToArray(); _selection = null; OnPropertyChanged(nameof(HasSelection)); OnPropertyChanged(nameof(CanSuggestCodeChange)); OnPropertyChanged(nameof(SelectedCode));
         if (!_section.IsPrSnapshot || lines.Length == 0 || _section.SelectedFile is not { } file) { OnPropertyChanged(nameof(SelectionLabel)); return; }
-        var left = side == "LEFT" || side is null && lines.Any(l => l.Kind == DiffLineKind.Removed) && lines.All(l => l.Kind != DiffLineKind.Added);
-        if (left ? lines.Any(l => l.Kind is not (DiffLineKind.Removed or DiffLineKind.Context)) : lines.Any(l => l.Kind is not (DiffLineKind.Added or DiffLineKind.Context))) { Message = "Select a contiguous range on one side of the diff."; return; }
-        var numbers = lines.Select(l => left ? l.OldLineNumber : l.NewLineNumber).Where(n => n.HasValue).Select(n => n!.Value).Distinct().Order().ToArray();
-        if (numbers.Length != lines.Length || numbers[^1] - numbers[0] + 1 != numbers.Length) { Message = "Select a contiguous range of code lines."; return; }
-        _selection = new(PullRequest.Number, _section.Result.HeadSha, PullRequest.BaseSha, file.NewPath, left ? "LEFT" : "RIGHT", numbers[^1], numbers.Length > 1 ? numbers[0] : null, numbers.Length > 1 ? left ? "LEFT" : "RIGHT" : null);
+        if (!ReviewSelection.TryCreateAnchor(PullRequest, file.NewPath, lines.Select(l => l.Source).ToArray(), side, out _selection, out var error))
+        { Message = error!; NotifyPublicationState(); return; }
         SelectComposer("line:" + JsonSerializer.Serialize(_selection));
-        OnPropertyChanged(nameof(SelectionLabel)); OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(SelectionLabel)); OnPropertyChanged(nameof(HasSelection)); OnPropertyChanged(nameof(CanSuggestCodeChange)); OnPropertyChanged(nameof(SelectedCode));
+        NotifyPublicationState();
+    }
+    /// <summary>Prefills a standard GitHub suggestion with the selected head-side code, retaining existing prose.</summary>
+    [RelayCommand] private void SuggestCodeChange()
+    {
+        if (!CanSuggestCodeChange) { Message = "Select current code on the right side to suggest a replacement. Deleted lines support comments only."; return; }
+        if (HasSuggestionPreview) { Message = "Edit the existing suggestion block to change the replacement."; return; }
+        var suggestion = ReviewContent.Suggestion(SelectedCode!);
+        Composer = string.IsNullOrWhiteSpace(Composer) ? suggestion : Composer + "\n\n" + suggestion;
+        Message = "Edit the code inside the suggestion block, then add it to your review or post it.";
+    }
+    private string? GetSelectedCode()
+    {
+        if (_selection is not { Side: "RIGHT" } anchor || anchor.HeadSha != _section.Result.HeadSha || anchor.BaseSha != PullRequest.BaseSha || anchor.Path != _section.SelectedFile?.NewPath) return null;
+        var start = anchor.StartLine ?? anchor.Line;
+        var lines = _section.Lines.Where(l => l.Kind is DiffLineKind.Added or DiffLineKind.Context && l.NewLineNumber >= start && l.NewLineNumber <= anchor.Line).OrderBy(l => l.NewLineNumber).ToArray();
+        return lines.Length == anchor.Line - start + 1 ? string.Join("\n", lines.Select(l => l.Text.TrimEnd('\r'))) : null;
     }
     [RelayCommand] public async Task ReloadAsync(CancellationToken ct = default)
     {
@@ -219,6 +241,7 @@ public partial class ReviewViewModel : ObservableObject
         catch (Exception ex) { Message = ex.Message; if (_backgroundRead) throw; }
         finally { if (ReferenceEquals(_discussionLoad, load)) _discussionLoad = null; }
     }
+    /// <summary>Reloads remote comments while retaining unsent local draft text.</summary>
     public async Task RefreshDiscussionAsync(CancellationToken ct = default)
     { if (IsBusy) return; _backgroundRead = true; try { await ReloadAsync(ct); } finally { _backgroundRead = false; } }
     private static void Sync<T>(ObservableCollection<T> target, IReadOnlyList<T> incoming, Func<T, string> key)
@@ -242,6 +265,7 @@ public partial class ReviewViewModel : ObservableObject
     {
         if (IsBusy) return;
         if (_selection is null || string.IsNullOrWhiteSpace(Composer)) { Message = "Select code lines and enter a comment."; return; }
+        if (_selection.Side != "RIGHT" && HasSuggestionPreview) { Message = "Suggestions can only replace right-side code. Keep a normal comment on deleted lines."; return; }
         if (_draft.HeadSha != _selection.HeadSha || _draft.BaseSha != _selection.BaseSha) { Message = "This draft belongs to another PR version. Recheck its existing anchors first."; return; }
         var comment = new DraftComment(_selection, Composer); _draft.Comments.Add(comment); DraftComments.Add(comment); Composer = ""; QueueSave(); await _saveQueue; if (_saveError is null) Message = "Line comment saved to the local draft.";
     }
@@ -269,6 +293,7 @@ public partial class ReviewViewModel : ObservableObject
     [RelayCommand] private async Task PostInlineAsync()
     {
         if (_selection is null) { Message = "Select code lines first."; return; }
+        if (_selection.Side != "RIGHT" && HasSuggestionPreview) { Message = "Suggestions can only replace right-side code. Keep a normal comment on deleted lines."; return; }
         var anchor = _selection; var body = Composer;
         await PublishAsync("inline", [anchor], marker => _writer.InlineCommentAsync(Context, new(anchor, Mark(body, marker))));
     }
@@ -290,11 +315,13 @@ public partial class ReviewViewModel : ObservableObject
         if (latest.HeadSha != PullRequest.HeadSha || latest.BaseSha != PullRequest.BaseSha) throw new StackerException("PR base/head changed. Refresh and reopen PR changes. Your draft is preserved.");
         await _reader.ValidateAnchorsAsync(Context, latest, anchors);
     }
+    // Publication first persists a pending marker, then revalidates the server snapshot; a failed write keeps the draft recoverable.
     private async Task PublishAsync(string kind, IReadOnlyList<ReviewAnchor> anchors, Func<string, Task> send, string? filePath = null)
     {
         if (!CanPublish) { Message = IsDemo ? "Demo is offline. Publishing is disabled." : "Resolve the pending publication before sending again."; return; }
         if (kind != "review" && string.IsNullOrWhiteSpace(kind == "file" ? FileComposer : Composer)) { Message = "Enter a comment first."; return; }
         if (kind == "review" && (_draft.HeadSha != PullRequest.HeadSha || _draft.BaseSha != PullRequest.BaseSha)) { Message = "Draft version differs from this PR snapshot."; return; }
+        if (kind == "review" && _draft.Comments.Any(c => c.Anchor.Side != "RIGHT" && ReviewContent.Parse(c.Body).Any(b => b.IsSuggestion))) { Message = "A suggestion targets deleted lines. Edit it into a normal comment before submitting."; return; }
         if (kind == "review" && Decision == "REQUEST_CHANGES" && string.IsNullOrWhiteSpace(Summary)) { Message = "Explain the requested changes in the review summary."; return; }
         if (kind == "review" && Decision != "APPROVE" && string.IsNullOrWhiteSpace(Summary) && DraftComments.Count == 0) { Message = "Add a summary or line comments."; return; }
         _discussionLoad?.Cancel(); IsBusy = true;
@@ -342,6 +369,7 @@ public partial class ReviewViewModel : ObservableObject
         _draft.PendingReviewComments = null; _draft.PendingSummary = null;
     }
     private static string Mark(string body, string marker) => body + "\n\n<!-- stacker:" + marker + " -->";
+    // Serialize saves so an older asynchronous write cannot overwrite newer text typed by the user.
     private void QueueSave()
     {
         if (_loading || !_draftLoaded) return;
@@ -354,5 +382,6 @@ public partial class ReviewViewModel : ObservableObject
         try { await _store.WriteAsync("drafts", Key, copy); _saveError = null; }
         catch (Exception ex) { _saveError = "Cannot save draft: " + ex.Message; Message = _saveError; }
     }
+    /// <summary>Waits for queued draft writes so closing or switching context cannot silently lose edits.</summary>
     public async Task FlushAsync() { await _saveQueue; if (_saveError is not null) throw new StackerException(_saveError); }
 }

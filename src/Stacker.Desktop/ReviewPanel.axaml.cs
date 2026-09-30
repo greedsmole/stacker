@@ -1,3 +1,4 @@
+// Purpose: Review-panel event bridge for tab changes and local draft-comment editing actions.
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Stacker.Core;

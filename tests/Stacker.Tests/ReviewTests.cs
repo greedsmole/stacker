@@ -1,3 +1,4 @@
+// Purpose: Review workflow scenarios using a fake GitHub service to verify draft preservation and safe publication behavior.
 using Avalonia.Headless.XUnit;
 using Stacker.Core;
 using Stacker.Desktop.ViewModels;

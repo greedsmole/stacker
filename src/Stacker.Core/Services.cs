@@ -1,7 +1,9 @@
 namespace Stacker.Core;
 
+/// <summary>Enforces definition invariants before a stack is saved or compared.</summary>
 public static class StackValidation
 {
+    /// <summary>Rejects duplicate IDs, invalid refs, repeated layers, and using the base as a layer.</summary>
     public static void Validate(IReadOnlyList<StackDefinition> stacks)
     {
         var ids = new HashSet<string>(StringComparer.Ordinal);
@@ -24,6 +26,8 @@ public static class StackValidation
 
 public sealed class StackService(IGitRepositoryReader git)
 {
+    /// <summary>Resolves each configured layer and measures its relation to the immediately preceding ref.</summary>
+    /// <remarks>A behind count warns that the displayed merge-base diff is not a prediction of the merge result.</remarks>
     public async Task<IReadOnlyList<StackLayerSnapshot>> SnapshotAsync(RepositorySnapshot repository, StackDefinition stack, CancellationToken ct = default)
     {
         var refs = repository.Refs.ToDictionary(r => r.Name, r => r.Sha, StringComparer.Ordinal);
@@ -49,6 +53,8 @@ public sealed class StackService(IGitRepositoryReader git)
 
 public sealed class DiffService(IGitRepositoryReader git)
 {
+    /// <summary>Builds Layer, Cumulative, FullStack, or independent MultiLayer file lists.</summary>
+    /// <remarks>All requested comparisons use SHAs captured in the request so a moving branch cannot mix snapshots.</remarks>
     public async Task<IReadOnlyList<DiffResult>> CompareAsync(DiffRequest request, CancellationToken ct = default)
     {
         var stack = request.Stack;

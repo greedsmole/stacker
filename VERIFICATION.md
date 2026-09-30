@@ -1,3 +1,11 @@
+# Verification — Stacker v0.4.1
+
+Recorded on 2026-10-01. Local test suite: **109 passed, 0 failed** on macOS ARM64. Coverage includes native folder-picker ownership in headless Avalonia, multiline range selection and its full-height comment button, allowed unchanged context anchors, suggestion generation/parsing/rendering, and rejection of suggestions on deleted-side anchors. No live comments or reviews were posted.
+
+Release packages target macOS ARM64 and Windows x64. GitHub Actions tests and packages both platforms for the release source commit. Interactive Windows/GHES testing and live publication remain unverified. The macOS app is not Developer ID signed or notarized.
+
+## Earlier verification records
+
 # Verification — Stacker v0.4
 
 Local implementation on 2026-09-30: standalone PRs open directly in reviewable Layer mode; selected diff rows create a range anchor; code wrapping, file/change search and a live Git log are available. The Git cache batches missing refs and requests only the PRs required by the chosen comparison. No clone or pull is issued by the application.

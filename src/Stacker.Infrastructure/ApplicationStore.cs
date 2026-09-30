@@ -1,3 +1,4 @@
+// Purpose: Stores application-owned snapshots, preferences, and drafts under stable hashed identities outside the user repository.
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;

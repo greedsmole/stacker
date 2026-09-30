@@ -1,3 +1,4 @@
+// Purpose: Converts unified patch text into line-numbered diff records used by rendering and review-anchor validation.
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Stacker.Core;
@@ -6,8 +7,10 @@ namespace Stacker.Infrastructure;
 
 public static partial class PatchParser
 {
+    // Generated once by the compiler so each patch line does not recompile or recreate the hunk-header expression.
     [GeneratedRegex(@"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")]
     private static partial Regex HunkHeader();
+    /// <summary>Parses unified patch lines into semantic kinds and old/new coordinates for display and review anchoring.</summary>
     public static FileDiff Parse(FileChange file, string patch)
     {
         var lines = new List<DiffLine>();

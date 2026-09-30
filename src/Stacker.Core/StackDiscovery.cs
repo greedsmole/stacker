@@ -1,7 +1,10 @@
 namespace Stacker.Core;
 
+/// <summary>Groups open pull requests into stacks using exact repository and branch relationships.</summary>
 public static class StackDiscovery
 {
+    /// <summary>Finds PR parent edges, cuts edges at configured boundary branches, and reports ambiguous or cyclic paths.</summary>
+    /// <remarks>Titles, timestamps, and commit similarity are deliberately ignored: they are not reliable evidence of stacking.</remarks>
     public static DiscoveryResult Discover(IReadOnlyList<PullRequest> prs, IReadOnlyCollection<string> boundaries)
     {
         var warnings = new List<string>();

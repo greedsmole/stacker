@@ -1,3 +1,4 @@
+// Purpose: View-model actions that expose recent Git command diagnostics in the dedicated log tab.
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;

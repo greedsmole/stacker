@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Stacker.Desktop.ReviewBodyView" x:Name="BodyRoot">
+ <ItemsControl x:Name="BodyBlocks"><ItemsControl.ItemTemplate><DataTemplate>
+  <StackPanel Spacing="6" Margin="0,2">
+   <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding IsText}"/>
+   <Border IsVisible="{Binding IsSuggestion}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" CornerRadius="5" ClipToBounds="True">
+    <StackPanel>
+     <Grid ColumnDefinitions="*,Auto" Background="{DynamicResource PanelBrush}" Margin="0"><TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="11" Margin="10,8"/><Button Grid.Column="1" Content="Copy code" Click="CopySuggestionClick" Classes="quiet" FontSize="10" Margin="2"/></Grid>
+     <Border Background="{DynamicResource SuggestionRemovedBrush}" Padding="10,8" IsVisible="{Binding #BodyRoot.HasOriginalCode}"><StackPanel Spacing="4"><TextBlock Text="CURRENT" Classes="label"/><SelectableTextBlock Text="{Binding #BodyRoot.OriginalCode}" FontFamily="Menlo,Consolas,monospace" FontSize="12" TextWrapping="Wrap"/></StackPanel></Border>
+     <Border Background="{DynamicResource SuggestionAddedBrush}" Padding="10,8"><StackPanel Spacing="4"><TextBlock Text="REPLACEMENT" Classes="label"/><SelectableTextBlock Text="{Binding Text}" FontFamily="Menlo,Consolas,monospace" FontSize="12" TextWrapping="Wrap"/><TextBlock Text="Delete the selected lines" IsVisible="{Binding IsDeletion}" Classes="muted" FontSize="11"/></StackPanel></Border>
+    </StackPanel>
+   </Border>
+  </StackPanel>
+ </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+</UserControl>

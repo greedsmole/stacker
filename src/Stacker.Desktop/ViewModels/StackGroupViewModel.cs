@@ -1,3 +1,4 @@
+// Purpose: Presentation state for one stack and its numbered layers, including associated PR metadata and expansion/selection state.
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Stacker.Core;

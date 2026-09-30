@@ -8,7 +8,7 @@ import subprocess
 import tarfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 parser = argparse.ArgumentParser()
 parser.add_argument("rid", choices=["win-x64", "osx-arm64", "osx-x64", "linux-x64"])
 args = parser.parse_args()

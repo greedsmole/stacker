@@ -1,3 +1,4 @@
+// Purpose: State and asynchronous loading for one diff section, including file filtering, source highlighting, review threads, and preserved view state.
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Avalonia.Media;
@@ -12,6 +13,9 @@ public sealed partial class RenderedDiffLine(DiffLine line) : ObservableObject
     public int? OldLineNumber => Source.OldLineNumber;
     public int? NewLineNumber => Source.NewLineNumber;
     public bool IsCode => Kind is DiffLineKind.Context or DiffLineKind.Added or DiffLineKind.Removed;
+    public bool CanCommentLeft => Kind == DiffLineKind.Removed;
+    public bool IsLineCommentVisible => IsCode && !IsRangeSelected;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsLineCommentVisible))] private bool _isRangeSelected;
     public string Marker => Kind == DiffLineKind.Added ? "+" : Kind == DiffLineKind.Removed ? "−" : "";
     public string Text => IsCode && Source.Text.Length > 0 ? Source.Text[1..] : Source.Text;
     [ObservableProperty] private ReviewViewModel? _editor;
@@ -78,6 +82,8 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
         AssociatedPr = pr; GitHubContext = context;
         OnPropertyChanged(nameof(Comparison)); OnPropertyChanged(nameof(HasPr)); OnPropertyChanged(nameof(Title)); OnPropertyChanged(nameof(ReviewAction));
     }
+    /// <summary>Transfers transient browsing state when identical comparison data is refreshed.</summary>
+    /// <remarks>The selected file is matched by path so a refreshed snapshot can replace file objects safely.</remarks>
     public void RestoreView(DiffSectionViewModel old)
     {
         Filter = old.Filter; IsExpanded = old.IsExpanded;
@@ -94,6 +100,8 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
         if (SelectedFile is null && selected is not null) _ = LoadAsync(null);
     }
     partial void OnSelectedFileChanged(FileChange? value) { if (!_filtering) { ScrollX = ScrollY = 0; _ = LoadAsync(value); } }
+    /// <summary>Loads one file's patch on demand and cancels any request for the previously selected file.</summary>
+    /// <remarks>Results are applied only while this request remains current, preventing stale selections from flashing.</remarks>
     public async Task LoadAsync(FileChange? file)
     {
         _load?.Cancel(); var load = new CancellationTokenSource(); _load = load;
@@ -120,6 +128,7 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
         catch (Exception ex) { if (!load.IsCancellationRequested && !_disposed) { HasLoadError = true; Message = ex.Message; } }
         finally { if (ReferenceEquals(_load, load)) { _load = null; IsBusy = false; } load.Dispose(); }
     }
+    // Old and new blobs are tokenized separately so multiline grammar state follows each side's actual source text.
     private async Task HighlightAsync(FileChange file, CancellationToken ct)
     {
         if (_highlighter is null || _git is not IBlobReader reader) return;
@@ -143,6 +152,7 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     public void SetThreads(IEnumerable<ReviewThread> threads) { ReplaceIfChanged(Threads, threads.ToArray()); ApplyThreads(); }
     private static void ReplaceIfChanged<T>(ObservableCollection<T> target, IReadOnlyList<T> values)
     { if (target.SequenceEqual(values)) return; target.Clear(); foreach (var value in values) target.Add(value); }
+    /// <summary>Attaches only current-PR comments whose path, side, and line match the displayed file lines.</summary>
     public void ApplyThreads()
     {
         var path = SelectedFile?.NewPath;

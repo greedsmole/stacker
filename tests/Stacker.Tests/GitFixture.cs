@@ -1,3 +1,4 @@
+// Purpose: Builds and cleans up isolated temporary repositories/worktrees so Git integration scenarios never use the user checkout.
 using Stacker.Core;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;

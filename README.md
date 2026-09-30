@@ -14,7 +14,7 @@ dotnet run --project src/Stacker.Desktop -- --demo
 dotnet run --project src/Stacker.Desktop -- /path/to/repository
 ```
 
-Build a macOS ARM64 package with `python3 scripts/package.py osx-arm64`, or a Windows x64 package with `python scripts/package.py win-x64`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe`; keep its adjacent files. No separate .NET runtime is required. Git and optional GitHub CLI are installed separately. The archive is written to `artifacts/Stacker-0.4.0-osx-arm64.tar.gz`. The `.app` is not Developer ID signed or notarized. Public distribution signing requires the publisher's Apple credentials.
+Build a macOS ARM64 package with `python3 scripts/package.py osx-arm64`, or a Windows x64 package with `python scripts/package.py win-x64`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe`; keep its adjacent files. No separate .NET runtime is required. Git and optional GitHub CLI are installed separately. The archive is written to `artifacts/Stacker-0.4.1-osx-arm64.tar.gz`. The `.app` is not Developer ID signed or notarized. Public distribution signing requires the publisher's Apple credentials.
 
 ## Navigation and comparisons
 
@@ -94,6 +94,10 @@ Select a GitHub PR layer: its changes and discussion load automatically. The hea
 - **Submit:** **Review (N)** lists pending line comments, with Edit/Remove, summary and Comment / Approve / Request changes. Request changes requires an explanation. Submission is always explicit.
 
 Drafts are isolated by host, repository, account, PR and code version. Line, reply, file and PR composer text is kept separately. Old ambiguous composer text is displayed as a recovered draft and requires choosing a destination. Background reads do not disable editors or clear typed text.
+
+Select adjacent diff rows with Shift-click. One blue **+** spans the selected range; click it to comment on that range. Deleted lines use LEFT; additions and unchanged context use RIGHT. Gaps and mixed-side ranges cannot form a line comment. Context comments remain supported: the [GitHub review-comment API](https://docs.github.com/en/rest/pulls/comments) explicitly accepts unchanged lines shown for context, and [GitLab's discussion API](https://docs.gitlab.com/api/discussions/#create-a-new-thread-in-the-merge-request-diff) accepts unchanged lines with both old/new coordinates. GitHub.com's [new Files changed experience](https://github.blog/changelog/2025-09-25-pull-request-files-changed-public-preview-now-supports-commenting-on-unchanged-lines/) also supports comments further outside the original hunks; Stacker currently displays patch context and validates publication against the server-provided patch.
+
+In the line editor, **Suggest code change** prefills a standard GitHub suggestion fence with the selected right-side code. Edit the replacement inside the fence, inspect the current/replacement preview, then **Add to review** or **Post now**. Empty replacement blocks represent deletion. Existing prose is retained. Deleted-side comments cannot generate applicable suggestions. Suggestions use the existing draft persistence and PR-version validation. Loaded suggestions are automatically rendered as replacement code with a copy action, including in threads and drafts; outdated threads never borrow current source as their original code. **Open demo** includes an offline suggestion example. Suggestions are submitted as comments; applying them to a branch remains a GitHub action.
 
 Before publication Stacker rechecks the account, access, current PR base/head and code anchors/file membership. A changed snapshot blocks anchored publication until Update changes and draft review. Existing comments are not relocated automatically. Publication keeps its original PR/account even while navigating elsewhere.
 

@@ -1,3 +1,4 @@
+// Purpose: Selectable text control that renders syntax spans as Avalonia runs while preserving the original selectable text.
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;

@@ -1,3 +1,4 @@
+// Purpose: Creates a fresh, disposable multi-stack Git repository and offline PR fixtures for learning and regression scenarios.
 using System.Text.Json;
 using Stacker.Core;
 namespace Stacker.Infrastructure;
@@ -5,6 +6,8 @@ namespace Stacker.Infrastructure;
 public sealed record DemoExpectation(string Stack, DiffMode Mode, int[] Positions, int Files, int Additions, int Deletions);
 public sealed class DemoRepositoryGenerator(IProcessRunner runner, GitExecutable executable, IStackStore stacks, ApplicationStore store)
 {
+    /// <summary>Builds an isolated repository with independent stacks, shared PR ancestry, boundary branches, and offline review fixtures.</summary>
+    /// <remarks>A unique directory is created on each call so opening the demo never overwrites existing user work.</remarks>
     public async Task<string> CreateAsync(CancellationToken ct = default)
     {
         var root = Path.Combine(store.Root, "demos", "demo-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..6]);
@@ -51,10 +54,11 @@ public sealed class DemoRepositoryGenerator(IProcessRunner runner, GitExecutable
         await File.WriteAllTextAsync(Path.Combine(root, "demo-manifest.json"), JsonSerializer.Serialize(expectations), ct);
         return root;
     }
+    /// <summary>Supplies realistic read-only discussion fixtures, including an outdated thread for UI behavior.</summary>
     public static ReviewDiscussion Discussion(PullRequest pr) => new(
         [new("1", "reviewer", "Please check the contribution of this layer, then compare the entire stack.", pr.Url, DateTimeOffset.UtcNow)],
         [new("1", "reviewer", "The shape looks good; one line needs clarification.", "COMMENTED", DateTimeOffset.UtcNow)],
-        [new("demo-current", false, false, false, new(pr.Number, pr.HeadSha, pr.BaseSha, "Auth.cs", "RIGHT", 4), [new("2", "reviewer", "Should authentication failure be represented explicitly?", pr.Url, DateTimeOffset.UtcNow)]),
+        [new("demo-current", false, false, false, new(pr.Number, pr.HeadSha, pr.BaseSha, "Auth.cs", "RIGHT", 4), [new("2", "reviewer", "Should authentication failure be represented explicitly?\n\n```suggestion\n    public static string Login() => throw new UnauthorizedAccessException();\n```", pr.Url, DateTimeOffset.UtcNow)]),
          new("demo-file", false, false, false, null, [new("4", "reviewer", "Could this file also document the session expiry policy?", pr.Url, DateTimeOffset.UtcNow)], "Auth.cs", true),
          new("demo-outdated", false, true, false, null, [new("3", "reviewer", "This comment refers to an older version of the file.", pr.Url, DateTimeOffset.UtcNow)], "Auth.cs")]);
 }

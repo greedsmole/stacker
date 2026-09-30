@@ -1,9 +1,11 @@
+// Purpose: Process boundary scenarios for argument fidelity, stdin/stdout/stderr, timeouts, cancellation, and output limits.
 using Stacker.Core;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 public sealed class ProcessRunnerTests
 {
     private static ProcessRequest Probe(string mode, params string[] args) => new("dotnet", [typeof(ProcessProbe).Assembly.Location, mode, .. args]);
+    // Scenario: Arguments are passed literally and stdin is closed.
     [Fact]
     public async Task Arguments_are_passed_literally_and_stdin_is_closed()
     {
@@ -13,12 +15,14 @@ public sealed class ProcessRunnerTests
         Assert.Equal("", (await runner.RunAsync(Probe("stdin"))).StdOut);
         Assert.Equal("{\"body\":\"Unicode ü\"}", (await runner.RunAsync(Probe("stdin") with { StandardInput = "{\"body\":\"Unicode ü\"}" })).StdOut);
     }
+    // Scenario: Reads both pipes without deadlock and preserves exit code.
     [Fact]
     public async Task Reads_both_pipes_without_deadlock_and_preserves_exit_code()
     {
         var runner = new ProcessRunner(); var flood = await runner.RunAsync(Probe("flood")); Assert.Equal(2_048_000, flood.StdOut.Length); Assert.Equal(2_048_000, flood.StdErr.Length);
         var failed = await runner.RunAsync(Probe("exit")); Assert.Equal(7, failed.ExitCode); Assert.Equal("intentional error", failed.StdErr);
     }
+    // Scenario: Output limit timeout and cancellation end the process.
     [Fact]
     public async Task Output_limit_timeout_and_cancellation_end_the_process()
     {
@@ -28,6 +32,7 @@ public sealed class ProcessRunnerTests
         using var cts = new CancellationTokenSource(200);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(Probe("delay"), cts.Token));
     }
+    // Scenario: Environment removal is limited to child process.
     [Fact]
     public async Task Environment_removal_is_limited_to_child_process()
     {
@@ -37,6 +42,7 @@ public sealed class ProcessRunnerTests
         Assert.Equal("absent", (await runner.RunAsync(request with { UnsetEnvironment = ["STACKER_TEST_TOKEN"] })).StdOut);
         Assert.Equal("test-value", (await runner.RunAsync(request)).StdOut);
     }
+    // Scenario: Missing executable has actionable error.
     [Fact]
     public async Task Missing_executable_has_actionable_error()
     {

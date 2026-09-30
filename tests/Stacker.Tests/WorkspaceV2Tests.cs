@@ -1,3 +1,4 @@
+// Purpose: Workspace regression scenarios for refresh behavior and retaining the prior visible snapshot after failures.
 using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -19,6 +20,7 @@ public sealed class CountingReader(IGitRepositoryReader inner) : IGitRepositoryR
 }
 public sealed class WorkspaceV2Tests
 {
+    // Scenario: Demo manifest checks real changes across multiple stacks.
     [Fact] public async Task Demo_manifest_checks_real_changes_across_multiple_stacks()
     {
         await using var fixture=new GitFixture(); var store=new YamlStackStore(); var appStore=new ApplicationStore(fixture.Root);

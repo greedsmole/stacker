@@ -1,4 +1,8 @@
+// Purpose: UI-oriented review tool scenarios for line ranges, file comments, and comment navigation.
 using Avalonia.Controls;
+using Avalonia;
+using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
@@ -96,6 +100,84 @@ public sealed class ReviewToolsTests
         vm.ActiveReview.Composer="Review both lines"; await vm.ActiveReview.AddToDraftCommand.ExecuteAsync(null);
         var anchor=Assert.Single(vm.ActiveReview.DraftComments).Anchor; Assert.Equal(1,anchor.StartLine); Assert.Equal(2,anchor.Line);
         await vm.FlushReviewsAsync(); window.Close();
+    }
+
+    // A plus anywhere inside a Shift-selected range must preserve the range; outside it targets the clicked line.
+    [AvaloniaTheory]
+    [InlineData(0, 1, 2, false)]
+    [InlineData(1, 1, 2, false)]
+    [InlineData(2, null, 3, false)]
+    [InlineData(1, 1, 2, true)]
+    public async Task Plus_button_uses_selected_range_only_when_clicked_inside_it(int clickedIndex, int? startLine, int endLine, bool pointerClick)
+    {
+        await using var f = new GitFixture(); await f.Init(); await f.Git("checkout", "-b", "feature");
+        await f.Write("note.cs", "first\nsecond\nthird\n"); await f.Commit("three lines");
+        var hub = new FakeGitHub { Current = DiscoveryTests.Pr(42, "main", "feature") with
+            { BaseSha = await f.Git("rev-parse", "main"), HeadSha = await f.Git("rev-parse", "feature") } };
+        using var vm = Create(f, hub, new RecordingCache(f.Root));
+        var window = new MainWindow { DataContext = vm }; window.Show();
+        try
+        {
+            await vm.OpenRepositoryAsync(f.Root); await vm.SelectGroupAsync(Assert.Single(vm.OtherGroups));
+            var section = Assert.Single(vm.Sections); await section.LoadAsync(section.SelectedFile); window.UpdateLayout();
+            var lines = section.Lines.Where(line => line.Kind == DiffLineKind.Added).ToArray();
+            var list = window.GetVisualDescendants().OfType<ListBox>().First(item => ReferenceEquals(item.ItemsSource, section.Lines));
+            list.SelectedItems!.Add(lines[0]); list.SelectedItems.Add(lines[1]);
+            window.UpdateLayout();
+            var plus = window.GetVisualDescendants().OfType<Button>().Single(button =>
+                button.Classes.Contains("line-add") && ReferenceEquals(button.DataContext, lines[clickedIndex]));
+            if (pointerClick)
+            {
+                var rangeButton = window.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "SelectedRangeButton");
+                Assert.True(rangeButton.IsVisible);
+                Assert.True(rangeButton.Height > lines.Length * 10);
+                Assert.False(plus.IsVisible);
+                var position = rangeButton.TranslatePoint(new Point(rangeButton.Bounds.Width / 2, rangeButton.Bounds.Height / 2), window)!.Value;
+                window.MouseMove(position);
+                window.MouseDown(position, MouseButton.Left);
+                window.MouseUp(position, MouseButton.Left);
+            }
+            else plus.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Task.Yield(); window.UpdateLayout();
+
+            Assert.Equal($"note.cs · RIGHT · lines {startLine ?? endLine}–{endLine}", vm.ActiveReview!.SelectionLabel);
+            vm.ActiveReview.Composer = "Review the selected code";
+            Assert.True(vm.ActiveReview.CanSuggestCodeChange);
+            vm.ActiveReview.SuggestCodeChangeCommand.Execute(null);
+            var replacement = Assert.Single(ReviewContent.Parse(vm.ActiveReview.Composer), b => b.IsSuggestion);
+            Assert.Equal(startLine is null ? "third" : "first\nsecond", replacement.Text);
+            Assert.Contains("Review the selected code", vm.ActiveReview.Composer);
+            var composer = vm.ActiveReview.Composer;
+            vm.ActiveReview.SuggestCodeChangeCommand.Execute(null);
+            Assert.Equal(composer, vm.ActiveReview.Composer);
+            await vm.ActiveReview.AddToDraftCommand.ExecuteAsync(null);
+            var anchor = Assert.Single(vm.ActiveReview.DraftComments).Anchor;
+            Assert.Equal(composer, vm.ActiveReview.DraftComments[0].Body);
+            Assert.Equal(startLine, anchor.StartLine); Assert.Equal(endLine, anchor.Line);
+            Assert.Equal("RIGHT", anchor.Side);
+            await vm.FlushReviewsAsync();
+        }
+        finally { window.Close(); }
+    }
+
+    // Scenario: Git log records running command and final status.
+    [AvaloniaFact]
+    public void Suggestion_body_renders_current_and_replacement_code_and_preserves_plain_text()
+    {
+        var body = new ReviewBodyView { Body = "Explanation\n```suggestion\nnew code\n```\nAfter", OriginalCode = "old code" };
+        var window = new Window { Content = body, Width = 500, Height = 400 }; window.Show(); window.UpdateLayout();
+        try
+        {
+            var blocks = body.FindControl<ItemsControl>("BodyBlocks")!.ItemsSource!.Cast<ReviewContentBlock>().ToArray();
+            Assert.Equal(3, blocks.Length); Assert.True(body.HasOriginalCode);
+            var text = body.GetVisualDescendants().OfType<SelectableTextBlock>().Where(t => t.IsEffectivelyVisible).Select(t => t.Text).ToArray();
+            Assert.Contains("old code", text); Assert.Contains("new code", text); Assert.Contains("Explanation", text); Assert.Contains("After", text);
+            Assert.DoesNotContain(text, t => t?.Contains("```suggestion", StringComparison.Ordinal) == true);
+            body.Body = "```suggestion\nnot closed"; window.UpdateLayout();
+            Assert.False(body.HasOriginalCode);
+            Assert.False(Assert.Single(body.FindControl<ItemsControl>("BodyBlocks")!.ItemsSource!.Cast<ReviewContentBlock>()).IsSuggestion);
+        }
+        finally { window.Close(); }
     }
 
     [Fact] public async Task Git_log_records_running_command_and_final_status()

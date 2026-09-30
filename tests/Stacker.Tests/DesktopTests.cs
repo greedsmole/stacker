@@ -1,3 +1,4 @@
+// Purpose: Regression scenarios for view-model navigation and desktop state behavior without starting external services.
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;

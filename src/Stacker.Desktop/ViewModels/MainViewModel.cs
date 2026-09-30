@@ -1,3 +1,4 @@
+// Purpose: Central screen state and comparison navigation; turns stack/layer selection into explicit diff requests.
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -63,6 +64,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (!_suppress && value is not null && LocalGroups.FirstOrDefault(g => g.Definition.Id == value.Id) is { } group) _ = SelectGroupAsync(group);
     }
     partial void OnModeChanged(DiffMode value) { OnPropertyChanged(nameof(IsSingleLayer)); OnPropertyChanged(nameof(IsThroughLayer)); if (!_suppress) { CaptureWorkspace(); _ = CompareAsync(); } }
+    /// <summary>Restores preferences and the last workspace once when the application starts.</summary>
     public async Task InitializeAsync()
     {
         try
@@ -75,7 +77,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
     [RelayCommand] public Task OpenAsync() => OpenRepositoryAsync(RepositoryPath);
     [RelayCommand] public Task RefreshAsync() => ReadRepositoryAsync(_repository?.Root ?? RepositoryPath, false);
+    /// <summary>Starts a new repository workspace; unlike refresh, this intentionally replaces the active repository.</summary>
     public Task OpenRepositoryAsync(string path) => ReadRepositoryAsync(path, true);
+    // Opening and refreshing share the data-loading path, but only an explicit open clears workspace state.
     private async Task ReadRepositoryAsync(string path, bool opening)
     {
         if (string.IsNullOrWhiteSpace(path) || _disposed) return;
@@ -153,6 +157,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Layers.Clear(); foreach (var layer in group.Layers) Layers.Add(layer);
         OnPropertyChanged(nameof(BaseLabel)); OnPropertyChanged(nameof(IsLocalSelected));
     }
+    /// <summary>Selects a stack overview and requests its final layer as the complete stack comparison.</summary>
     public async Task SelectGroupAsync(StackGroupViewModel group, bool saveCurrent = true)
     {
         if (saveCurrent) await SaveWorkspaceAsync();
@@ -166,6 +171,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         _suppress = false; await CompareAsync();
     }
+    /// <summary>Selects one layer or toggles it into a same-stack multi-layer selection.</summary>
+    /// <remarks>Multi-layer comparisons remain independent and keep each selected layer's real parent branch.</remarks>
     public async Task SelectLayerAsync(LayerViewModel layer, bool toggle)
     {
         await SaveWorkspaceAsync();
@@ -180,6 +187,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _selectedPositions = layers.Select(l => l.Snapshot.Position).Order().ToArray();
         _suppress = true; Mode = _selectedPositions.Length > 1 ? DiffMode.MultiLayer : DiffMode.Layer; _suppress = false; _ = CompareAsync();
     }
+    /// <summary>Rebuilds visible sections from the selected stack, comparison mode, and captured ref snapshot.</summary>
+    /// <remarks>Cancellation and comparison keys prevent a slower previous selection from replacing a newer one.</remarks>
     public async Task CompareAsync()
     {
         ResetSearch();
@@ -252,12 +261,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var relevant = stack.Branches.Prepend(stack.Base).ToHashSet();
         return repo.Root + "|" + stack.Id + "|" + mode + "|" + string.Join(',', positions) + "|" + string.Join(';', stack.Branches.Prepend(stack.Base)) + "|" + string.Join(';', repo.Refs.Where(r => relevant.Contains(r.Name)).OrderBy(r => r.Name).Select(r => r.Name + "=" + r.Sha));
     }
+    /// <summary>Creates or updates one local stack definition without modifying its underlying Git branches.</summary>
     public async Task<bool> SaveStackAsync(StackDefinition stack)
     {
         if (_repository is null || _document is null) return false;
         var updated = _document.Stacks.Any(s => s.Id == stack.Id) ? _document.Stacks.Select(s => s.Id == stack.Id ? stack : s).ToArray() : _document.Stacks.Append(stack).ToArray();
         return await SaveStacksAsync(updated);
     }
+    /// <summary>Removes only the selected description; refs and commits remain untouched.</summary>
     public async Task DeleteSelectedStackAsync()
     {
         if (_document is not null && SelectedStack is not null && _activeGroup?.IsRemote != true) await SaveStacksAsync(_document.Stacks.Where(s => s.Id != SelectedStack.Id).ToArray());

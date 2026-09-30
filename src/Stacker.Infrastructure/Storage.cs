@@ -1,3 +1,4 @@
+// Purpose: Implements repository YAML persistence with revision checks and atomic replacement, plus per-user JSON preferences.
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;

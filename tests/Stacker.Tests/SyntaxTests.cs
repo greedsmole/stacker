@@ -1,7 +1,9 @@
+// Purpose: Syntax tokenizer scenarios for supported languages, unsupported files, limits, and fallback rendering.
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 public sealed class SyntaxTests
 {
+    // Scenario: TextMate colors multiline comments and themes without patch markers.
     [Fact] public async Task TextMate_colors_multiline_comments_and_themes_without_patch_markers()
     {
         var highlighter=new TextMateSyntaxHighlighter(); var text="public class Example\n{\n/* comment\nstill comment */\npublic string Name => \"hello\";\n}\n";
@@ -9,6 +11,7 @@ public sealed class SyntaxTests
         var light=await highlighter.HighlightAsync("blob","code.cs",text,"Light"); Assert.NotEqual(dark[5].Select(t=>t.Color),light[5].Select(t=>t.Color));
         var cached=await highlighter.HighlightAsync("blob","code.cs",text,"Dark"); Assert.Same(dark,cached);
     }
+    // Scenario: Unknown language and oversized blobs fall back to plain text.
     [Fact] public async Task Unknown_language_and_oversized_blobs_fall_back_to_plain_text()
     {
         var highlighter=new TextMateSyntaxHighlighter(); Assert.Empty(await highlighter.HighlightAsync("1","file.unknown","text","Dark")); Assert.Empty(await highlighter.HighlightAsync("2","file.cs",new string('x',2*1024*1024+1),"Dark"));

@@ -1,9 +1,9 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Stacker.Desktop.ThreadView">
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.ThreadView" x:Name="ThreadRoot">
  <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,5" Padding="0,5">
   <StackPanel>
    <ToggleButton x:Name="Disclosure" IsChecked="{Binding !IsResolved, Mode=OneTime}" Classes="quiet" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"><TextBlock Text="{Binding Label}" FontSize="11" TextWrapping="Wrap"/></ToggleButton>
   <StackPanel Spacing="8" Margin="8" IsVisible="{Binding #Disclosure.IsChecked}">
-   <ItemsControl ItemsSource="{Binding Comments}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="0,5" Spacing="4"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><TextBlock Text="{Binding CreatedAt, StringFormat={}{0:g}}" Classes="muted" FontSize="10"/><SelectableTextBlock Text="{Binding DisplayBody}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+   <ItemsControl ItemsSource="{Binding Comments}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="0,5" Spacing="4"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><TextBlock Text="{Binding CreatedAt, StringFormat={}{0:g}}" Classes="muted" FontSize="10"/><local:ReviewBodyView Body="{Binding DisplayBody}" OriginalCode="{Binding #ThreadRoot.OriginalCode}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
    <StackPanel Orientation="Horizontal" Spacing="6"><Button Content="Reply" Click="ReplyClick" Classes="quiet"/><Button Content="Resolve / reopen" IsVisible="{Binding CanResolve}" Click="ResolveClick" Classes="quiet"/><Button Content="Go to code" Click="GoToClick" Classes="quiet" IsVisible="{Binding !IsOutdated}"/></StackPanel>
   </StackPanel>
  </StackPanel></Border>

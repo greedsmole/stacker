@@ -1,8 +1,10 @@
+// Purpose: Scenarios ensuring remote objects are cached separately and downloaded refs are checked against the PR snapshot.
 using Stacker.Core;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 public sealed class GitCacheTests
 {
+    // Scenario: Missing PR refs are batched into one fetch.
     [Fact] public async Task Missing_PR_refs_are_batched_into_one_fetch()
     {
         await using var folder=new GitFixture();
@@ -16,6 +18,7 @@ public sealed class GitCacheTests
         Assert.Contains("+refs/pull/2/head:refs/stacker/pr/2",fetch.Arguments);
         Assert.DoesNotContain(runner.Calls,request=>request.Arguments.Contains("clone"));
     }
+    // Scenario: Existing objects support offline comparison without touching source repository.
     [Fact] public async Task Existing_objects_support_offline_comparison_without_touching_source_repository()
     {
         await using var repo=new GitFixture();await repo.Linear();await using var cacheFolder=new GitFixture();
@@ -33,6 +36,7 @@ public sealed class GitCacheTests
         Assert.Equal(beforeRefs,await repo.Git("show-ref"));Assert.Equal(beforeIndex,await File.ReadAllBytesAsync(Path.Combine(repo.Root,".git","index")));Assert.Equal(beforeConfig,await File.ReadAllTextAsync(Path.Combine(repo.Root,".git","config")));
         await cache.ClearAsync(context);Assert.False(Directory.Exists(cachePath));Assert.True(Directory.Exists(Path.Combine(repo.Root,".git")));
     }
+    // Scenario: Download uses private refs scoped helper and rejects moving snapshot.
     [Fact] public async Task Download_uses_private_refs_scoped_helper_and_rejects_moving_snapshot()
     {
         await using var f=new GitFixture();var store=new ApplicationStore(f.Root);
@@ -48,6 +52,7 @@ public sealed class GitCacheTests
         Assert.DoesNotContain(runner.Calls, c => c.Arguments.Contains("config"));
     }
 
+    // Scenario: Untrusted certificate explains remediation preserves details and does not retry.
     [Theory]
     [InlineData("SSL certificate problem: unable to get local issuer certificate")]
     [InlineData("SSL certificate problem: self-signed certificate in certificate chain")]
@@ -70,6 +75,7 @@ public sealed class GitCacheTests
         Assert.DoesNotContain(runner.Calls, request => request.Arguments.Contains("rev-parse"));
     }
 
+    // Scenario: Other fetch failures keep the original error.
     [Fact]
     public async Task Other_fetch_failures_keep_the_original_error()
     {

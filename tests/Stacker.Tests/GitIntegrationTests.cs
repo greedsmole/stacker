@@ -1,7 +1,9 @@
+// Purpose: Real-Git behavior checks for diff modes, ancestry edge cases, paths, and patch parsing.
 using Stacker.Core;
 namespace Stacker.Tests;
 public sealed class GitIntegrationTests
 {
+    // Scenario: Linear modes use exact commit boundaries and preserve original parent.
     [Fact]
     public async Task Linear_modes_use_exact_commit_boundaries_and_preserve_original_parent()
     {
@@ -20,6 +22,7 @@ public sealed class GitIntegrationTests
         Assert.Equal(new[] { "refs/heads/A", "refs/heads/C" }, multi.Select(m => m.Layer));
         Assert.Equal(await f.Git("rev-parse", "B"), multi[1].BaseSha); Assert.Equal("C.txt", Assert.Single(multi[1].Files).NewPath);
     }
+    // Scenario: Divergence warns and uses merge base.
     [Fact]
     public async Task Divergence_warns_and_uses_merge_base()
     {
@@ -32,6 +35,7 @@ public sealed class GitIntegrationTests
         var layers = await new StackService(f.Reader).SnapshotAsync(repo, f.Stack);
         Assert.Equal(1, layers[1].Ahead); Assert.Equal(1, layers[1].Behind); Assert.NotNull(layers[1].Warning);
     }
+    // Scenario: Missing refs and unrelated histories are explicit errors.
     [Fact]
     public async Task Missing_refs_and_unrelated_histories_are_explicit_errors()
     {
@@ -44,6 +48,7 @@ public sealed class GitIntegrationTests
         var stack = new StackDefinition("x", "x", "refs/heads/main", ["refs/heads/unrelated"]);
         Assert.Contains("no common ancestor", (await Assert.ThrowsAsync<StackerException>(() => new DiffService(f.Reader).CompareAsync(new(repo, stack, DiffMode.Layer, [0])))).Message);
     }
+    // Scenario: Criss cross history rejects multiple merge bases.
     [Fact]
     public async Task Criss_cross_history_rejects_multiple_merge_bases()
     {
@@ -58,6 +63,7 @@ public sealed class GitIntegrationTests
         Assert.Equal(2, (await f.Reader.MergeBasesAsync(f.Root, left, right)).Count);
         Assert.Contains("multiple merge-bases", (await Assert.ThrowsAsync<StackerException>(() => new DiffService(f.Reader).CompareAsync(new(repo, new("x", "x", "refs/heads/left", ["refs/heads/right"]), DiffMode.Layer, [0])))).Message);
     }
+    // Scenario: File metadata handles rename binary mode submodule unicode and newlines.
     [Fact]
     public async Task File_metadata_handles_rename_binary_mode_submodule_unicode_and_newlines()
     {
@@ -81,6 +87,7 @@ public sealed class GitIntegrationTests
         var patch = await f.Reader.PatchAsync(f.Root, parent, head, noNewline); Assert.Contains(patch.Lines, l => l.Kind == DiffLineKind.Notice && l.Text.Contains("No newline"));
         var crlf = await f.Reader.PatchAsync(f.Root, parent, head, files.Single(x => x.NewPath == "crlf.txt")); Assert.Equal(2, crlf.Lines.Count(l => l.Kind == DiffLineKind.Added));
     }
+    // Scenario: Reader supports worktrees refresh and does not mutate git state.
     [Fact]
     public async Task Reader_supports_worktrees_refresh_and_does_not_mutate_git_state()
     {
@@ -96,6 +103,7 @@ public sealed class GitIntegrationTests
         var worktree = await f.AddWorktree(); var work = await f.Reader.OpenAsync(worktree); Assert.Equal(await f.Git("-C", worktree, "rev-parse", "--show-toplevel"), work.Root);
         await f.Git("branch", "fresh"); Assert.Contains((await f.Reader.OpenAsync(f.Root)).Refs, r => r.Name == "refs/heads/fresh");
     }
+    // Scenario: Literal paths are not interpreted as pathspecs.
     [Fact]
     public async Task Literal_paths_are_not_interpreted_as_pathspecs()
     {
@@ -106,6 +114,7 @@ public sealed class GitIntegrationTests
         var patch = await f.Reader.PatchAsync(f.Root, parent, head, file); Assert.DoesNotContain("+other", patch.Patch); Assert.Contains("+literal", patch.Patch);
     }
 
+    // Scenario: Reused path and rename patches respect git metadata and custom prefix settings.
     [Fact]
     public async Task Reused_path_and_rename_patches_respect_git_metadata_and_custom_prefix_settings()
     {
@@ -129,6 +138,7 @@ public sealed class GitIntegrationTests
         Assert.Contains("rename from new ü name.txt", patch.Patch);
         Assert.DoesNotContain("unrelated replacement", patch.Patch);
     }
+    // Scenario: Quoted control characters in paths are decoded and matched.
     [Fact]
     public async Task Quoted_control_characters_in_paths_are_decoded_and_matched()
     {
@@ -140,6 +150,7 @@ public sealed class GitIntegrationTests
         var patch = await f.Reader.PatchAsync(f.Root, parent, head, file); Assert.Contains("+unusual path", patch.Patch);
     }
 
+    // Scenario: Large patch is rejected without truncation.
     [Fact]
     public async Task Large_patch_is_rejected_without_truncation()
     {

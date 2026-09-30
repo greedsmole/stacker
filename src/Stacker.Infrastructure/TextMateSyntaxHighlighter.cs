@@ -1,3 +1,4 @@
+// Purpose: Optional TextMate tokenization for source blobs; caches bounded results and falls back to plain text on unsupported input.
 using System.Diagnostics;
 using System.Text;
 using Stacker.Core;
@@ -7,10 +8,13 @@ namespace Stacker.Infrastructure;
 
 public sealed class TextMateSyntaxHighlighter : ISyntaxHighlighter
 {
+    // A single gate protects TextMate registries and the bounded cache from concurrent UI selection changes.
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<string, IReadOnlyDictionary<int, IReadOnlyList<SyntaxSpan>>> _cache = [];
     private readonly Dictionary<string, (RegistryOptions Options, Registry Registry)> _registries = [];
     private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase) { ".cs", ".json", ".yaml", ".yml", ".xml", ".axaml", ".csproj", ".js", ".jsx", ".ts", ".tsx", ".html", ".css", ".sql", ".sh", ".bash", ".md" };
+    /// <summary>Tokenizes a source blob, carrying grammar state line-to-line for multiline strings and comments.</summary>
+    /// <remarks>Unsupported extensions, oversized input, and tokenizer failures return no spans so plain text stays usable.</remarks>
     public async Task<IReadOnlyDictionary<int, IReadOnlyList<SyntaxSpan>>> HighlightAsync(string blobId, string path, string text, string theme, CancellationToken ct = default)
     {
         var extension = Path.GetExtension(path).ToLowerInvariant();

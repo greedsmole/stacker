@@ -1,3 +1,4 @@
+// Purpose: Main-window event bridge: translates user gestures into view-model actions and owns native dialogs/clipboard interaction.
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -5,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Stacker.Desktop.ViewModels;
 namespace Stacker.Desktop;
@@ -12,6 +14,7 @@ public partial class MainWindow : Window
 {
     private bool _ready;
     private bool _closing;
+    private bool _repositoryActionPending;
     private MainViewModel Vm => (MainViewModel)DataContext!;
     public MainWindow()
     {
@@ -83,19 +86,52 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { Vm.Error = "Cannot copy Git logs: " + ex.Message; }
     }
-    private async void OpenFolderClick(object? sender, RoutedEventArgs e)
+    /// <summary>Ends popup interaction before starting a repository action on the owning main window.</summary>
+    private async Task RunRepositoryActionAsync(Func<Task> action)
     {
+        if (_repositoryActionPending || !_ready || _closing || !IsVisible) return;
+        _repositoryActionPending = true;
         try
         {
-            var folders = await StorageProvider.OpenFolderPickerAsync(new() { Title = "Open Git repository", AllowMultiple = false });
-            if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } path) await Vm.OpenRepositoryAsync(path);
+            RecentBox.IsDropDownOpen = false;
+            RepositoryButton.Flyout?.Hide();
+            ToolTip.SetIsOpen(RepositoryButton, false);
+            // macOS flyouts have native popup windows. Let the click and popup teardown finish
+            // before presenting an NSOpenPanel sheet, otherwise the popup can retain input/focus.
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            if (!_closing && IsVisible) await action();
         }
         catch (Exception ex) { Vm.Error = ex.Message; }
+        finally { _repositoryActionPending = false; }
     }
-    private async void PathKeyDown(object? sender, KeyEventArgs e) { if (e.Key == Key.Enter) { e.Handled = true; await Vm.OpenAsync(); } }
+    /// <summary>Uses this main window as the native picker owner, never the transient repository popup.</summary>
+    protected virtual async Task<string?> PickRepositoryFolderAsync()
+    {
+        if (!StorageProvider.CanPickFolder) throw new InvalidOperationException("Folder selection is unavailable. Enter the repository path instead.");
+        var folders = await StorageProvider.OpenFolderPickerAsync(new() { Title = "Open Git repository", AllowMultiple = false });
+        try { return folders.Count > 0 ? folders[0].TryGetLocalPath() : null; }
+        finally { foreach (var folder in folders) folder.Dispose(); }
+    }
+    private async void OpenFolderClick(object? sender, RoutedEventArgs e) => await RunRepositoryActionAsync(async () =>
+    {
+        var path = await PickRepositoryFolderAsync();
+        if (path is not null && !_closing && IsVisible) await Vm.OpenRepositoryAsync(path);
+    });
+    private async void OpenDemoClick(object? sender, RoutedEventArgs e) => await RunRepositoryActionAsync(Vm.OpenDemoAsync);
+    private async void PathKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        e.Handled = true;
+        var path = Vm.RepositoryPath;
+        await RunRepositoryActionAsync(() => Vm.OpenRepositoryAsync(path));
+    }
     private async void RecentChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (_ready && RecentBox.SelectedItem is string path) { RecentBox.SelectedItem = null; await Vm.OpenRepositoryAsync(path); }
+        if (_ready && RecentBox.SelectedItem is string path)
+        {
+            RecentBox.SelectedItem = null;
+            await RunRepositoryActionAsync(() => Vm.OpenRepositoryAsync(path));
+        }
     }
     private async void StackClick(object? sender, RoutedEventArgs e)
     { if (sender is Control { DataContext: StackGroupViewModel group })

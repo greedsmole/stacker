@@ -1,3 +1,4 @@
+// Purpose: Small child-process helper used to create deterministic process-runner timeout, output, and cancellation scenarios.
 namespace Stacker.Tests;
 public static class ProcessProbe
 {

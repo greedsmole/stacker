@@ -1,3 +1,4 @@
+// Purpose: Small persisted-session identity used to separate review drafts by repository/account/PR context.
 using Stacker.Core;
 using Stacker.Infrastructure;
 namespace Stacker.Desktop.ViewModels;

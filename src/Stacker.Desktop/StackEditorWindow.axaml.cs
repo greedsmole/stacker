@@ -1,3 +1,4 @@
+// Purpose: Editor for a user-authored stack definition; validates refs and changes ordering without changing Git history.
 using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Input;

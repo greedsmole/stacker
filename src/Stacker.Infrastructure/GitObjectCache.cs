@@ -1,3 +1,4 @@
+// Purpose: Fetches selected PR commits into an application-owned bare cache so remote review does not alter the user checkout.
 using Stacker.Core;
 namespace Stacker.Infrastructure;
 
