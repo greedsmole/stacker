@@ -68,7 +68,12 @@ public sealed class ReviewToolsTests
         Assert.Equal("B.txt",vm.Sections[0].SelectedFile?.NewPath);
         vm.SearchScope="Changed lines"; vm.SearchQuery="^B$"; vm.SearchRegex=true; await vm.SearchAsync();
         var lineHit=Assert.Single(vm.SearchResults); Assert.Equal(DiffLineKind.Added,lineHit.Line?.Kind);
-        vm.Sections[0].WrapCode=true;
+        var firstSection=vm.Sections[0];
+        await vm.SelectLayerAsync(vm.LocalGroups[0].Layers[0],false);
+        await vm.SetWrapCodeAsync(true);
+        Assert.True(firstSection.WrapCode);
+        await vm.SelectOverviewAsync(vm.LocalGroups[0]);
+        Assert.True(vm.Sections[0].WrapCode);
         Assert.All(vm.Sections[0].Lines,line=>Assert.Equal(TextWrapping.Wrap,line.TextWrapping));
         Assert.Equal(ScrollBarVisibility.Disabled,vm.Sections[0].CodeHorizontalScroll);
         vm.SearchQuery="["; await vm.SearchAsync(); Assert.Contains("Invalid regex",vm.SearchStatus);

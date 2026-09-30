@@ -92,9 +92,7 @@ public partial class DiffSectionView : UserControl
     private async void WrapCodeClick(object? sender, RoutedEventArgs e)
     {
         if (sender is not ToggleButton toggle || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
-        main.Settings.WrapCode = toggle.IsChecked == true;
-        foreach (var section in main.Sections) section.WrapCode = main.Settings.WrapCode;
-        await main.SaveSettingsAsync();
+        await main.SetWrapCodeAsync(toggle.IsChecked == true);
     }
     private async void CommentSelectedClick(object? sender, RoutedEventArgs e)
     {

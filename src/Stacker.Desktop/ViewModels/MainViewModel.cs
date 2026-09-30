@@ -273,6 +273,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try { _executable.Override = Settings.GitPath; if (_ghExecutable is not null) { _ghExecutable.Override = Settings.GhPath; _ghExecutable.UseSavedCredentials = Settings.UseSavedGhCredentials; } await _settingsStore.SaveAsync(Settings); }
         catch (Exception ex) { Error = "Cannot save settings: " + ex.Message; }
     }
+    public async Task SetWrapCodeAsync(bool enabled)
+    {
+        Settings.WrapCode = enabled;
+        foreach (var section in _views.Values.SelectMany(views => views).Distinct()) section.WrapCode = enabled;
+        await SaveSettingsAsync();
+    }
     private void DisposeViews() { foreach (var section in _views.Values.SelectMany(v => v).Distinct()) section.Dispose(); _views.Clear(); }
     public void Dispose() { _disposed = true; if (_commandLog is not null) _commandLog.Changed -= LogChanged; _searchLoad?.Cancel(); _refresh?.Cancel(); _comparison?.Cancel(); _githubLoad?.Cancel(); _coordinator?.Dispose(); DisposeViews(); }
 }
