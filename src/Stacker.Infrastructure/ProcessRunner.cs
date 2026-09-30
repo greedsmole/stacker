@@ -4,9 +4,26 @@ using Stacker.Core;
 
 namespace Stacker.Infrastructure;
 
-public sealed class ProcessRunner : IProcessRunner
+public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRunner
 {
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+    {
+        var started = DateTimeOffset.UtcNow;
+        var watch = Stopwatch.StartNew();
+        var logId = commandLog?.Begin(request, started);
+        try
+        {
+            var result = await RunCoreAsync(request, ct);
+            commandLog?.Finish(logId, watch.Elapsed, result.ExitCode, result.StdErr.Trim());
+            return result;
+        }
+        catch (Exception ex)
+        {
+            commandLog?.Finish(logId, watch.Elapsed, null, ex.Message);
+            throw;
+        }
+    }
+    private static async Task<ProcessResult> RunCoreAsync(ProcessRequest request, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         using var timeout = new CancellationTokenSource(request.Timeout ?? TimeSpan.FromSeconds(30));

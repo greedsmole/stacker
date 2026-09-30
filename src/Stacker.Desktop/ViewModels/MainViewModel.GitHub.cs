@@ -131,14 +131,22 @@ public sealed partial class MainViewModel
         var matches = _remoteSnapshot?.PullRequests.Where(p => p.HeadRepositoryId == _remoteSnapshot.Context.RepositoryId && p.HeadRef == name).ToArray();
         return matches?.Length == 1 ? matches[0] : null;
     }
-    private Task<RepositorySnapshot> PrepareRemoteAsync(StackGroupViewModel group, CancellationToken ct)
+    private Task<RepositorySnapshot> PrepareRemoteAsync(StackGroupViewModel group, DiffMode mode, int[] positions, CancellationToken ct)
     {
+        var required = mode switch
+        {
+            DiffMode.FullStack => new[] { 0, group.PullRequests.Count - 1 },
+            DiffMode.Cumulative => new[] { 0, positions[0] },
+            DiffMode.MultiLayer => positions.Concat(positions.Where(p => p > 0).Select(p => p - 1)).ToArray(),
+            _ => positions
+        };
+        var prs = required.Distinct().Order().Select(index => group.PullRequests[index]).ToArray();
         if (IsDemo)
         {
-            IReadOnlyList<BranchRef> refs = group.PullRequests.SelectMany(p => new[] { new BranchRef(GitObjectCache.HeadRef(p), p.HeadSha), new BranchRef(GitObjectCache.BaseRef(p), p.BaseSha) }).ToArray();
+            IReadOnlyList<BranchRef> refs = prs.SelectMany(p => new[] { new BranchRef(GitObjectCache.HeadRef(p), p.HeadSha), new BranchRef(GitObjectCache.BaseRef(p), p.BaseSha) }).ToArray();
             return Task.FromResult(new RepositorySnapshot(_repository!.Root, refs, 0));
         }
-        return _objectCache?.PrepareAsync(_remoteSnapshot!.Context, group.PullRequests, ct) ?? throw new StackerException("GitHub cache is unavailable.");
+        return _objectCache?.PrepareAsync(_remoteSnapshot!.Context, prs, ct) ?? throw new StackerException("GitHub cache is unavailable.");
     }
     public async Task SaveGitHubPreferencesAsync(RepositoryPreferences preferences)
     {

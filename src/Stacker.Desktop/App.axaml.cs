@@ -15,7 +15,8 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             _services = new ServiceCollection()
-                .AddSingleton<GitExecutable>().AddSingleton<GhExecutable>().AddSingleton<IProcessRunner, ProcessRunner>()
+                .AddSingleton<GitExecutable>().AddSingleton<GhExecutable>().AddSingleton<GitCommandLog>()
+                .AddSingleton<IProcessRunner>(s => new ProcessRunner(s.GetRequiredService<GitCommandLog>()))
                 .AddSingleton<ApplicationStore>().AddSingleton<GitHubCli>()
                 .AddSingleton<IGitHubReader>(s => s.GetRequiredService<GitHubCli>()).AddSingleton<IGitHubWriter>(s => s.GetRequiredService<GitHubCli>())
                 .AddSingleton<IGitObjectCache, GitObjectCache>().AddSingleton<ISyntaxHighlighter, TextMateSyntaxHighlighter>()

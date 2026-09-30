@@ -24,11 +24,16 @@ public sealed partial class StackGroupViewModel : ObservableObject
     public ObservableCollection<LayerViewModel> Layers { get; } = [];
     public IReadOnlyList<PullRequest> PullRequests { get; }
     public bool IsRemote => PullRequests.Count > 0;
+    public bool IsSinglePr => IsRemote && PullRequests.Count == 1;
+    public bool IsStack => !IsSinglePr;
+    public bool ShowLayers => IsStack && IsExpanded;
     public string Name => Definition.Name;
-    public string Summary => $"{Layers.Count} {(IsRemote ? "PRs" : "layers")}{(SharedPrefix ? " · shared foundation" : "")}";
+    public string Summary => IsSinglePr ? $"#{PullRequests[0].Number} · {PullRequests[0].BaseRef} ← {PullRequests[0].HeadRef}"
+        : $"{Layers.Count} {(IsRemote ? "PRs" : "layers")}{(SharedPrefix ? " · shared foundation" : "")}";
     public string BaseLabel => "Base: " + (IsRemote ? PullRequests[0].BaseRef : Definition.Base.Replace("refs/heads/", "").Replace("refs/remotes/", ""));
     public bool SharedPrefix { get; }
     [ObservableProperty] private bool _isExpanded = true;
+    partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(ShowLayers));
     [ObservableProperty] private bool _isSelected;
     public StackGroupViewModel(StackDefinition definition, IEnumerable<StackLayerSnapshot> layers, IReadOnlyList<PullRequest>? prs = null, bool sharedPrefix = false)
     {

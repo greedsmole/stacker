@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
 using Stacker.Core;
 namespace Stacker.Desktop.ViewModels;
 
@@ -18,6 +20,7 @@ public sealed partial class RenderedDiffLine(DiffLine line) : ObservableObject
     public bool HasEditor => Editor is not null;
     partial void OnEditorChanged(ReviewViewModel? value) => OnPropertyChanged(nameof(HasEditor));
     [ObservableProperty] private IReadOnlyList<SyntaxSpan> _tokens = [];
+    [ObservableProperty] private TextWrapping _textWrapping = TextWrapping.NoWrap;
 }
 public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
 {
@@ -59,6 +62,10 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     public ObservableCollection<ReviewThread> FileThreads { get; } = [];
     [ObservableProperty] private string _patch = "";
     [ObservableProperty] private bool _isExpanded = true;
+    [ObservableProperty] private bool _wrapCode;
+    public ScrollBarVisibility CodeHorizontalScroll => WrapCode ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
+    partial void OnWrapCodeChanged(bool value)
+    { foreach (var line in Lines) line.TextWrapping = value ? TextWrapping.Wrap : TextWrapping.NoWrap; OnPropertyChanged(nameof(CodeHorizontalScroll)); }
     [ObservableProperty] private double _panelHeight = 560;
     public DiffSectionViewModel(IGitRepositoryReader git, string root, DiffResult result, ISyntaxHighlighter? highlighter = null, string theme = "Dark")
     {
@@ -100,10 +107,10 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
             Patch = diff.Patch;
             foreach (var hunk in diff.Hunks)
             {
-                Lines.Add(new(new(DiffLineKind.Header, null, null, $"Lines {hunk.OldStart}–{hunk.OldStart + Math.Max(0, hunk.OldCount - 1)} → {hunk.NewStart}–{hunk.NewStart + Math.Max(0, hunk.NewCount - 1)}  {hunk.Context}")));
+                Lines.Add(new(new(DiffLineKind.Header, null, null, $"Lines {hunk.OldStart}–{hunk.OldStart + Math.Max(0, hunk.OldCount - 1)} → {hunk.NewStart}–{hunk.NewStart + Math.Max(0, hunk.NewCount - 1)}  {hunk.Context}")) { TextWrapping = WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap });
                 foreach (var line in hunk.Lines)
                     if (line.Kind != DiffLineKind.Notice || line.Text.StartsWith("\\ No newline", StringComparison.Ordinal))
-                        Lines.Add(new(line.Kind == DiffLineKind.Notice ? line with { Text = "No newline at end of file" } : line));
+                        Lines.Add(new(line.Kind == DiffLineKind.Notice ? line with { Text = "No newline at end of file" } : line) { TextWrapping = WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap });
             }
             Message = file.IsBinary ? "Binary file — text preview unavailable." : file.IsSubmodule ? "Submodule commit changed." : file.ModeChanged ? file.Detail : diff.Lines.Count == 0 ? "No textual changes." : "";
             IsBusy = false; ApplyThreads();

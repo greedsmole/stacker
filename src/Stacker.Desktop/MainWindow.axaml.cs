@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using Stacker.Desktop.ViewModels;
 namespace Stacker.Desktop;
 public partial class MainWindow : Window
@@ -16,6 +17,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Activated += (_, _) => { if (_ready) Vm.SetWindowActive(true); };
+        KeyDown += SearchShortcut;
         Deactivated += (_, _) => { if (_ready) Vm.SetWindowActive(false); };
         SizeChanged += (_, _) => Grid.SetColumn(ReviewHost, Bounds.Width < 1320 ? 2 : 3);
         Opened += async (_, _) =>
@@ -50,6 +52,37 @@ public partial class MainWindow : Window
         foreach (var section in Vm.Sections) section.PanelHeight = Vm.Sections.Count == 1 ? Math.Max(300, SectionScroll.Bounds.Height - 12) : 440;
     }
     private void ApplyTheme() { if (Application.Current is { } app) app.RequestedThemeVariant = Vm.Settings.Theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark; }
+    private void ChangesTabClick(object? sender, RoutedEventArgs e) => Vm.IsGitLogOpen = false;
+    private void GitLogsTabClick(object? sender, RoutedEventArgs e) => Vm.IsGitLogOpen = true;
+    private void FindClick(object? sender, RoutedEventArgs e) => OpenFind("Files");
+    private void OpenFind(string scope) { Vm.OpenSearch(scope); SearchBox.Focus(); SearchBox.SelectAll(); }
+    private void SearchShortcut(object? sender, KeyEventArgs e)
+    {
+        if ((e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0) return;
+        if (e.Key == Key.P) { e.Handled = true; OpenFind("Files"); }
+        else if (e.Key == Key.F && e.KeyModifiers.HasFlag(KeyModifiers.Shift)) { e.Handled = true; OpenFind("Changed lines"); }
+    }
+    private void SearchKeyDown(object? sender, KeyEventArgs e)
+    { if (e.Key == Key.Enter) { e.Handled = true; _ = Vm.SearchAsync(); } else if (e.Key == Key.Escape) Vm.CloseSearch(); }
+    private void CloseSearchClick(object? sender, RoutedEventArgs e) => Vm.CloseSearch();
+    private async void SearchResultSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ListBox { SelectedItem: ChangeSearchHit hit } list) return;
+        list.SelectedItem = null;
+        await Vm.OpenSearchHitAsync(hit);
+        var view = SectionScroll.GetVisualDescendants().OfType<DiffSectionView>().FirstOrDefault(v => ReferenceEquals(v.DataContext, hit.Section));
+        if (view is not null) { view.BringIntoView(); if (hit.Line is not null) view.ScrollTo(hit.Line); }
+        Vm.CloseSearch();
+    }
+    private async void CopyGitLogClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (Clipboard is { } clipboard)
+                await clipboard.SetTextAsync(string.Join("\n\n", Vm.GitLogEntries.Select(entry => entry.Summary + "\n" + entry.WorkingDirectory + "\n" + entry.Detail)));
+        }
+        catch (Exception ex) { Vm.Error = "Cannot copy Git logs: " + ex.Message; }
+    }
     private async void OpenFolderClick(object? sender, RoutedEventArgs e)
     {
         try
@@ -64,7 +97,9 @@ public partial class MainWindow : Window
     {
         if (_ready && RecentBox.SelectedItem is string path) { RecentBox.SelectedItem = null; await Vm.OpenRepositoryAsync(path); }
     }
-    private async void StackClick(object? sender, RoutedEventArgs e) { if (sender is Control { DataContext: StackGroupViewModel group }) await Vm.SelectGroupAsync(group); }
+    private async void StackClick(object? sender, RoutedEventArgs e)
+    { if (sender is Control { DataContext: StackGroupViewModel group })
+        { if (group.IsSinglePr) await Vm.SelectLayerAsync(group.Layers[0], false); else await Vm.SelectGroupAsync(group); } }
     private async void LayerClick(object? sender, RoutedEventArgs e) { if (sender is Control { DataContext: LayerViewModel layer }) await Vm.SelectLayerAsync(layer, false); }
     private async void LayerPointerPressed(object? sender, PointerPressedEventArgs e)
     {

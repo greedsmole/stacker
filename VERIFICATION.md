@@ -1,4 +1,12 @@
-# Verification — Stacker v0.3
+# Verification — Stacker v0.4
+
+Local implementation on 2026-09-30: standalone PRs open directly in reviewable Layer mode; selected diff rows create a range anchor; code wrapping, file/change search and a live Git log are available. The Git cache batches missing refs and requests only the PRs required by the chosen comparison. No clone or pull is issued by the application.
+
+Local Release test suite: **86 passed, 0 failed** on macOS ARM64. Regression tests cover standalone PR navigation, selective/batched cache fetch, multi-line editor controls, file and regex changed-line search, wrapping, and running/completed Git log entries. The previous v0.3 release record follows below. Live GHES fetch duration, interactive Windows behavior and real comment publication require verification on the Windows GHES workstation.
+
+## Previous release verification
+
+### Stacker v0.3
 
 Recorded locally on 2026-09-29. Current target packages: macOS ARM64 and Windows x64.
 
@@ -8,8 +16,6 @@ Recorded locally on 2026-09-29. Current target packages: macOS ARM64 and Windows
 - macOS ARM64 and Windows x64 packages are built locally and checked for archive integrity and executable architecture. Windows is cross-published on this Mac; interactive Windows validation was not performed.
 - CI builds/tests/packages on both target operating systems. Release publication requires a successful run for its source commit; the release notes link to that run.
 - Live posting to GitHub/GHES has not been exercised. Tests use fake responses and never post comments or reviews. The existing Windows Schannel cache behavior is retained.
-
-## Previous release verification
 
 ### Stacker v0.2
 

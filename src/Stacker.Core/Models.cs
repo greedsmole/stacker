@@ -45,6 +45,7 @@ public sealed class AppSettings
 {
     public List<string> RecentRepositories { get; set; } = [];
     public bool BackgroundRefresh { get; set; } = true;
+    public bool WrapCode { get; set; }
     public string? LastRepository { get; set; }
     public string? GitPath { get; set; }
     public string? GhPath { get; set; }

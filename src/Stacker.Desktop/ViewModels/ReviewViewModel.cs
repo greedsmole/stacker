@@ -169,7 +169,7 @@ public partial class ReviewViewModel : ObservableObject
         if (IsBusy) return;
         CloseInlineEditors(); var lines = selected.ToArray(); _selection = null; OnPropertyChanged(nameof(HasSelection));
         if (!_section.IsPrSnapshot || lines.Length == 0 || _section.SelectedFile is not { } file) { OnPropertyChanged(nameof(SelectionLabel)); return; }
-        var left = side == "LEFT" || side is null && lines.All(l => l.Kind == DiffLineKind.Removed);
+        var left = side == "LEFT" || side is null && lines.Any(l => l.Kind == DiffLineKind.Removed) && lines.All(l => l.Kind != DiffLineKind.Added);
         if (left ? lines.Any(l => l.Kind is not (DiffLineKind.Removed or DiffLineKind.Context)) : lines.Any(l => l.Kind is not (DiffLineKind.Added or DiffLineKind.Context))) { Message = "Select a contiguous range on one side of the diff."; return; }
         var numbers = lines.Select(l => left ? l.OldLineNumber : l.NewLineNumber).Where(n => n.HasValue).Select(n => n!.Value).Distinct().Order().ToArray();
         if (numbers.Length != lines.Length || numbers[^1] - numbers[0] + 1 != numbers.Length) { Message = "Select a contiguous range of code lines."; return; }

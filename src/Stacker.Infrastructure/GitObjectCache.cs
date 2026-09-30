@@ -12,26 +12,38 @@ public sealed class GitObjectCache(IProcessRunner runner, GitExecutable git, GhE
         {
             var root = DirectoryFor(context); Directory.CreateDirectory(root);
             if (!File.Exists(Path.Combine(root, "HEAD"))) await Run(root, ["init", "--bare"], ct);
-            var refs = new List<BranchRef>();
-            foreach (var pr in prs)
+            var requested = prs.DistinctBy(pr => pr.Number).ToArray();
+            var missing = new List<PullRequest>();
+            foreach (var pr in requested)
             {
                 ct.ThrowIfCancellationRequested();
                 if (!await Exists(root, pr.HeadSha, ct) || !await Exists(root, pr.BaseSha, ct))
+                    missing.Add(pr);
+            }
+            if (missing.Count > 0)
+            {
+                if (reader is not null) await reader.VerifyAccessAsync(context, ct);
+                if (!Uri.TryCreate(context.CloneUrl, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !string.Equals(uri.Host, context.Host, StringComparison.OrdinalIgnoreCase) || uri.UserInfo.Length > 0)
+                    throw new StackerException("GitHub returned an unexpected repository URL.");
+                // One fetch for all refs required by this comparison. This remains in the
+                // application-owned bare cache; no clone or user-repository refs are changed.
+                var refspecs = missing.SelectMany(pr => new[]
                 {
-                    if (reader is not null) await reader.VerifyAccessAsync(context, ct);
-                    if (!Uri.TryCreate(context.CloneUrl, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !string.Equals(uri.Host, context.Host, StringComparison.OrdinalIgnoreCase))
-                        throw new StackerException("GitHub returned an unexpected clone URL.");
-                    var headRef = $"refs/stacker/pr/{pr.Number}"; var baseRef = $"refs/stacker/base/{pr.Number}";
-                    // Only the fixed helper program is interpreted by Git. Paths are supplied via a quoted environment variable.
-                    await Run(root, ["-c", "credential.helper=", "-c", "credential.helper=!\"$STACKER_GH\" auth git-credential", "-c", "credential.interactive=false",
-                        "fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", context.CloneUrl,
-                        $"+refs/pull/{pr.Number}/head:{headRef}", $"+refs/heads/{pr.BaseRef}:{baseRef}"], ct, TimeSpan.FromMinutes(3), isDownload: true);
-                    var head = await Run(root, ["rev-parse", headRef], ct); var @base = await Run(root, ["rev-parse", baseRef], ct);
+                    $"+refs/pull/{pr.Number}/head:refs/stacker/pr/{pr.Number}",
+                    $"+refs/heads/{pr.BaseRef}:refs/stacker/base/{pr.Number}"
+                }).ToArray();
+                // Only the fixed helper program is interpreted by Git. Paths are supplied via a quoted environment variable.
+                await Run(root, ["-c", "credential.helper=", "-c", "credential.helper=!\"$STACKER_GH\" auth git-credential", "-c", "credential.interactive=false",
+                    "fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", context.CloneUrl, .. refspecs], ct, TimeSpan.FromMinutes(3), isDownload: true);
+                foreach (var pr in missing)
+                {
+                    var head = await Run(root, ["rev-parse", $"refs/stacker/pr/{pr.Number}"], ct);
+                    var @base = await Run(root, ["rev-parse", $"refs/stacker/base/{pr.Number}"], ct);
                     if (head.StdOut.Trim() != pr.HeadSha || @base.StdOut.Trim() != pr.BaseSha)
                         throw new StackerException($"PR #{pr.Number} changed while downloading. Refresh GitHub before comparing.");
                 }
-                refs.Add(new(HeadRef(pr), pr.HeadSha)); refs.Add(new(BaseRef(pr), pr.BaseSha));
             }
+            var refs = requested.SelectMany(pr => new[] { new BranchRef(HeadRef(pr), pr.HeadSha), new BranchRef(BaseRef(pr), pr.BaseSha) }).ToArray();
             return new(root, refs.DistinctBy(r => r.Name).ToArray(), 0);
         }
         finally { _gate.Release(); }

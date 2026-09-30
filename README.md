@@ -1,4 +1,4 @@
-# Stacker v0.3
+# Stacker v0.4
 
 A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Release targets: **macOS Apple Silicon** and **Windows x64**. Linux and Intel Mac release work is deferred.
 
@@ -14,7 +14,7 @@ dotnet run --project src/Stacker.Desktop -- --demo
 dotnet run --project src/Stacker.Desktop -- /path/to/repository
 ```
 
-Build a macOS ARM64 package with `python3 scripts/package.py osx-arm64`, or a Windows x64 package with `python scripts/package.py win-x64`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe`; keep its adjacent files. No separate .NET runtime is required. Git and optional GitHub CLI are installed separately. The archive is written to `artifacts/Stacker-0.3.0-osx-arm64.tar.gz`. The `.app` is not Developer ID signed or notarized. Public distribution signing requires the publisher's Apple credentials.
+Build a macOS ARM64 package with `python3 scripts/package.py osx-arm64`, or a Windows x64 package with `python scripts/package.py win-x64`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe`; keep its adjacent files. No separate .NET runtime is required. Git and optional GitHub CLI are installed separately. The archive is written to `artifacts/Stacker-0.4.0-osx-arm64.tar.gz`. The `.app` is not Developer ID signed or notarized. Public distribution signing requires the publisher's Apple credentials.
 
 ## Navigation and comparisons
 
@@ -33,9 +33,17 @@ At the last layer, Through this layer equals Entire stack. Selected layers keep 
 
 The repository switcher contains recent folders, Open folder and Open demo. Stack editing lives in each stack's menu. The workspace uses a single toolbar and an embedded PR inspector, which overlays the right side below 1320 logical pixels.
 
+**Standalone pull requests:** PRs outside discovered stacks appear under **Pull requests** as direct review entries. Click one to open its server base/head changes, code threads, discussion and review controls. No stack definition is needed.
+
+**Search:** choose **Find**, or press Cmd/Ctrl+P for file names and Cmd/Ctrl+Shift+F for changed text. File search checks paths across all visible comparison sections. Changed text search checks added and removed lines in their pinned diff snapshots; optional Regex uses a bounded match time. Select a result to open its file and scroll to the line. Search runs on demand, can be cancelled and reports files whose patches exceed the display limit.
+
+**Git logs:** the **Git logs** tab shows each Git command while it runs, then its duration, exit status and up to 2 KiB of error output. Copy or clear the log there. Credentials embedded in HTTPS URLs are redacted. The tab includes reads and cache downloads so a slow GHES fetch is visible.
+
 **Refresh and background updates:** one Refresh checks local refs and GitHub. GitHub PR metadata and the selected PR's discussion are also read every 60 seconds while the window is active. Losing focus pauses the timer; regaining focus only restarts the delay. Background reads never download Git objects. Comments update in place; changed code or stack structure waits behind **New changes available → Update changes**. Temporary failures back off to 2/4/8 minutes, authentication failures suspend the loop, and previous data remains visible. Settings can disable background refresh.
 
 The diff displays code, line numbers and compact hunk ranges. Git headers (`diff --git`, `index`, `---/+++`) are omitted; rename/mode/binary/submodule information is shown as file metadata. Missing final newlines remain visible. Text selection copies source text, and Cmd/Ctrl+C on selected diff rows omits markers and line numbers. **Copy patch** in the file menu still copies the original patch.
+
+Use **Wrap code** above a diff to fit long lines to the pane; the preference is saved. For a multi-line comment, Shift-click adjacent code rows and choose **Comment on selected lines**. The editor shows the line range before you add it to a review or post it. Mixed added/removed sides are rejected with an explanation.
 
 ## Reproducible demo
 
@@ -67,7 +75,7 @@ Discovery does not rewrite `.stackpr.yml`. Save as local stack is an explicit ac
 
 ## Isolated Git cache
 
-Selecting a remote PR or stack downloads objects into an application-owned bare repository, partitioned by host, repository ID and account. It uses gh's credential helper only for that child Git invocation. User branches, refs, index, configuration and working tree are untouched.
+Selecting a remote PR or stack fetches objects into an application-owned bare repository, partitioned by host, repository ID and account. Stacker does not clone the user repository or run pull on it. A single PR fetches only its own base/head refs; stack comparisons request just the PRs needed for that mode, and missing refs are combined into one fetch. Existing objects are reused. The fetch uses gh's credential helper only for that child Git invocation. User branches, refs, index, configuration and working tree are untouched.
 
 On Windows, cache downloads use Git's **Schannel** backend, which uses the Windows certificate store by default. This supports corporate GHES certificates already trusted by Windows. The backend is selected only for the download process; Stacker does not disable certificate/revocation checks or change global Git configuration. Existing explicit Schannel CA-bundle settings remain effective. Use Git for Windows with Schannel support.
 
@@ -99,7 +107,7 @@ TextMateSharp tokenizes the old and new Git blobs separately, preserving multili
 
 The diff appears first. Highlighting runs in the background with cancellation and a blob/language/theme cache. Unknown languages, grammar failures, blobs above 2 MiB / 50,000 lines or tokenization exceeding the time budget fall back to plain text. There is no WebView, Monaco, LSP or go-to-definition.
 
-File patches retain the v0.1 limit of 5 MiB / 50,000 lines. Binary, submodule, rename and mode changes have explicit metadata. Non-UTF-8 path bytes remain outside v0.3 support.
+File patches retain the v0.1 limit of 5 MiB / 50,000 lines. Binary, submodule, rename and mode changes have explicit metadata. Non-UTF-8 path bytes remain outside v0.4 support.
 
 ## Storage and tests
 

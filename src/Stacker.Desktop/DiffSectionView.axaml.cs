@@ -4,6 +4,7 @@ using Avalonia.VisualTree;
 using Avalonia.Threading;
 using Avalonia.Interactivity;
 using Avalonia.Input;
+using Avalonia.Controls.Primitives;
 using Stacker.Core;
 using Stacker.Desktop.ViewModels;
 namespace Stacker.Desktop;
@@ -74,6 +75,12 @@ public partial class DiffSectionView : UserControl
         var line = section.Lines.FirstOrDefault(l => anchor.Side == "LEFT" ? l.Kind == DiffLineKind.Removed && l.OldLineNumber == anchor.Line : l.Kind != DiffLineKind.Removed && l.NewLineNumber == anchor.Line);
         if (line is not null) DiffLines.ScrollIntoView(line);
     }
+    public void ScrollTo(DiffLine source)
+    {
+        if (DataContext is not DiffSectionViewModel section) return;
+        var line = section.Lines.FirstOrDefault(row => row.Kind == source.Kind && row.OldLineNumber == source.OldLineNumber && row.NewLineNumber == source.NewLineNumber);
+        if (line is not null) DiffLines.ScrollIntoView(line);
+    }
     private async void ReviewClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not DiffSectionViewModel section || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
@@ -82,6 +89,26 @@ public partial class DiffSectionView : UserControl
     }
     private async void FileCommentClick(object? sender, RoutedEventArgs e)
     { if (DataContext is DiffSectionViewModel section && TopLevel.GetTopLevel(this)?.DataContext is MainViewModel main) await main.ShowReviewAsync(section, 1); }
+    private async void WrapCodeClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not ToggleButton toggle || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
+        main.Settings.WrapCode = toggle.IsChecked == true;
+        foreach (var section in main.Sections) section.WrapCode = main.Settings.WrapCode;
+        await main.SaveSettingsAsync();
+    }
+    private async void CommentSelectedClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DiffSectionViewModel section || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
+        var selected = DiffLines.SelectedItems?.OfType<RenderedDiffLine>().Where(l => l.IsCode).ToHashSet() ?? [];
+        if (selected.Count == 0) { section.Message = "Select adjacent code rows with Shift-click, then comment on the selection."; return; }
+        var session = await main.EnsureReviewAsync(section);
+        if (session is null || session.IsBusy) return;
+        session.SetSelection(section.Lines.Where(selected.Contains));
+        if (!session.HasSelection) { section.Message = session.Message; return; }
+        foreach (var row in section.Lines) row.Editor = null;
+        var last = section.Lines.Last(selected.Contains); last.Editor = session; main.ActiveReview = session;
+        DiffLines.ScrollIntoView(last);
+    }
     private async void AddLineClick(object? sender, RoutedEventArgs e)
     { if (sender is Control { DataContext: RenderedDiffLine line }) { await BeginLineAsync(line, _extendRange); _extendRange = false; } }
     private async void LineNumberPressed(object? sender, PointerPressedEventArgs e)

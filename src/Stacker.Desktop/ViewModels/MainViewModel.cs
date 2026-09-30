@@ -49,10 +49,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public string BaseLabel => _activeGroup?.BaseLabel ?? "No stack selected";
     public MainViewModel(IGitRepositoryReader git, IStackStore store, ISettingsStore settingsStore, GitExecutable executable, StackService stacks, DiffService diff,
         IGitHubReader? github = null, IGitHubWriter? writer = null, IGitObjectCache? cache = null, ApplicationStore? applicationStore = null,
-        ISyntaxHighlighter? highlighter = null, DemoRepositoryGenerator? demo = null, GhExecutable? ghExecutable = null)
+        ISyntaxHighlighter? highlighter = null, DemoRepositoryGenerator? demo = null, GhExecutable? ghExecutable = null, GitCommandLog? commandLog = null)
     {
         _git = git; _store = store; _settingsStore = settingsStore; _executable = executable; _stacks = stacks; _diff = diff; _highlighter = highlighter;
         _github = github; _writer = writer; _objectCache = cache; _applicationStore = applicationStore ?? new(); _demo = demo; _ghExecutable = ghExecutable;
+        _commandLog = commandLog;
+        if (_commandLog is not null) { foreach (var entry in _commandLog.Snapshot()) GitLogEntries.Add(entry); _commandLog.Changed += LogChanged; }
         Sections.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoSections));
     }
     partial void OnErrorChanged(string value) => OnPropertyChanged(nameof(HasError));
@@ -154,6 +156,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public async Task SelectGroupAsync(StackGroupViewModel group, bool saveCurrent = true)
     {
         if (saveCurrent) await SaveWorkspaceAsync();
+        if (group.IsSinglePr) { SetActiveGroup(group); _selectedPositions = [0]; _suppress = true; Mode = DiffMode.Layer; _suppress = false; await CompareAsync(); return; }
         SetActiveGroup(group); _selectedPositions = []; _suppress = true; Mode = DiffMode.FullStack;
         if (_workspace.Stacks.TryGetValue(GroupKey(group), out var saved))
         {
@@ -179,6 +182,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
     public async Task CompareAsync()
     {
+        ResetSearch();
         _comparison?.Cancel(); var compare = new CancellationTokenSource(); _comparison = compare;
         var group = _activeGroup; var repo = _repository; var mode = Mode; var positions = _selectedPositions.ToArray();
         if (repo is null || group is null || _disposed) { compare.Dispose(); if (ReferenceEquals(_comparison, compare)) _comparison = null; return; }
@@ -190,7 +194,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (group.IsRemote)
             {
                 if (_remoteSnapshot is null) throw new StackerException("Refresh to load this stack.");
-                comparisonRepository = await PrepareRemoteAsync(group, compare.Token);
+                comparisonRepository = await PrepareRemoteAsync(group, mode, positions, compare.Token);
                 stack = new(group.Definition.Id, group.Name, GitObjectCache.BaseRef(group.PullRequests[0]), group.PullRequests.Select(GitObjectCache.HeadRef).ToArray());
                 // For a single PR's review use its declared server base, even if the discovered parent has moved.
                 if (mode == DiffMode.Layer && positions.Length == 1)
@@ -208,7 +212,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 {
                     var pr = group.IsRemote ? group.PullRequests.FirstOrDefault(p => GitObjectCache.HeadRef(p) == result.Layer) : FindLocalPr(result.Layer);
                     return new DiffSectionViewModel(_git, comparisonRepository.Root, result, _highlighter, Settings.Theme)
-                    { AssociatedPr = pr, GitHubContext = _remoteSnapshot?.Context, IsPrSnapshot = group.IsRemote && mode == DiffMode.Layer, IsDemo = IsDemo };
+                    { AssociatedPr = pr, GitHubContext = _remoteSnapshot?.Context, IsPrSnapshot = group.IsRemote && mode == DiffMode.Layer, IsDemo = IsDemo, WrapCode = Settings.WrapCode };
                 }).ToList();
                 // Carry file/filter/scroll state across a changed snapshot of the same comparison.
                 foreach (var section in sections)
@@ -227,7 +231,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 DiffMode.FullStack => $"Entire stack · {group.Name}",
                 DiffMode.Cumulative => $"Through layer {(_selectedPositions.FirstOrDefault() + 1)} · {group.Name}",
                 DiffMode.MultiLayer => $"Selected layers · {string.Join(", ", _selectedPositions.Select(p => p + 1))}",
-                _ => $"Layer {(_selectedPositions.FirstOrDefault() + 1)} · {group.Layers.ElementAtOrDefault(_selectedPositions.FirstOrDefault())?.Title}"
+                _ => group.IsSinglePr ? $"Pull request · {group.PullRequests[0].Label}" : $"Layer {(_selectedPositions.FirstOrDefault() + 1)} · {group.Layers.ElementAtOrDefault(_selectedPositions.FirstOrDefault())?.Title}"
             };
             OnPropertyChanged(nameof(ComparisonDetail));
             RestoreSections();
@@ -270,5 +274,5 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) { Error = "Cannot save settings: " + ex.Message; }
     }
     private void DisposeViews() { foreach (var section in _views.Values.SelectMany(v => v).Distinct()) section.Dispose(); _views.Clear(); }
-    public void Dispose() { _disposed = true; _refresh?.Cancel(); _comparison?.Cancel(); _githubLoad?.Cancel(); _coordinator?.Dispose(); DisposeViews(); }
+    public void Dispose() { _disposed = true; if (_commandLog is not null) _commandLog.Changed -= LogChanged; _searchLoad?.Cancel(); _refresh?.Cancel(); _comparison?.Cancel(); _githubLoad?.Cancel(); _coordinator?.Dispose(); DisposeViews(); }
 }

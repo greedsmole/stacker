@@ -7,6 +7,7 @@ namespace Stacker.Tests;
 public sealed class FakeGitHub : IGitHubReader, IGitHubWriter
 {
     public PullRequest Current { get; set; }=DiscoveryTests.Pr(42,"main","feature");
+    public List<PullRequest> Extra { get; }=[];
     public bool RejectAccess { get; set; }
     public bool FailAfterSend { get; set; }
     public int Writes { get; private set; }
@@ -18,7 +19,7 @@ public sealed class FakeGitHub : IGitHubReader, IGitHubWriter
     public TaskCompletionSource<ReviewDiscussion>? DiscussionGate { get; set; }
     public Task<GitHubRepositoryContext> ConnectAsync(string root,string? repositoryOverride,CancellationToken ct=default)=>Task.FromResult(Context);
     public static GitHubRepositoryContext Context { get; }=new("github.example",1,"team","repo","https://github.example/team/repo.git","alice","main");
-    public Task<GitHubSnapshot> SnapshotAsync(GitHubRepositoryContext context,CancellationToken ct=default)=>Task.FromResult(new GitHubSnapshot(context,[Current],DateTimeOffset.UtcNow));
+    public Task<GitHubSnapshot> SnapshotAsync(GitHubRepositoryContext context,CancellationToken ct=default)=>Task.FromResult(new GitHubSnapshot(context,[Current,..Extra],DateTimeOffset.UtcNow));
     public Task<PullRequest> PullRequestAsync(GitHubRepositoryContext context,long number,CancellationToken ct=default)=>Task.FromResult(Current);
     public Task<ReviewDiscussion> DiscussionAsync(GitHubRepositoryContext context,PullRequest pr,CancellationToken ct=default)=>DiscussionGate is { } gate ? gate.Task.WaitAsync(ct) : Task.FromResult(new ReviewDiscussion(Published.ToArray(),Submitted.ToArray(),FileThreads.ToArray()));
     public Task VerifyAccessAsync(GitHubRepositoryContext context,CancellationToken ct=default){Verifications++;if(RejectAccess)throw new StackerException("HTTP 403");return Task.CompletedTask;}

@@ -3,12 +3,27 @@ using Stacker.Infrastructure;
 namespace Stacker.Tests;
 public sealed class GitCacheTests
 {
+    [Fact] public async Task Missing_PR_refs_are_batched_into_one_fetch()
+    {
+        await using var folder=new GitFixture();
+        var runner=new ScriptedRunner(request=>request.Arguments.Contains("cat-file") ? new(1,"","")
+            : request.Arguments.Contains("rev-parse") ? new(0,(request.Arguments.Last().Contains("/base/") ? new string('a',40) : new string('b',40))+"\n","")
+            : new(0,"",""));
+        var prs=new[]{DiscoveryTests.Pr(1,"main","A"),DiscoveryTests.Pr(2,"A","B")};
+        await new GitObjectCache(runner,new(),new(),new ApplicationStore(folder.Root)).PrepareAsync(FakeGitHub.Context,prs);
+        var fetch=Assert.Single(runner.Calls,request=>request.Arguments.Contains("fetch"));
+        Assert.Contains("+refs/pull/1/head:refs/stacker/pr/1",fetch.Arguments);
+        Assert.Contains("+refs/pull/2/head:refs/stacker/pr/2",fetch.Arguments);
+        Assert.DoesNotContain(runner.Calls,request=>request.Arguments.Contains("clone"));
+    }
     [Fact] public async Task Existing_objects_support_offline_comparison_without_touching_source_repository()
     {
         await using var repo=new GitFixture();await repo.Linear();await using var cacheFolder=new GitFixture();
         var store=new ApplicationStore(cacheFolder.Root);var context=FakeGitHub.Context;
         var cachePath=Path.Combine(store.Root,"objects",ApplicationStore.Key(context.Identity));Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
-        var clone=await repo.Runner.RunAsync(new(new GitExecutable().Resolve(),["clone","--bare",repo.Root,cachePath]));Assert.Equal(0,clone.ExitCode);
+        Directory.CreateDirectory(cachePath);
+        var init=await repo.Runner.RunAsync(new(new GitExecutable().Resolve(),["init","--bare"],cachePath));Assert.Equal(0,init.ExitCode);
+        var fetch=await repo.Runner.RunAsync(new(new GitExecutable().Resolve(),["fetch","--no-tags",repo.Root,"+refs/heads/*:refs/heads/*"],cachePath));Assert.Equal(0,fetch.ExitCode);
         var head=await repo.Git("rev-parse","B");var parent=await repo.Git("rev-parse","A");
         var pr=new PullRequest(42,"Test",1,"A",parent,1,"B",head,false,"");
         var beforeRefs=await repo.Git("show-ref");var beforeIndex=await File.ReadAllBytesAsync(Path.Combine(repo.Root,".git","index"));var beforeConfig=await File.ReadAllTextAsync(Path.Combine(repo.Root,".git","config"));
