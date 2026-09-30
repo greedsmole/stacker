@@ -27,7 +27,7 @@ public sealed class DesktopTests
         await vm.SelectLayerAsync(vm.LocalGroups[0].Layers[0], false);
         Assert.Equal("A.txt", Assert.Single(vm.Sections[0].Files).NewPath);
         await vm.Sections[0].LoadAsync(vm.Sections[0].SelectedFile);
-        Assert.Contains(vm.Sections[0].Lines, l => l.Text == "+A");
+        Assert.Contains(vm.Sections[0].Lines, l => l.Text == "A" && l.Kind == DiffLineKind.Added);
         Assert.False(vm.HasError, vm.Error);
         vm.Mode = DiffMode.MultiLayer;
         vm.SelectLayers([vm.Layers[0], vm.Layers[2]]);

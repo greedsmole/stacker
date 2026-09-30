@@ -34,8 +34,13 @@ public sealed partial class MainViewModel
     }
     [RelayCommand] public async Task RefreshGitHubAsync()
     {
+        try { await RefreshGitHubCoreAsync(default, false); }
+        catch (Exception ex) { GitHubStatus = ex.Message; }
+    }
+    private async Task RefreshGitHubCoreAsync(CancellationToken ct, bool background)
+    {
         if (_repository is null) return;
-        _githubLoad?.Cancel(); var load = new CancellationTokenSource(); _githubLoad = load;
+        _githubLoad?.Cancel(); var load = CancellationTokenSource.CreateLinkedTokenSource(ct); _githubLoad = load;
         var root = _repository.Root; GitHubBusy = true;
         try
         {
@@ -49,13 +54,18 @@ public sealed partial class MainViewModel
                 snapshot = await _github.SnapshotAsync(context, load.Token);
             }
             load.Token.ThrowIfCancellationRequested();
+            var changed = _remoteSnapshot is null || _remoteSnapshot.Context != snapshot.Context || !_remoteSnapshot.PullRequests.SequenceEqual(snapshot.PullRequests);
+            if (changed && _remoteSnapshot is not null && Sections.Count > 0 && !_applyingChanges)
+            { _pendingRemote = snapshot; HasPendingChanges = true; GitHubStatus = $"New changes available · checked {DateTime.Now:HH:mm}"; return; }
             _remoteSnapshot = snapshot;
             await _applicationStore.WriteAsync("snapshots", root, snapshot, load.Token);
             GitHubPreferences.BoundaryBranches ??= new[] { snapshot.Context.DefaultBranch }.Concat(new[] { "main", "master", "develop", "test" }.Where(b => _repository!.Refs.Any(r => r.Name.EndsWith('/' + b, StringComparison.Ordinal)) || snapshot.PullRequests.Any(p => p.BaseRef == b || p.HeadRef == b))).Distinct().ToList();
             await _applicationStore.WriteAsync("repositories", root, GitHubPreferences, load.Token);
-            BuildDiscoveredGroups();
+            load.Token.ThrowIfCancellationRequested();
+            if (changed) BuildDiscoveredGroups();
             GitHubStatus = IsDemo ? "Demo / offline · publishing disabled" : snapshot.Context.Display + $" · Updated {snapshot.UpdatedAt.LocalDateTime:HH:mm}";
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
@@ -64,9 +74,10 @@ public sealed partial class MainViewModel
             try
             {
                 var saved = await _applicationStore.ReadAsync<GitHubSnapshot>("snapshots", root, load.Token);
-                if (saved is not null) { _remoteSnapshot = saved; BuildDiscoveredGroups(); GitHubStatus += $" · Cached {saved.Context.Display} · {saved.UpdatedAt.LocalDateTime:g}"; }
+                if (_remoteSnapshot is null && saved is not null) { _remoteSnapshot = saved; BuildDiscoveredGroups(); GitHubStatus += $" · Cached {saved.Context.Display} · {saved.UpdatedAt.LocalDateTime:g}"; }
             }
             catch (Exception cacheError) when (cacheError is not OperationCanceledException) { GitHubStatus += " · Cache unavailable"; }
+            if (background) throw;
         }
         finally { if (ReferenceEquals(_githubLoad, load)) { _githubLoad = null; GitHubBusy = false; } load.Dispose(); }
     }
@@ -97,7 +108,7 @@ public sealed partial class MainViewModel
         if (_activeGroup?.IsRemote == true)
         {
             var replacement = RemoteGroups.Concat(OtherGroups).FirstOrDefault(g => g.Definition.Id == _activeGroup.Definition.Id);
-            if (replacement is not null) { SetActiveGroup(replacement); _ = CompareAsync(); }
+            if (replacement is not null) { SetActiveGroup(replacement); }
             else
             {
                 _comparison?.Cancel(); _activeGroup = null; _selectedPositions = []; Layers.Clear(); Sections.Clear();
@@ -106,7 +117,7 @@ public sealed partial class MainViewModel
                 OnPropertyChanged(nameof(BaseLabel)); OnPropertyChanged(nameof(HasSelectedLayer)); OnPropertyChanged(nameof(IsLocalSelected));
             }
         }
-        OnPropertyChanged(nameof(HasPrDiscussion)); OnPropertyChanged(nameof(HasRemoteGroups)); OnPropertyChanged(nameof(HasOtherGroups));
+        OnPropertyChanged(nameof(HasPrDiscussion)); OnPropertyChanged(nameof(CanReview)); OnPropertyChanged(nameof(HasRemoteGroups)); OnPropertyChanged(nameof(HasOtherGroups));
     }
     private static StackGroupViewModel RemoteGroup(string id, string name, IReadOnlyList<PullRequest> prs, bool shared)
     {
@@ -132,7 +143,13 @@ public sealed partial class MainViewModel
     public async Task SaveGitHubPreferencesAsync(RepositoryPreferences preferences)
     {
         if (_repository is null) return;
-        try { await _applicationStore.WriteAsync("repositories", _repository.Root, preferences); GitHubPreferences = preferences; await RefreshGitHubAsync(); }
+        try
+        {
+            await _applicationStore.WriteAsync("repositories", _repository.Root, preferences); GitHubPreferences = preferences;
+            _applyingChanges = true;
+            try { await RefreshGitHubAsync(); BuildDiscoveredGroups(); if (_activeGroup is not null) await CompareAsync(); }
+            finally { _applyingChanges = false; }
+        }
         catch (Exception ex) { Error = ex.Message; }
     }
     public async Task ClearGitHubCacheAsync()
@@ -166,8 +183,6 @@ public sealed partial class MainViewModel
         return new(_git, _repository.Root, new(pr.HeadRef, pr.BaseRef, pr.BaseSha, pr.HeadSha, null, []))
         { AssociatedPr = pr, GitHubContext = _remoteSnapshot.Context, IsDemo = IsDemo };
     }
-    public ReviewViewModel? CreateReview(DiffSectionViewModel section) => section.AssociatedPr is { } pr && section.GitHubContext is { } context && _github is not null && _writer is not null
-        ? new(_github, _writer, _applicationStore, _git, context, pr, section, IsDemo) : null;
     public async Task OpenPrChangesAsync(DiffSectionViewModel section)
     {
         var pr = section.AssociatedPr; if (pr is null || _remoteSnapshot is null) return;

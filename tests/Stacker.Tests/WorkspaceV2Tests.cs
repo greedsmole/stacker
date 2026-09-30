@@ -56,7 +56,7 @@ public sealed class WorkspaceV2Tests
         await vm.SelectLayerAsync(vm.LocalGroups[0].Layers[0],false); await vm.SelectLayerAsync(vm.LocalGroups[0].Layers[2],true); Assert.Equal(DiffMode.MultiLayer,vm.Mode); Assert.Equal(2,vm.Sections.Count);
         var multi = vm.Sections.ToArray();
         await vm.SelectGroupAsync(vm.LocalGroups[1]); await vm.SelectGroupAsync(vm.LocalGroups[0]);
-        Assert.True(vm.HasSavedSelection); await vm.RestoreSelectionAsync();
+        Assert.Equal(DiffMode.MultiLayer, vm.Mode);
         Assert.Equal(new[]{0,2},vm.SelectedPositions); Assert.Equal(multi,vm.Sections.ToArray());
         window.Close();
     }

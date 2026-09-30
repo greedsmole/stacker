@@ -1,4 +1,4 @@
-# Stacker v0.2
+# Stacker v0.3
 
 A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Release targets: **macOS Apple Silicon** and **Windows x64**. Linux and Intel Mac release work is deferred.
 
@@ -14,24 +14,28 @@ dotnet run --project src/Stacker.Desktop -- --demo
 dotnet run --project src/Stacker.Desktop -- /path/to/repository
 ```
 
-Build a macOS ARM64 package with `python3 scripts/package.py osx-arm64`, or a Windows x64 package with `python scripts/package.py win-x64`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe`; keep its adjacent files. No separate .NET runtime is required. Git and optional GitHub CLI are installed separately. The archive is written to `artifacts/Stacker-0.2.1-osx-arm64.tar.gz`. The `.app` is not Developer ID signed or notarized. Public distribution signing requires the publisher's Apple credentials.
+Build a macOS ARM64 package with `python3 scripts/package.py osx-arm64`, or a Windows x64 package with `python scripts/package.py win-x64`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe`; keep its adjacent files. No separate .NET runtime is required. Git and optional GitHub CLI are installed separately. The archive is written to `artifacts/Stacker-0.3.0-osx-arm64.tar.gz`. The `.app` is not Developer ID signed or notarized. Public distribution signing requires the publisher's Apple credentials.
 
 ## Navigation and comparisons
 
-Stacks are separate expandable groups. Layers are numbered, not represented by indentation characters. Click the chevron to collapse a group; click its title to view its combined changes.
+Stacks are separate expandable groups. Layers are numbered, not represented by indentation characters. Click the chevron to collapse a group; click its title to restore its last view. Overview always opens the combined changes.
 
 For `main → A → B → C`:
 
 | Action | View | Comparison |
 | --- | --- | --- |
-| Click the stack title | Entire stack | merge-base(main, C) → C |
+| Click Overview | Entire stack | merge-base(main, C) → C |
 | Click layer 2 | This layer | merge-base(A, B) → B |
 | Click Through this layer | Through layer 2 | merge-base(main, B) → B |
 | Check layers 1 and 3 | Selected layers | main → A and merge-base(B, C) → C, separately |
 
-At the last layer, Through this layer equals Entire stack. The selected layer comparisons never combine unrelated layers into a synthetic patch. Multiple selection stays within one stack. Checkboxes and Cmd-click toggle layers. After returning to a stack, **Restore layer selection** restores its previous single/multiple-layer selection; the stack title itself always opens Entire stack.
+At the last layer, Through this layer equals Entire stack. Selected layers keep their own parents. Checkboxes and Cmd/Ctrl-click toggle layers within one stack. Returning to a stack automatically restores its selection, mode, file, filter and scroll position. These are also saved across restarts, together with group expansion. The last available repository reopens on launch.
 
-Returning to the app **never refreshes data**. Use **Refresh** for local refs and **Refresh GitHub** for remote metadata. A no-change local refresh keeps existing diff sections. Failed refreshes keep the previous snapshot. File choice, filter, expansion and scroll state are retained in the comparison cache while navigating (up to 24 recent comparisons); theme and panel sizes persist across restarts.
+The repository switcher contains recent folders, Open folder and Open demo. Stack editing lives in each stack's menu. The workspace uses a single toolbar and an embedded PR inspector, which overlays the right side below 1320 logical pixels.
+
+**Refresh and background updates:** one Refresh checks local refs and GitHub. GitHub PR metadata and the selected PR's discussion are also read every 60 seconds while the window is active. Losing focus pauses the timer; regaining focus only restarts the delay. Background reads never download Git objects. Comments update in place; changed code or stack structure waits behind **New changes available → Update changes**. Temporary failures back off to 2/4/8 minutes, authentication failures suspend the loop, and previous data remains visible. Settings can disable background refresh.
+
+The diff displays code, line numbers and compact hunk ranges. Git headers (`diff --git`, `index`, `---/+++`) are omitted; rename/mode/binary/submodule information is shown as file metadata. Missing final newlines remain visible. Text selection copies source text, and Cmd/Ctrl+C on selected diff rows omits markers and line numbers. **Copy patch** in the file menu still copies the original patch.
 
 ## Reproducible demo
 
@@ -45,7 +49,7 @@ Choose **Open demo**. Every invocation creates a new repository in Stacker's app
 
 The demo includes `demo-manifest.json` assertions, `.stackpr.yml`, offline PR metadata and sample discussion/current/outdated threads. The UI labels it **Demo / offline**. Publication is disabled, even though local draft editing works.
 
-Suggested walkthrough: click Authorization → layer 2 → Through this layer → check layers 1 and 3 → switch to Payments and back. In GitHub stacks select a PR layer, then select code lines and click Review PR to explore discussion and drafts.
+Suggested walkthrough: Authorization → Overview → layer 2 → Through this layer → check layers 1 and 3 → Payments → Authorization. The previous selection returns automatically. Select Session API, click Review to open its PR snapshot, then use the + beside a line to add a pending review comment. Explore Discussion and Comment on file; publishing remains disabled. New demo repositories isolate their drafts from older demos.
 
 ## GitHub connection and discovery
 
@@ -53,7 +57,7 @@ Stacker uses the **fetch URL of origin**, not gh's default repository or some ot
 
 Authenticate in a terminal with `gh auth login --hostname HOST`; switch accounts with `gh auth switch --hostname HOST`. Stacker does not change your global gh account or run `gh auth setup-git`. Tokens remain owned by gh.
 
-If an invalid `GH_TOKEN` / `GITHUB_TOKEN` (or Enterprise equivalent) overrides a valid saved account, enable **Settings → Use saved gh credentials**, save, then **Refresh GitHub**. This removes the four token environment variables only from Stacker child processes, including the Git cache credential helper. It does not change shell variables or switch the global gh account. The setting is off by default so explicit environment credentials retain their normal precedence.
+If an invalid `GH_TOKEN` / `GITHUB_TOKEN` (or Enterprise equivalent) overrides a valid saved account, enable **Settings → Use saved gh credentials**, save, then **Refresh**. This removes the four token environment variables only from Stacker child processes, including the Git cache credential helper. It does not change shell variables or switch the global gh account. The setting is off by default so explicit environment credentials retain their normal precedence.
 
 Open PRs (including drafts) are fetched with pagination. A stack edge exists only when the child's base repository/branch matches another PR's head repository/branch. Names and commit history are not used as guesses. Fork repository identity matters. Ambiguous parents and cycles produce warnings.
 
@@ -73,21 +77,21 @@ The cache verifies downloaded head/base SHA against the PR snapshot and rejects 
 
 ## Review workflow
 
-Select a PR layer and click the top-level **PR comments** button to read discussion or comment without downloading Git objects. Each PR diff also has a **Comments & review** action. Local or aggregate comparisons instead offer **Open PR changes**: inline comments must target an actual PR snapshot, not a guessed layer in an aggregate diff.
+Select a GitHub PR layer: its changes and discussion load automatically. The header offers **Discussion** and **Review (N)** in the main window. On a local linked layer, Review opens the confirmed PR snapshot. Aggregate comparisons require choosing a PR layer before making inline comments.
 
-1. Open PR changes and select a code line or contiguous range on one side of the diff.
-2. Open Comments & review. Inspect PR comments, File comments, Reviews and Code threads.
-3. Write a comment. Add it to the local draft, post it as a line comment, post a general PR comment, or reply to the selected thread.
-4. For a whole-file comment, open **File comments**, choose a path, enter text and click **Post file comment**. No line selection is required, including for binary files. File drafts are saved separately by path; current and outdated file threads retain their paths. Select a thread to reply using the comment box on the right.
-5. Add a review summary, choose COMMENT / APPROVE / REQUEST_CHANGES and explicitly Submit review.
+- **Line / range:** click the + beside a line, or Shift-click line numbers to extend a range on one side. An inline composer offers **Add to review** (local draft) and **Post now** (immediate publication).
+- **File:** **Comment on file** opens a composer for the selected file, including binary files. Publish explicitly with Post comment.
+- **PR:** **Discussion** displays general comments and review decisions and provides its own PR composer.
+- **Threads:** current threads appear with the code; replies and resolve/reopen actions are contextual. Resolved threads collapse. Outdated threads remain in the inspector and are never attached to an arbitrary current line.
+- **Submit:** **Review (N)** lists pending line comments, with Edit/Remove, summary and Comment / Approve / Request changes. Request changes requires an explanation. Submission is always explicit.
 
-Current code threads appear alongside their anchored lines; outdated threads remain in the Code threads tab. Resolve/reopen is available when GitHub reports permission. Mixed deletion/addition ranges are rejected; select one side. Binary files and omitted GitHub patches cannot receive inline comments through Stacker; whole-file comments are supported.
+Drafts are isolated by host, repository, account, PR and code version. Line, reply, file and PR composer text is kept separately. Old ambiguous composer text is displayed as a recovered draft and requires choosing a destination. Background reads do not disable editors or clear typed text.
 
-Draft summary, PR/line composer text, per-file composer text, line comments and pending publication state are stored locally by account and PR, with the base/head version. Account, repository access, current PR SHA and server diff lines are verified before publication. A stale draft is retained for manual rechecking. Remove old anchors before adopting the current PR version for the summary.
+Before publication Stacker rechecks the account, access, current PR base/head and code anchors/file membership. A changed snapshot blocks anchored publication until Update changes and draft review. Existing comments are not relocated automatically. Publication keeps its original PR/account even while navigating elsewhere.
 
-Writes are never automatically retried. Publications carry a hidden operation marker so a timeout can be reconciled by reloading the discussion. If the outcome remains unknown, check GitHub before choosing “I checked GitHub — unlock retry”. Partial/uncertain operations preserve draft text. No live comments are posted by the automated test suite.
+Writes are never automatically retried. A hidden operation marker allows uncertain sends to be reconciled by subsequent discussion reads. Retry recovery controls only appear when needed; if the result is still uncertain, inspect GitHub before explicitly unlocking a retry. Draft changes made after an uncertain send are retained when it is confirmed.
 
-Not included: editing/deleting published comments, GitLab, PR creation, merging, checkout, rebase, restack, push, CI dashboards or automatic polling.
+Not included: editing/deleting published comments, emoji reactions, GitLab, PR creation, merging, checkout, rebase, restack, push or CI dashboards.
 
 ## Syntax highlighting
 
@@ -95,7 +99,7 @@ TextMateSharp tokenizes the old and new Git blobs separately, preserving multili
 
 The diff appears first. Highlighting runs in the background with cancellation and a blob/language/theme cache. Unknown languages, grammar failures, blobs above 2 MiB / 50,000 lines or tokenization exceeding the time budget fall back to plain text. There is no WebView, Monaco, LSP or go-to-definition.
 
-File patches retain the v0.1 limit of 5 MiB / 50,000 lines. Binary, submodule, rename and mode changes have explicit metadata. Non-UTF-8 path bytes remain outside v0.2 support.
+File patches retain the v0.1 limit of 5 MiB / 50,000 lines. Binary, submodule, rename and mode changes have explicit metadata. Non-UTF-8 path bytes remain outside v0.3 support.
 
 ## Storage and tests
 

@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.ReviewPanel">
+ <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="16" RowSpacing="12">
+  <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"/>
+  <TextBlock Grid.Row="1" Text="{Binding Message}" Classes="muted" TextWrapping="Wrap" MaxHeight="100"/>
+  <StackPanel Grid.Row="2" Spacing="6"><Button Content="Retry loading review" Command="{Binding RetryInitializeCommand}" IsVisible="{Binding !IsInitialized}"/>
+   <Border IsVisible="{Binding HasRecoveredText}" Classes="notice" Padding="10"><StackPanel Spacing="6"><TextBlock Text="Recovered draft — choose its destination before posting" TextWrapping="Wrap"/><SelectableTextBlock Text="{Binding RecoveredText}" TextWrapping="Wrap" MaxHeight="100"/><Button Content="Use in current editor" Command="{Binding RestoreRecoveredTextCommand}"/></StackPanel></Border>
+   <Button Content="Recheck draft against current PR" Command="{Binding UseCurrentVersionCommand}" IsVisible="{Binding HasStaleDraft}"/>
+   <StackPanel IsVisible="{Binding HasPendingPublication}" Spacing="6"><Button Content="Check publication status" Command="{Binding ReloadCommand}"/><Button Content="I checked GitHub — allow retry" Command="{Binding UnlockRetryCommand}"/></StackPanel>
+  </StackPanel>
+  <TabControl Grid.Row="3" SelectedIndex="{Binding PanelTab}" SelectionChanged="TabChanged" IsEnabled="{Binding CanEditDraft}">
+   <TabItem Header="Discussion"><Grid RowDefinitions="*,Auto,Auto" RowSpacing="10">
+    <ScrollViewer><StackPanel Spacing="16">
+     <ItemsControl ItemsSource="{Binding Comments}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Spacing="5" Margin="0,10"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding CreatedAt, StringFormat={}{0:g}}" Classes="muted" FontSize="10"/></Grid><SelectableTextBlock Text="{Binding DisplayBody}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+     <TextBlock Text="REVIEWS" Classes="label"/>
+     <ItemsControl ItemsSource="{Binding Reviews}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Spacing="5" Margin="0,6"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><TextBlock Text="{Binding State}" Classes="muted"/><SelectableTextBlock Text="{Binding DisplayBody}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+    </StackPanel></ScrollViewer>
+    <TextBox Grid.Row="1" Text="{Binding Composer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" MaxHeight="180" Watermark="Comment on this pull request…"/>
+    <Button Grid.Row="2" Content="Post comment" Command="{Binding PostCommentCommand}" IsEnabled="{Binding CanPublish}" Classes="primary" HorizontalAlignment="Right"/>
+   </Grid></TabItem>
+   <TabItem Header="File"><Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="10">
+    <ComboBox ItemsSource="{Binding ReviewFiles}" SelectedItem="{Binding SelectedReviewFile}" HorizontalAlignment="Stretch"/>
+    <ScrollViewer Grid.Row="1"><ItemsControl ItemsSource="{Binding FileThreads}"><ItemsControl.ItemTemplate><DataTemplate><local:ThreadView/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
+    <TextBox Grid.Row="2" Text="{Binding FileComposer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" MaxHeight="180" Watermark="Comment on this file…"/>
+    <Button Grid.Row="3" Content="Post comment" Command="{Binding PostFileCommentCommand}" IsEnabled="{Binding CanPostFile}" Classes="primary" HorizontalAlignment="Right"/>
+   </Grid></TabItem>
+   <TabItem Header="Threads"><Grid RowDefinitions="*,Auto,Auto" RowSpacing="8">
+    <ScrollViewer><ItemsControl ItemsSource="{Binding Threads}"><ItemsControl.ItemTemplate><DataTemplate><local:ThreadView/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
+    <StackPanel Grid.Row="1" IsVisible="{Binding SelectedThread}" Spacing="6"><TextBlock Text="{Binding SelectedThread.Label}" Classes="muted" TextWrapping="Wrap"/><TextBox Text="{Binding Composer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" MaxHeight="180" Watermark="Reply to this thread…"/></StackPanel>
+    <Button Grid.Row="2" Content="Reply" Command="{Binding ReplyCommand}" IsEnabled="{Binding CanPublish}" HorizontalAlignment="Right"/>
+   </Grid></TabItem>
+   <TabItem Header="Review"><ScrollViewer><StackPanel Spacing="12">
+    <TextBlock Text="{Binding ReviewLabel}" FontSize="17" FontWeight="SemiBold"/>
+    <TextBlock Text="Line comments stay on this device until you submit." Classes="muted" TextWrapping="Wrap"/>
+    <ItemsControl ItemsSource="{Binding DraftComments}"><ItemsControl.ItemTemplate><DataTemplate><Border Classes="notice" Padding="10" Margin="0,4"><StackPanel Spacing="6"><TextBlock Text="{Binding Anchor.Path}" FontWeight="SemiBold" TextWrapping="Wrap"/><SelectableTextBlock Text="{Binding Body}" TextWrapping="Wrap"/><StackPanel Orientation="Horizontal" Spacing="6"><Button Content="Edit" Click="EditDraftClick" Classes="quiet"/><Button Content="Remove" Click="RemoveDraftClick" Classes="quiet"/></StackPanel></StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+    <StackPanel IsVisible="{Binding HasSelection}" Spacing="6"><TextBlock Text="{Binding SelectionLabel}" Classes="muted" TextWrapping="Wrap"/><TextBox Text="{Binding Composer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="75" Watermark="Line comment…"/><Button Content="Add to review" Command="{Binding AddToDraftCommand}"/></StackPanel>
+    <TextBox Text="{Binding Summary}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" Watermark="Review summary…"/>
+    <ComboBox ItemsSource="{Binding DecisionLabels}" SelectedItem="{Binding DecisionLabel}" HorizontalAlignment="Stretch"/>
+    <Button Content="Submit review" Command="{Binding SubmitReviewCommand}" IsEnabled="{Binding CanPublish}" Classes="primary" HorizontalAlignment="Stretch"/>
+   </StackPanel></ScrollViewer></TabItem>
+  </TabControl>
+ </Grid>
+</UserControl>

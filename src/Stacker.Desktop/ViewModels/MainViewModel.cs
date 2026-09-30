@@ -23,9 +23,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _disposed;
     private StackGroupViewModel? _activeGroup;
     private readonly Dictionary<string, List<DiffSectionViewModel>> _views = [];
-    private readonly Dictionary<string, (DiffMode Mode, string[] Branches)> _savedSelections = [];
     private int[] _selectedPositions = [];
-    public bool HasSavedSelection => _activeGroup is not null && _savedSelections.ContainsKey(_activeGroup.Definition.Id) && Mode == DiffMode.FullStack;
     public IReadOnlyList<int> SelectedPositions => _selectedPositions;
     public AppSettings Settings { get; private set; } = new();
     public RepositorySnapshot? Repository => _repository;
@@ -62,7 +60,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (!_suppress && value is not null && LocalGroups.FirstOrDefault(g => g.Definition.Id == value.Id) is { } group) _ = SelectGroupAsync(group);
     }
-    partial void OnModeChanged(DiffMode value) { if (!_suppress) _ = CompareAsync(); }
+    partial void OnModeChanged(DiffMode value) { OnPropertyChanged(nameof(IsSingleLayer)); OnPropertyChanged(nameof(IsThroughLayer)); if (!_suppress) { CaptureWorkspace(); _ = CompareAsync(); } }
     public async Task InitializeAsync()
     {
         try
@@ -83,17 +81,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IsBusy = true; Error = "";
         try
         {
+            if (opening) await SaveWorkspaceAsync();
             var repo = await _git.OpenAsync(path, refresh.Token);
             var document = await _store.LoadAsync(repo.Root, refresh.Token);
             var sameRepo = _repository?.Root == repo.Root;
             var unchanged = sameRepo && _document?.Revision == document.Revision && _repository!.Refs.SequenceEqual(repo.Refs);
+            if (sameRepo && !opening && !unchanged && Sections.Count > 0 && !_applyingChanges)
+            { _pendingLocal = true; HasPendingChanges = true; Status = "New local changes available"; return; }
             var groups = new List<StackGroupViewModel>();
             if (!unchanged)
                 foreach (var stack in document.Stacks) groups.Add(new(stack, await _stacks.SnapshotAsync(repo, stack, refresh.Token)) { IsExpanded = !sameRepo || LocalGroups.FirstOrDefault(g => g.Definition.Id == stack.Id)?.IsExpanded != false });
             refresh.Token.ThrowIfCancellationRequested();
             var previousGroup = _activeGroup; var selectedBranches = previousGroup?.Layers.Where(l => _selectedPositions.Contains(l.Snapshot.Position)).Select(l => l.Snapshot.Branch).ToHashSet() ?? []; var mode = Mode;
-            if (!sameRepo) { _comparison?.Cancel(); _githubLoad?.Cancel(); DisposeViews(); _savedSelections.Clear(); Sections.Clear(); RemoteGroups.Clear(); OtherGroups.Clear(); _remoteSnapshot = null; _activeGroup = null; GitHubStatus = "Not connected"; }
+            if (!sameRepo) { _comparison?.Cancel(); _githubLoad?.Cancel(); DisposeViews(); Sections.Clear(); RemoteGroups.Clear(); OtherGroups.Clear(); _remoteSnapshot = null; _activeGroup = null; GitHubStatus = "Not connected"; }
             _repository = repo; _document = document; RepositoryPath = repo.Root;
+            if (!sameRepo) { _workspace = await _applicationStore.ReadAsync<WorkspaceState>("workspace", repo.Root, refresh.Token) ?? new(); _displayedStateKey = null; _pendingRemote = null; _pendingLocal = false; HasPendingChanges = false; ActiveReview = null; IsReviewOpen = false; }
+            Settings.LastRepository = repo.Root;
             IsDemo = File.Exists(Path.Combine(repo.Root, ".stacker-demo.json"));
             RepositoryTitle = Path.GetFileName(repo.Root) + (IsDemo ? " · Demo / offline" : "");
             Status = $"Working tree: {repo.ChangedFiles} changed entries · Updated {DateTime.Now:HH:mm:ss}"; CanEdit = true;
@@ -106,12 +109,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                         if (FindLocalPr(group.Layers[i].Snapshot.Branch) is { } pr) group.Layers[i] = new(group.Layers[i].Snapshot, pr) { Group = group };
                     Stacks.Add(group.Definition); LocalGroups.Add(group);
                 }
-                var selected = sameRepo && previousGroup?.IsRemote == true ? previousGroup : groups.FirstOrDefault(g => g.Definition.Id == previousGroup?.Definition.Id) ?? groups.FirstOrDefault();
+                var selected = sameRepo && previousGroup?.IsRemote == true ? previousGroup : groups.FirstOrDefault(g => GroupKey(g) == _workspace.ActiveGroup) ?? groups.FirstOrDefault(g => g.Definition.Id == previousGroup?.Definition.Id) ?? groups.FirstOrDefault();
                 if (selected is not null)
                 {
                     SetActiveGroup(selected);
                     _suppress = true; Mode = sameRepo && selected.Definition.Id == previousGroup?.Definition.Id ? mode : DiffMode.FullStack;
                     _selectedPositions = sameRepo ? selected.Layers.Where(l => selectedBranches.Contains(l.Snapshot.Branch)).Select(l => l.Snapshot.Position).ToArray() : [];
+                    if (!sameRepo && _workspace.Stacks.TryGetValue(GroupKey(selected), out var saved))
+                    { Mode = saved.Mode; _selectedPositions = selected.Layers.Where(l => saved.Branches.Contains(l.Snapshot.Branch)).Select(l => l.Snapshot.Position).ToArray(); }
                     if (Mode != DiffMode.FullStack && _selectedPositions.Length == 0) { Mode = DiffMode.FullStack; Error = "The selected layer disappeared. Showing the entire stack."; }
                     _suppress = false; await CompareAsync();
                 }
@@ -122,7 +127,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 Settings.RecentRepositories.Remove(repo.Root); Settings.RecentRepositories.Insert(0, repo.Root); Settings.RecentRepositories = Settings.RecentRepositories.Take(10).ToList();
                 RecentRepositories.Clear(); foreach (var recent in Settings.RecentRepositories) RecentRepositories.Add(recent);
                 await SaveSettingsAsync();
-                if (!sameRepo) await RefreshGitHubAsync();
+                if (!sameRepo)
+                {
+                    var restore = _workspace.ActiveGroup;
+                    await RefreshGitHubAsync();
+                    foreach (var group in LocalGroups.Concat(RemoteGroups).Concat(OtherGroups))
+                        if (_workspace.Stacks.TryGetValue(GroupKey(group), out var saved)) group.IsExpanded = saved.Expanded;
+                    var target = LocalGroups.Concat(RemoteGroups).Concat(OtherGroups).FirstOrDefault(g => GroupKey(g) == restore);
+                    if (target is not null) await SelectGroupAsync(target, saveCurrent: false);
+                }
+                SetWindowActive(_windowActive);
             }
         }
         catch (OperationCanceledException) { }
@@ -137,12 +151,21 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Layers.Clear(); foreach (var layer in group.Layers) Layers.Add(layer);
         OnPropertyChanged(nameof(BaseLabel)); OnPropertyChanged(nameof(IsLocalSelected));
     }
-    public async Task SelectGroupAsync(StackGroupViewModel group)
+    public async Task SelectGroupAsync(StackGroupViewModel group, bool saveCurrent = true)
     {
-        SetActiveGroup(group); _selectedPositions = []; _suppress = true; Mode = DiffMode.FullStack; _suppress = false; await CompareAsync();
+        if (saveCurrent) await SaveWorkspaceAsync();
+        SetActiveGroup(group); _selectedPositions = []; _suppress = true; Mode = DiffMode.FullStack;
+        if (_workspace.Stacks.TryGetValue(GroupKey(group), out var saved))
+        {
+            _selectedPositions = group.Layers.Where(l => saved.Branches.Contains(l.Snapshot.Branch)).Select(l => l.Snapshot.Position).ToArray();
+            if (saved.Branches.Length == _selectedPositions.Length) Mode = saved.Mode;
+            else { _selectedPositions = []; EmptyMessage = "The saved layer is no longer available. Showing Overview."; }
+        }
+        _suppress = false; await CompareAsync();
     }
     public async Task SelectLayerAsync(LayerViewModel layer, bool toggle)
     {
+        await SaveWorkspaceAsync();
         var group = layer.Group!;
         if (!ReferenceEquals(_activeGroup, group)) { SetActiveGroup(group); _selectedPositions = []; }
         _selectedPositions = toggle ? (_selectedPositions.Contains(layer.Snapshot.Position) ? _selectedPositions.Where(p => p != layer.Snapshot.Position) : _selectedPositions.Append(layer.Snapshot.Position)).Order().ToArray() : [layer.Snapshot.Position];
@@ -154,26 +177,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _selectedPositions = layers.Select(l => l.Snapshot.Position).Order().ToArray();
         _suppress = true; Mode = _selectedPositions.Length > 1 ? DiffMode.MultiLayer : DiffMode.Layer; _suppress = false; _ = CompareAsync();
     }
-    [RelayCommand] public async Task RestoreSelectionAsync()
-    {
-        if (_activeGroup is null || !_savedSelections.TryGetValue(_activeGroup.Definition.Id, out var saved)) return;
-        _selectedPositions = _activeGroup.Layers.Where(l => saved.Branches.Contains(l.Snapshot.Branch)).Select(l => l.Snapshot.Position).ToArray();
-        _suppress = true; Mode = _selectedPositions.Length == 0 ? DiffMode.FullStack : _selectedPositions.Length > 1 ? DiffMode.MultiLayer : saved.Mode == DiffMode.Cumulative ? DiffMode.Cumulative : DiffMode.Layer; _suppress = false;
-        await CompareAsync();
-    }
     public async Task CompareAsync()
     {
         _comparison?.Cancel(); var compare = new CancellationTokenSource(); _comparison = compare;
         var group = _activeGroup; var repo = _repository; var mode = Mode; var positions = _selectedPositions.ToArray();
         if (repo is null || group is null || _disposed) { compare.Dispose(); if (ReferenceEquals(_comparison, compare)) _comparison = null; return; }
-        OnPropertyChanged(nameof(HasPrDiscussion));
+        OnPropertyChanged(nameof(HasPrDiscussion)); OnPropertyChanged(nameof(CanReview));
         IsBusy = true; Error = "";
         try
         {
             var comparisonRepository = repo; var stack = group.Definition;
             if (group.IsRemote)
             {
-                if (_remoteSnapshot is null) throw new StackerException("Refresh GitHub to load this stack.");
+                if (_remoteSnapshot is null) throw new StackerException("Refresh to load this stack.");
                 comparisonRepository = await PrepareRemoteAsync(group, compare.Token);
                 stack = new(group.Definition.Id, group.Name, GitObjectCache.BaseRef(group.PullRequests[0]), group.PullRequests.Select(GitObjectCache.HeadRef).ToArray());
                 // For a single PR's review use its declared server base, even if the discovered parent has moved.
@@ -213,9 +229,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 DiffMode.MultiLayer => $"Selected layers · {string.Join(", ", _selectedPositions.Select(p => p + 1))}",
                 _ => $"Layer {(_selectedPositions.FirstOrDefault() + 1)} · {group.Layers.ElementAtOrDefault(_selectedPositions.FirstOrDefault())?.Title}"
             };
-            if (_github is not null) foreach (var section in sections) _ = section.LoadThreadsAsync(_github);
-            if (mode != DiffMode.FullStack) _savedSelections[group.Definition.Id] = (mode, group.Layers.Where(l => _selectedPositions.Contains(l.Snapshot.Position)).Select(l => l.Snapshot.Branch).ToArray());
-            OnPropertyChanged(nameof(HasSavedSelection));
+            OnPropertyChanged(nameof(ComparisonDetail));
+            RestoreSections();
+            foreach (var section in sections) section.ShowSectionHeader = sections.Count > 1;
+            var prSection = sections.FirstOrDefault(s => s.IsPrSnapshot);
+            if (prSection is not null) { var review = await EnsureReviewAsync(prSection, compare.Token); compare.Token.ThrowIfCancellationRequested(); ActiveReview = review; }
+            else { ActiveReview = null; IsReviewOpen = false; }
+            compare.Token.ThrowIfCancellationRequested();
             OnPropertyChanged(nameof(HasSelectedLayer));
             EmptyMessage = sections.Count == 0 ? "This stack has no layers. Edit it to add branches." : "";
         }
@@ -241,7 +261,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task<bool> SaveStacksAsync(IReadOnlyList<StackDefinition> stacks)
     {
         if (_repository is null || _document is null) return false;
-        try { await _store.SaveAsync(_repository.Root, stacks, _document.Revision); await RefreshAsync(); return !HasError; }
+        try { await _store.SaveAsync(_repository.Root, stacks, _document.Revision); _applyingChanges = true; try { await RefreshAsync(); } finally { _applyingChanges = false; } return !HasError; }
         catch (Exception ex) { Error = ex.Message; return false; }
     }
     public async Task SaveSettingsAsync()
@@ -250,5 +270,5 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) { Error = "Cannot save settings: " + ex.Message; }
     }
     private void DisposeViews() { foreach (var section in _views.Values.SelectMany(v => v).Distinct()) section.Dispose(); _views.Clear(); }
-    public void Dispose() { _disposed = true; _refresh?.Cancel(); _comparison?.Cancel(); _githubLoad?.Cancel(); DisposeViews(); }
+    public void Dispose() { _disposed = true; _refresh?.Cancel(); _comparison?.Cancel(); _githubLoad?.Cancel(); _coordinator?.Dispose(); DisposeViews(); }
 }

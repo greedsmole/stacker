@@ -93,9 +93,9 @@ public sealed class FileCommentsTests
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub(); using var section = Section(f, hub.Current);
         var vm = View(hub, new ApplicationStore(f.Root), f, section, true); await vm.InitializeAsync();
-        var window = new ReviewWindow { DataContext = vm }; window.Show();
+        var window = new Window { Width = 390, Height = 780, Content = new ReviewPanel { DataContext = vm } }; window.Show();
         var headers = window.GetVisualDescendants().OfType<TabItem>().Select(t => t.Header?.ToString()).ToArray();
-        Assert.Contains("PR comments", headers); Assert.Contains("File comments", headers); Assert.False(vm.CanPostFile);
+        Assert.Contains("Discussion", headers); Assert.Contains("File", headers); Assert.False(vm.CanPostFile);
         vm.SelectedReviewFile = "Auth.cs"; Assert.Single(vm.FileThreads); Assert.Contains(vm.CodeThreads, t => t.IsOutdated); window.Close(); await vm.FlushAsync();
     }
 }

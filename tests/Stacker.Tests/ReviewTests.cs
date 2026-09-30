@@ -15,11 +15,12 @@ public sealed class FakeGitHub : IGitHubReader, IGitHubWriter
     public List<ReviewSummary> Submitted { get; }=[];
     public List<ReviewThread> FileThreads { get; }=[];
     public bool RejectFile { get; set; }
+    public TaskCompletionSource<ReviewDiscussion>? DiscussionGate { get; set; }
     public Task<GitHubRepositoryContext> ConnectAsync(string root,string? repositoryOverride,CancellationToken ct=default)=>Task.FromResult(Context);
     public static GitHubRepositoryContext Context { get; }=new("github.example",1,"team","repo","https://github.example/team/repo.git","alice","main");
     public Task<GitHubSnapshot> SnapshotAsync(GitHubRepositoryContext context,CancellationToken ct=default)=>Task.FromResult(new GitHubSnapshot(context,[Current],DateTimeOffset.UtcNow));
     public Task<PullRequest> PullRequestAsync(GitHubRepositoryContext context,long number,CancellationToken ct=default)=>Task.FromResult(Current);
-    public Task<ReviewDiscussion> DiscussionAsync(GitHubRepositoryContext context,PullRequest pr,CancellationToken ct=default)=>Task.FromResult(new ReviewDiscussion(Published.ToArray(),Submitted.ToArray(),FileThreads.ToArray()));
+    public Task<ReviewDiscussion> DiscussionAsync(GitHubRepositoryContext context,PullRequest pr,CancellationToken ct=default)=>DiscussionGate is { } gate ? gate.Task.WaitAsync(ct) : Task.FromResult(new ReviewDiscussion(Published.ToArray(),Submitted.ToArray(),FileThreads.ToArray()));
     public Task VerifyAccessAsync(GitHubRepositoryContext context,CancellationToken ct=default){Verifications++;if(RejectAccess)throw new StackerException("HTTP 403");return Task.CompletedTask;}
     public Task ValidateAnchorsAsync(GitHubRepositoryContext context,PullRequest pr,IReadOnlyList<ReviewAnchor> anchors,CancellationToken ct=default)
     {if(anchors.Any(a=>a.Line!=1 || a.HeadSha!=pr.HeadSha))throw new StackerException("Invalid anchor");return Task.CompletedTask;}

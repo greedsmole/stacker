@@ -43,6 +43,7 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
     {
         var response = await runner.RunAsync(new(gh.Resolve(), args, Timeout: TimeSpan.FromSeconds(60), MaxOutputBytes: 32 * 1024 * 1024,
             Environment: new Dictionary<string, string> { ["GH_PROMPT_DISABLED"] = "1", ["GH_PAGER"] = "cat", ["GH_DEBUG"] = "" }, StandardInput: body, UnsetEnvironment: gh.UnsetEnvironment), ct);
+        if (response.ExitCode != 0 && response.StdErr.Contains("HTTP 401", StringComparison.OrdinalIgnoreCase)) throw new GitHubAuthenticationException(response.StdErr.Trim());
         if (response.ExitCode != 0) throw new StackerException($"GitHub request failed ({response.ExitCode}): {response.StdErr.Trim()}");
         try { return JsonDocument.Parse(string.IsNullOrWhiteSpace(response.StdOut) ? "{}" : response.StdOut).RootElement.Clone(); }
         catch (JsonException) { throw new StackerException("gh returned invalid JSON. Check the GitHub host and CLI version."); }
@@ -57,10 +58,10 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
             foreach (var entry in accounts.EnumerateArray())
             {
                 if (Bool(entry, "active") && Str(entry, "state") != "success" && Str(entry, "tokenSource") is "GH_TOKEN" or "GITHUB_TOKEN" or "GH_ENTERPRISE_TOKEN" or "GITHUB_ENTERPRISE_TOKEN")
-                    throw new StackerException($"{host}: {Str(entry, "tokenSource")} is invalid and overrides saved gh accounts. Enable Settings → Use saved gh credentials, then Refresh GitHub; or fix the environment token and restart Stacker.");
+                    throw new GitHubAuthenticationException($"{host}: {Str(entry, "tokenSource")} is invalid and overrides saved gh accounts. Enable Settings → Use saved gh credentials, then Refresh; or fix the environment token and restart Stacker.");
                 if (Bool(entry, "active") && Str(entry, "state") == "success" && !string.IsNullOrEmpty(Str(entry, "login"))) return Str(entry, "login");
             }
-        throw new StackerException($"Not authenticated for {host}. Run: gh auth login --hostname {host}, then retry.");
+        throw new GitHubAuthenticationException($"Not authenticated for {host}. Run: gh auth login --hostname {host}, then retry.");
     }
     public async Task<GitHubRepositoryContext> ConnectAsync(string root, string? repositoryOverride, CancellationToken ct = default)
     {
@@ -79,7 +80,7 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
     public async Task VerifyAccessAsync(GitHubRepositoryContext context, CancellationToken ct = default)
     {
         var user = await ActiveUser(context.Host, ct);
-        if (!string.Equals(user, context.User, StringComparison.OrdinalIgnoreCase)) throw new StackerException("The active GitHub account changed. Refresh GitHub before publishing.");
+        if (!string.Equals(user, context.User, StringComparison.OrdinalIgnoreCase)) throw new StackerException("The active GitHub account changed. Refresh before publishing.");
         var repository = await Api(context.Host, Repo(context), ct);
         if (repository.GetProperty("id").GetInt64() != context.RepositoryId) throw new StackerException("Repository identity changed. Reconnect before publishing.");
     }
@@ -91,7 +92,7 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
     public async Task<PullRequest> PullRequestAsync(GitHubRepositoryContext context, long number, CancellationToken ct = default)
     {
         var value = await Api(context.Host, $"{Repo(context)}/pulls/{number}", ct);
-        if (Str(value, "state") != "open") throw new StackerException($"PR #{number} is no longer open. Refresh GitHub.");
+        if (Str(value, "state") != "open") throw new StackerException($"PR #{number} is no longer open. Refresh.");
         return ParsePr(value);
     }
     private static PullRequest ParsePr(JsonElement p)
@@ -144,7 +145,7 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
     {
         var files = await ChangedFilePathsAsync(context, pr, ct);
         if (string.IsNullOrWhiteSpace(path) || !files.Contains(path, StringComparer.Ordinal))
-            throw new StackerException("This file is not in the current PR diff. Refresh GitHub and reopen PR changes.");
+            throw new StackerException("This file is not in the current PR diff. Refresh and reopen PR changes.");
     }
     public async Task ValidateAnchorsAsync(GitHubRepositoryContext context, PullRequest pr, IReadOnlyList<ReviewAnchor> anchors, CancellationToken ct = default)
     {

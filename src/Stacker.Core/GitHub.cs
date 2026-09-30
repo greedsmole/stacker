@@ -21,8 +21,14 @@ public sealed class RepositoryPreferences
 }
 public sealed record ReviewAnchor(long PullRequest, string HeadSha, string BaseSha, string Path, string Side,
     int Line, int? StartLine = null, string? StartSide = null);
-public sealed record DiscussionComment(string Id, string Author, string Body, string Url, DateTimeOffset CreatedAt);
-public sealed record ReviewSummary(string Id, string Author, string Body, string State, DateTimeOffset? SubmittedAt);
+public sealed record DiscussionComment(string Id, string Author, string Body, string Url, DateTimeOffset CreatedAt)
+{ public string DisplayBody => ReviewText.Visible(Body); }
+public sealed record ReviewSummary(string Id, string Author, string Body, string State, DateTimeOffset? SubmittedAt)
+{ public string DisplayBody => ReviewText.Visible(Body); }
+internal static class ReviewText
+{
+    public static string Visible(string body) => System.Text.RegularExpressions.Regex.Replace(body, @"\s*<!-- stacker:[0-9a-f]{32} -->\s*$", "");
+}
 public sealed record ReviewThread(string Id, bool IsResolved, bool IsOutdated, bool CanResolve, ReviewAnchor? Anchor,
     IReadOnlyList<DiscussionComment> Comments, string? FilePath = null, bool IsFileLevel = false)
 {
@@ -40,6 +46,13 @@ public sealed class ReviewDraft
     public string BaseSha { get; set; } = "";
     public string Summary { get; set; } = "";
     public string Composer { get; set; } = "";
+    public int EditorVersion { get; set; }
+    public string RecoveredText { get; set; } = "";
+    public Dictionary<string, string> ContextComposers { get; set; } = [];
+    public string? PendingComposerKey { get; set; }
+    public string? PendingBody { get; set; }
+    public string? PendingSummary { get; set; }
+    public List<DraftComment>? PendingReviewComments { get; set; }
     public Dictionary<string, string> FileComposers { get; set; } = [];
     public string? PendingFilePath { get; set; }
     public string Decision { get; set; } = "COMMENT";

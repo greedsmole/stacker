@@ -6,7 +6,7 @@ namespace Stacker.Infrastructure;
 
 public static partial class PatchParser
 {
-    [GeneratedRegex(@"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")]
+    [GeneratedRegex(@"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")]
     private static partial Regex HunkHeader();
     public static FileDiff Parse(FileChange file, string patch)
     {
@@ -24,9 +24,9 @@ public static partial class PatchParser
             if (match.Success)
             {
                 oldLine = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-                newLine = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+                newLine = int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
                 current = [];
-                hunks.Add(new(text, current));
+                hunks.Add(new(text, current, oldLine, match.Groups[2].Success ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : 1, newLine, match.Groups[4].Success ? int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture) : 1, match.Groups[5].Value.Trim()));
                 line = new(DiffLineKind.Header, null, null, text);
             }
             else if (current is not null && text.StartsWith('+')) line = new(DiffLineKind.Added, null, newLine++, text);

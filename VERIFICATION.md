@@ -1,4 +1,17 @@
-# Verification — Stacker v0.2
+# Verification — Stacker v0.3
+
+Recorded locally on 2026-09-29. Current target packages: macOS ARM64 and Windows x64.
+
+- Release test suite: **80 tests passed** on macOS ARM64. New coverage includes real control bindings for inline review, independent composers, restored navigation across restart, staged remote changes, preserving text during background reads, older draft recovery, uncertain review reconciliation, left-side ranges, and the delayed/pause/backoff/authentication refresh coordinator.
+- Native macOS walkthrough of the initial v0.3 package: generated the offline demo, selected Authorization layer 2 (+2/−1), opened its PR snapshot through Review, and inspected the embedded review panel, file discussion, code thread and clean highlighted diff. Publication was disabled in demo mode.
+- The Mac locked during the final native recheck. Later changes are covered by headless tests; the final native inline-editor walkthrough, light theme and target-size/scaling matrix remain unverified.
+- macOS ARM64 and Windows x64 packages are built locally and checked for archive integrity and executable architecture. Windows is cross-published on this Mac; interactive Windows validation was not performed.
+- CI builds/tests/packages on both target operating systems. Release publication requires a successful run for its source commit; the release notes link to that run.
+- Live posting to GitHub/GHES has not been exercised. Tests use fake responses and never post comments or reviews. The existing Windows Schannel cache behavior is retained.
+
+## Previous release verification
+
+### Stacker v0.2
 
 Scope: macOS ARM64 and Windows x64 packaging. Recorded locally on 2026-09-24 with .NET SDK 10.0.201 and Git 2.42.0.
 

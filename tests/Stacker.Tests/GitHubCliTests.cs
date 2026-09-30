@@ -30,13 +30,13 @@ public sealed class GitHubCliTests
     {
         var runner=new ScriptedRunner(_=>new(0,"{\"hosts\":{\"enterprise.example\":[{\"active\":true,\"state\":\"error\",\"login\":\"alice\"}]}}",""));
         var cli=new GitHubCli(runner,new(),new());
-        var error=await Assert.ThrowsAsync<StackerException>(()=>cli.ConnectAsync(".","enterprise.example/team/repo")); Assert.Contains("gh auth login --hostname enterprise.example",error.Message);
+        var error=await Assert.ThrowsAsync<GitHubAuthenticationException>(()=>cli.ConnectAsync(".","enterprise.example/team/repo")); Assert.Contains("gh auth login --hostname enterprise.example",error.Message);
         Assert.Single(runner.Calls); Assert.DoesNotContain("--show-token",runner.Calls[0].Arguments);
     }
     [Fact] public async Task Invalid_environment_token_explains_saved_account_override()
     {
         var runner = new ScriptedRunner(_ => new(0, """{"hosts":{"github.com":[{"active":true,"state":"error","tokenSource":"GITHUB_TOKEN"}]}}""", ""));
-        var error = await Assert.ThrowsAsync<StackerException>(() => new GitHubCli(runner, new(), new()).ConnectAsync(".", "github.com/team/repo"));
+        var error = await Assert.ThrowsAsync<GitHubAuthenticationException>(() => new GitHubCli(runner, new(), new()).ConnectAsync(".", "github.com/team/repo"));
         Assert.Contains("GITHUB_TOKEN is invalid", error.Message);
         Assert.Contains("Use saved gh credentials", error.Message);
     }

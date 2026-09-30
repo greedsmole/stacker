@@ -15,6 +15,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Activated += (_, _) => { if (_ready) Vm.SetWindowActive(true); };
+        Deactivated += (_, _) => { if (_ready) Vm.SetWindowActive(false); };
+        SizeChanged += (_, _) => Grid.SetColumn(ReviewHost, Bounds.Width < 1320 ? 2 : 3);
         Opened += async (_, _) =>
         {
             await Vm.InitializeAsync();
@@ -29,6 +32,8 @@ public partial class MainWindow : Window
             var args = Environment.GetCommandLineArgs();
             if (args.Contains("--demo")) await Vm.OpenDemoAsync();
             else if (args.Length > 1 && Directory.Exists(args[1])) await Vm.OpenRepositoryAsync(args[1]);
+            else if (Vm.Settings.LastRepository is { } last && Directory.Exists(last)) await Vm.OpenRepositoryAsync(last);
+            Vm.SetWindowActive(IsActive);
         };
         Closing += async (_, e) =>
         {
@@ -36,12 +41,13 @@ public partial class MainWindow : Window
             e.Cancel = true; _closing = true;
             Vm.Settings.WindowWidth = Width; Vm.Settings.WindowHeight = Height;
             Vm.Settings.NavigationWidth = Workspace.ColumnDefinitions[0].ActualWidth;
-            await Vm.SaveSettingsAsync(); Vm.Dispose(); Close();
+            try { await Vm.SaveWorkspaceAsync(); await Vm.FlushReviewsAsync(); await Vm.SaveSettingsAsync(); Vm.Dispose(); Close(); }
+            catch (Exception ex) { _closing = false; Vm.Error = ex.Message; }
         };
     }
     private void ResizeSections()
     {
-        foreach (var section in Vm.Sections) section.PanelHeight = Vm.Sections.Count == 1 ? Math.Max(300, SectionScroll.Bounds.Height - 84) : 440;
+        foreach (var section in Vm.Sections) section.PanelHeight = Vm.Sections.Count == 1 ? Math.Max(300, SectionScroll.Bounds.Height - 12) : 440;
     }
     private void ApplyTheme() { if (Application.Current is { } app) app.RequestedThemeVariant = Vm.Settings.Theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark; }
     private async void OpenFolderClick(object? sender, RoutedEventArgs e)
@@ -70,7 +76,7 @@ public partial class MainWindow : Window
     private async void SaveAsLocalClick(object? sender, RoutedEventArgs e) => await Vm.SaveRemoteAsLocalAsync();
     private async void HelpClick(object? sender, RoutedEventArgs e)
     {
-        var text = "For main → A → B → C:\n\nEntire stack: main → C. Click a stack title.\n\nThis layer: A → B. Click layer 2.\n\nThrough this layer: main → B. Includes layers 1 and 2. At layer 3 it equals Entire stack.\n\nSelected layers: check 1 and 3. Two separate comparisons: main → A and B → C. Layer 2 is not folded into layer 3.\n\nComparisons start from the common ancestor. Diverged branches show a warning.\n\nTry Open demo: Authorization changes the same file across three layers; Payments is independent. Shared foundation demonstrates branching PRs. Service branches demonstrate discovery boundaries.\n\nReturning to this window never reloads data. Use Refresh when needed.";
+        var text = "For main → A → B → C:\n\nEntire stack: main → C. Click Overview inside a stack.\n\nThis layer: A → B. Click layer 2.\n\nThrough this layer: main → B. Includes layers 1 and 2. At layer 3 it equals Entire stack.\n\nSelected layers: check 1 and 3. Two separate comparisons: main → A and B → C. Layer 2 is not folded into layer 3.\n\nComparisons start from the common ancestor. Diverged branches show a warning.\n\nTry Open demo: Authorization changes the same file across three layers; Payments is independent. Shared foundation demonstrates branching PRs. Service branches demonstrate discovery boundaries.\n\nStack titles restore your last view. GitHub updates quietly every minute while this window is active. New code waits for Update changes; returning to the window does not reload it.";
         await new Window { Title = "How comparisons work", Width = 590, Height = 590, WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = new ScrollViewer { Content = new SelectableTextBlock { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new Thickness(24) } } }.ShowDialog(this);
     }
     private async void GitHubSettingsClick(object? sender, RoutedEventArgs e)
@@ -102,18 +108,18 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { Vm.Error = ex.Message; }
     }
-    private async void PrCommentsClick(object? sender, RoutedEventArgs e)
+    private async void PrCommentsClick(object? sender, RoutedEventArgs e) => await Vm.ShowReviewAsync(tab: 0);
+    private async void ReviewPrClick(object? sender, RoutedEventArgs e)
     {
-        using var section = Vm.CreateDiscussionContext();
-        if (section is null || Vm.CreateReview(section) is not { } review) return;
-        try
-        {
-            await review.InitializeAsync();
-            await new ReviewWindow { DataContext = review }.ShowDialog(this);
-            await review.FlushAsync();
-        }
-        catch (Exception ex) { Vm.Error = ex.Message; }
+        if (Vm.Sections.FirstOrDefault() is { IsPrSnapshot: false, HasPr: true } section) await Vm.OpenPrChangesAsync(section);
+        await Vm.ShowReviewAsync();
     }
+    private async void OverviewClick(object? sender, RoutedEventArgs e)
+    { if (sender is Control { DataContext: StackGroupViewModel group }) await Vm.SelectOverviewAsync(group); }
+    private async void EditGroupClick(object? sender, RoutedEventArgs e)
+    { if (sender is Control { DataContext: StackGroupViewModel group }) { await Vm.SelectGroupAsync(group); await EditAsync(true); } }
+    private async void SaveGroupClick(object? sender, RoutedEventArgs e)
+    { if (sender is Control { DataContext: StackGroupViewModel group }) { await Vm.SelectGroupAsync(group); await Vm.SaveRemoteAsLocalAsync(); } }
     private async void SettingsClick(object? sender, RoutedEventArgs e)
     {
         try
@@ -121,18 +127,19 @@ public partial class MainWindow : Window
             var git = new TextBox { Text = Vm.Settings.GitPath, Watermark = "Auto-detect Git" };
             var gh = new TextBox { Text = Vm.Settings.GhPath, Watermark = "Auto-detect gh" };
             var savedCredentials = new CheckBox { Content = "Use saved gh credentials (ignore environment tokens)", IsChecked = Vm.Settings.UseSavedGhCredentials };
+            var background = new CheckBox { Content = "Update GitHub in the background while active", IsChecked = Vm.Settings.BackgroundRefresh };
             var theme = new ComboBox { ItemsSource = new[] { "Dark", "Light" }, SelectedItem = Vm.Settings.Theme, HorizontalAlignment = HorizontalAlignment.Stretch };
             var save = new Button { Content = "Save settings", HorizontalAlignment = HorizontalAlignment.Right };
             var window = new Window
             {
-                Title = "Settings", Width = 580, Height = 460, CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Title = "Settings", Width = 580, Height = 520, CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Content = new StackPanel { Margin = new Thickness(24), Spacing = 14, Children =
                 {
                     new TextBlock { Text = "Git executable", FontWeight = Avalonia.Media.FontWeight.SemiBold }, git, new TextBlock { Text = "GitHub CLI executable" }, gh,
-                    savedCredentials, new TextBlock { Text = "Applies only to Stacker. Then click Refresh GitHub.", FontSize = 12 }, new TextBlock { Text = "Theme" }, theme, save
+                    savedCredentials, background, new TextBlock { Text = "Connection changes are checked automatically.", FontSize = 12 }, new TextBlock { Text = "Theme" }, theme, save
                 } }
             };
-            save.Click += async (_, _) => { Vm.Settings.GitPath = string.IsNullOrWhiteSpace(git.Text) ? null : git.Text.Trim(); Vm.Settings.GhPath = string.IsNullOrWhiteSpace(gh.Text) ? null : gh.Text.Trim(); Vm.Settings.UseSavedGhCredentials = savedCredentials.IsChecked == true; Vm.Settings.Theme = theme.SelectedItem as string ?? "Dark"; await Vm.SaveSettingsAsync(); ApplyTheme(); foreach (var section in Vm.Sections) { section.Theme = Vm.Settings.Theme; await section.LoadAsync(section.SelectedFile); } window.Close(); };
+            save.Click += async (_, _) => { Vm.Settings.GitPath = string.IsNullOrWhiteSpace(git.Text) ? null : git.Text.Trim(); Vm.Settings.GhPath = string.IsNullOrWhiteSpace(gh.Text) ? null : gh.Text.Trim(); Vm.Settings.UseSavedGhCredentials = savedCredentials.IsChecked == true; Vm.Settings.BackgroundRefresh = background.IsChecked == true; Vm.Settings.Theme = theme.SelectedItem as string ?? "Dark"; await Vm.SaveSettingsAsync(); ApplyTheme(); foreach (var section in Vm.Sections) { section.Theme = Vm.Settings.Theme; await section.LoadAsync(section.SelectedFile); } window.Close(); await Vm.RefreshAllAsync(); };
             await window.ShowDialog(this);
         }
         catch (Exception ex) { Vm.Error = ex.Message; }

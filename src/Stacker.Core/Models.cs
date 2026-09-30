@@ -30,7 +30,7 @@ public sealed record FileChange(string OldPath, string NewPath, FileChangeKind K
 }
 public enum DiffLineKind { Context, Added, Removed, Header, Notice }
 public sealed record DiffLine(DiffLineKind Kind, int? OldLineNumber, int? NewLineNumber, string Text);
-public sealed record DiffHunk(string Header, IReadOnlyList<DiffLine> Lines);
+public sealed record DiffHunk(string Header, IReadOnlyList<DiffLine> Lines, int OldStart = 0, int OldCount = 0, int NewStart = 0, int NewCount = 0, string Context = "");
 public sealed record FileDiff(FileChange File, string Patch, IReadOnlyList<DiffHunk> Hunks, IReadOnlyList<DiffLine> Lines);
 public sealed record StackDocument(IReadOnlyList<StackDefinition> Stacks, string? Revision);
 public sealed record ProcessRequest(string Executable, IReadOnlyList<string> Arguments, string? WorkingDirectory = null,
@@ -38,11 +38,14 @@ public sealed record ProcessRequest(string Executable, IReadOnlyList<string> Arg
     IReadOnlyDictionary<string, string>? Environment = null, string? StandardInput = null, IReadOnlyList<string>? UnsetEnvironment = null);
 public sealed record ProcessResult(int ExitCode, string StdOut, string StdErr);
 public class StackerException(string message) : Exception(message);
+public sealed class GitHubAuthenticationException(string message) : StackerException(message);
 public sealed class OutputLimitException() : StackerException("Output exceeds the display limit. Select a smaller file or comparison.");
 
 public sealed class AppSettings
 {
     public List<string> RecentRepositories { get; set; } = [];
+    public bool BackgroundRefresh { get; set; } = true;
+    public string? LastRepository { get; set; }
     public string? GitPath { get; set; }
     public string? GhPath { get; set; }
     public bool UseSavedGhCredentials { get; set; }

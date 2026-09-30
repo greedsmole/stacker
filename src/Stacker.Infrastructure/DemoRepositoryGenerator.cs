@@ -19,7 +19,7 @@ public sealed class DemoRepositoryGenerator(IProcessRunner runner, GitExecutable
         async Task Commit(string file, string text, string message) { await File.WriteAllTextAsync(Path.Combine(root, file), text, ct); await Git("add", "--", file); await Git("commit", "-m", message); }
         async Task Branch(string name, string from) => _ = await Git("checkout", "-b", name, from);
         await Git("init", "-b", "main"); await Git("config", "user.name", "Stacker demo"); await Git("config", "user.email", "demo@example.invalid"); await Git("config", "core.autocrlf", "false");
-        await Commit("README.md", "# Stacker demo\n\nClick Authorization for all changes. Layer 2 shows only its contribution. Through this layer shows layers 1–2. Check 1 and 3 to compare those separately. Switch to Payments and back: the file/filter/scroll state is retained.\n\nGitHub data is offline. Publishing is disabled. Branches main, master and test are discovery boundaries.\n", "Demo instructions");
+        await Commit("README.md", "# Stacker demo\n\nClick Overview inside Authorization for all changes. Layer 2 shows only its contribution. Through this layer shows layers 1–2. Check 1 and 3 to compare those separately. Switch to Payments and back: the file/filter/scroll state is retained.\n\nSelect Session API and click Review to open the PR snapshot. Use the + beside a line to add a local review comment; Review (N) collects pending comments. Comment on file opens the file composer; Discussion opens PR comments. GitHub data is offline. Publishing is disabled. Branches main, master and test are discovery boundaries.\n", "Demo instructions");
         await Branch("auth/model", "main");
         var auth = "namespace Demo;\npublic static class Auth\n{\n    public static string Login() => \"guest\";\n}\n";
         await Commit("Auth.cs", auth, "Session model");
@@ -45,7 +45,7 @@ public sealed class DemoRepositoryGenerator(IProcessRunner runner, GitExecutable
         await Pr(110, "Payment model", "main", "payments/model"); await Pr(111, "Payment validation", "payments/model", "payments/validation");
         await Pr(120, "Shared foundation", "main", "shared/foundation"); await Pr(121, "Alpha feature", "shared/foundation", "shared/alpha"); await Pr(122, "Beta feature", "shared/foundation", "shared/beta");
         await Pr(130, "Promote test environment", "master", "test"); await Pr(131, "Service request", "test", "service/request");
-        var snapshot = new GitHubSnapshot(new("demo.local", 1, "demo", "stacker", "https://demo.local/demo/stacker.git", "demo", "main"), prs, DateTimeOffset.UtcNow);
+        var snapshot = new GitHubSnapshot(new("demo.local", 1, "demo", "stacker", "https://demo.local/demo/stacker.git", "demo-" + Path.GetFileName(root), "main"), prs, DateTimeOffset.UtcNow);
         await File.WriteAllTextAsync(Path.Combine(root, ".stacker-demo.json"), JsonSerializer.Serialize(snapshot), ct);
         var expectations = new DemoExpectation[] { new("authorization", DiffMode.Layer, [1], 1, 2, 1), new("authorization", DiffMode.Cumulative, [1], 1, 6, 0), new("authorization", DiffMode.FullStack, [], 1, 7, 0), new("payments", DiffMode.FullStack, [], 1, 3, 0) };
         await File.WriteAllTextAsync(Path.Combine(root, "demo-manifest.json"), JsonSerializer.Serialize(expectations), ct);
