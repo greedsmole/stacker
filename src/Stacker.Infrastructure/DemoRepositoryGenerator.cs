@@ -7,7 +7,7 @@ public sealed record DemoExpectation(string Stack, DiffMode Mode, int[] Position
 public sealed class DemoRepositoryGenerator(IProcessRunner runner, GitExecutable executable, IStackStore stacks, ApplicationStore store)
 {
     /// <summary>An empty directory used as the hooks path; "/dev/null" is not a directory on Windows.</summary>
-    private static readonly string NoHooks = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "stacker-no-hooks")).FullName;
+    private static string NoHooks => Framework.Neutral.HooksPath;
 
     /// <summary>Builds an isolated repository with independent stacks, shared PR ancestry, boundary branches, and offline review fixtures.</summary>
     /// <remarks>A unique directory is created on each call so opening the demo never overwrites existing user work.</remarks>
@@ -19,7 +19,7 @@ public sealed class DemoRepositoryGenerator(IProcessRunner runner, GitExecutable
         async Task<string> Git(params string[] args)
         {
             var result = await runner.RunAsync(new(executable.Resolve(), ["-c", "core.hooksPath=" + NoHooks, "-c", "commit.gpgSign=false", .. args], root,
-                Environment: new Dictionary<string, string> { ["GIT_CONFIG_GLOBAL"] = OperatingSystem.IsWindows() ? "NUL" : "/dev/null", ["GIT_CONFIG_NOSYSTEM"] = "1" }), ct);
+                Environment: new Dictionary<string, string> { ["GIT_CONFIG_GLOBAL"] = Framework.Neutral.EmptyConfigFile, ["GIT_CONFIG_NOSYSTEM"] = "1" }), ct);
             if (result.ExitCode != 0) throw new StackerException("Demo: " + result.StdErr);
             return result.StdOut.Trim();
         }

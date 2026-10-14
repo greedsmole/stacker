@@ -81,7 +81,7 @@ public sealed class GitObjectCache(IProcessRunner runner, GitExecutable git, GhE
         // Git for Windows can otherwise use an OpenSSL bundle that lacks corporate CAs
         // trusted by Windows (and gh). Scope the backend to this process, not Git config files.
         string[] tlsOptions = isDownload && OperatingSystem.IsWindows() ? ["-c", "http.sslBackend=schannel"] : [];
-        var response = await runner.RunAsync(new(git.Resolve(), ["-c", "core.hooksPath=/dev/null", .. tlsOptions, .. args], root, timeout,
+        var response = await runner.RunAsync(new(git.Resolve(), ["-c", "core.hooksPath=" + Framework.Neutral.HooksPath, .. tlsOptions, .. args], root, timeout,
             Environment: new Dictionary<string, string> { ["STACKER_GH"] = gh.Resolve(), ["GIT_TERMINAL_PROMPT"] = "0", ["GH_PROMPT_DISABLED"] = "1", ["GH_DEBUG"] = "" }, UnsetEnvironment: gh.UnsetEnvironment), ct);
         if (response.ExitCode != 0)
         {

@@ -30,6 +30,21 @@ public sealed partial class ArchitectureTests
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
             .Select(path => (Path.GetRelativePath(Root, path), File.ReadAllText(path)));
 
+    // Scenario: No git invocation depends on a device path, which Windows git versions refuse to read.
+    [Fact] public void No_git_call_uses_a_device_path_for_configuration_or_hooks()
+    {
+        string[] forbidden = ["core.hooksPath=/dev/null", "GIT_CONFIG_GLOBAL\"] = \"NUL\"", "IsWindows() ? \"NUL\""];
+        var offenders = ProductSources("Core", "Infrastructure", "Desktop")
+            // The rule itself names the forbidden tokens, so it is excluded from its own scan.
+            .Concat(Directory.EnumerateFiles(Path.Combine(Root, "tests"), "*.cs", SearchOption.AllDirectories)
+                .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                .Where(path => !path.EndsWith("ArchitectureTests.cs", StringComparison.Ordinal))
+                .Select(path => (Path.GetRelativePath(Root, path), File.ReadAllText(path))))
+            .Where(source => forbidden.Any(token => source.Item2.Contains(token, StringComparison.Ordinal)))
+            .Select(source => source.Item1);
+        Assert.Empty(offenders);
+    }
+
     // Scenario: The domain layer states the rules and never reaches for a process, a file or the network.
     [Fact] public void Core_does_not_touch_the_operating_system()
     {

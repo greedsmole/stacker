@@ -591,7 +591,7 @@ public sealed class GitBranchWriter(IProcessRunner runner, GitExecutable executa
             ? WriteEnvironment
             : new Dictionary<string, string>(WriteEnvironment) { ["GIT_EDITOR"] = editor };
         var result = await runner.RunAsync(new(executable.Resolve(),
-            ["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgSign=false", "-c", "rebase.updateRefs=false", .. args],
+            ["-c", "core.hooksPath=" + Framework.Neutral.HooksPath, "-c", "commit.gpgSign=false", "-c", "rebase.updateRefs=false", .. args],
             root, timeout ?? WriteTimeout, MaxOutputBytes: 4 * 1024 * 1024, Environment: environment), ct);
         if (!allowFailure && result.ExitCode != 0) throw new StackerException($"Git exited with code {result.ExitCode}: {result.StdErr.Trim()}");
         return result;

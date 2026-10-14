@@ -25,8 +25,10 @@ public sealed class RecoveryUiTests
     public async Task A_window_closes_even_when_nothing_can_be_saved()
     {
         await using var f = new GitFixture(); await f.Linear();
-        // A root that cannot be created, so every save on the way out fails.
-        using var vm = CreateVm(f, Path.Combine("/dev/null", "stacker"));
+        // A root that cannot be created on any platform: a directory below a file.
+        var blocker = Path.Combine(Path.GetTempPath(), "stacker-blocker-" + Guid.NewGuid().ToString("N")[..8]);
+        await File.WriteAllTextAsync(blocker, "not a directory");
+        using var vm = CreateVm(f, Path.Combine(blocker, "stacker"));
         var window = new MainWindow { DataContext = vm };
         window.Show();
         await vm.OpenRepositoryAsync(f.Root);

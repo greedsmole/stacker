@@ -11,7 +11,7 @@ public sealed class EditorLauncher(IProcessRunner runner, GitExecutable git, IPr
     public async Task<string?> ResolveAsync(string root, string? overrideCommand, CancellationToken ct = default)
     {
         if (!string.IsNullOrWhiteSpace(overrideCommand)) return overrideCommand.Trim();
-        var configured = await runner.RunAsync(new(git.Resolve(), ["-c", "core.hooksPath=/dev/null", "config", "--get", "core.editor"],
+        var configured = await runner.RunAsync(new(git.Resolve(), ["-c", "core.hooksPath=" + Framework.Neutral.HooksPath, "config", "--get", "core.editor"],
             root, TimeSpan.FromSeconds(15), Environment: EnvironmentOverrides), ct);
         if (configured.ExitCode == 0 && configured.StdOut.Trim().Length > 0) return configured.StdOut.Trim();
         foreach (var name in new[] { "GIT_EDITOR", "VISUAL", "EDITOR" })

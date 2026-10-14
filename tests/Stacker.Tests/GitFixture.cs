@@ -13,7 +13,7 @@ public sealed class GitFixture : IAsyncDisposable
     public string? RemoteRoot { get; private set; }
     private readonly List<string> _worktrees = [];
     private static readonly Dictionary<string, string> IsolatedEnvironment = new()
-    { ["GIT_CONFIG_NOSYSTEM"] = "1", ["GIT_CONFIG_GLOBAL"] = OperatingSystem.IsWindows() ? "NUL" : "/dev/null", ["GIT_TERMINAL_PROMPT"] = "0" };
+    { ["GIT_CONFIG_NOSYSTEM"] = "1", ["GIT_CONFIG_GLOBAL"] = Stacker.Infrastructure.Framework.Neutral.EmptyConfigFile, ["GIT_TERMINAL_PROMPT"] = "0" };
     public GitFixture() { Directory.CreateDirectory(Root); Reader = new(Runner, new()); }
     public async Task<string> Git(params string[] args)
     {
