@@ -42,12 +42,14 @@ public partial class MainWindow : Window
         };
         Closing += async (_, e) =>
         {
-            if (_closing || !_ready) return;
+            if (_closing) return;
             e.Cancel = true; _closing = true;
+            // Persistence happens even when the window is still loading; a failure is reported, never fatal.
             Vm.Settings.WindowWidth = Width; Vm.Settings.WindowHeight = Height;
             Vm.Settings.NavigationWidth = Workspace.ColumnDefinitions[0].ActualWidth;
-            try { await Vm.SaveWorkspaceAsync(); await Vm.FlushReviewsAsync(); await Vm.SaveSettingsAsync(); Vm.Dispose(); Close(); }
-            catch (Exception ex) { _closing = false; Vm.Error = ex.Message; }
+            var problems = await Vm.ShutdownAsync();
+            if (problems.Count > 0) Console.Error.WriteLine("Stacker closed with unsaved changes: " + string.Join(" ", problems));
+            Close();
         };
     }
     private void ResizeSections()
@@ -166,6 +168,65 @@ public partial class MainWindow : Window
         clear.Click += async (_, _) => await Vm.ClearGitHubCacheAsync();
         await window.ShowDialog(this);
     }
+    /// <summary>Opens the restack preview for a stack chosen in the sidebar or the active comparison.</summary>
+    private async void RestackClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: StackGroupViewModel group }) await Vm.SelectGroupAsync(group);
+        await ShowSyncWindowAsync();
+    }
+    private async Task ShowSyncWindowAsync()
+    {
+        try
+        {
+            var plan = await Vm.BuildRestackPlanAsync();
+            if (plan is null) return;
+            var undoAvailable = Vm.LocalGroups.FirstOrDefault(g => g.Definition.Id == plan.StackId)?.UndoAvailable == true;
+            await new SyncPreviewWindow(plan, Vm, undoAvailable).ShowDialog(this);
+            await Vm.RefreshSyncAvailabilityAsync();
+            await Vm.RefreshWorkingTreeAsync();
+        }
+        catch (Exception ex) { Vm.Error = ex.Message; }
+    }
+    private async void UndoRestackClick(object? sender, RoutedEventArgs e) => await Vm.UndoAsync();
+    /// <summary>Opens the conflicted files in the editor the user configured.</summary>
+    private async void ResolveConflictsClick(object? sender, RoutedEventArgs e) => await Vm.OpenConflictsInEditorAsync();
+    /// <summary>Opens the sync window, whose conflict panel covers Continue, Skip and Abort.</summary>
+    private async void ReviewConflictsClick(object? sender, RoutedEventArgs e) => await ShowSyncWindowAsync();
+    /// <summary>Restores what an interrupted run moved; the result is always reported.</summary>
+    private async void RestoreRecoveryClick(object? sender, RoutedEventArgs e)
+    {
+        var (ok, message) = await Vm.RestoreRecoveryAsync();
+        if (ok) Vm.Status = message; else Vm.Error = message;
+        await Vm.RefreshWorkingTreeAsync();
+    }
+    /// <summary>Dismisses the interrupted run without touching the branches, and says so.</summary>
+    private async void DismissRecoveryClick(object? sender, RoutedEventArgs e)
+    {
+        var (ok, message) = await Vm.DismissRecoveryAsync();
+        if (ok) Vm.Status = message; else Vm.Error = message;
+    }
+    /// <summary>Commits the working tree, staging everything when the user leaves the box ticked.</summary>
+    private async void CommitClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is Control { DataContext: StackGroupViewModel group }) await Vm.SelectGroupAsync(group);
+            await Vm.RefreshWorkingTreeAsync();
+            await new CommitWindow(Vm).ShowDialog<bool>(this);
+        }
+        catch (Exception ex) { Vm.Error = ex.Message; }
+    }
+    /// <summary>Creates a new layer branch on top of a local stack and adds it to the definition.</summary>
+    private async void AddLayerClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: StackGroupViewModel group }) return;
+        try
+        {
+            await Vm.SelectGroupAsync(group);
+            await new AddLayerWindow(group.Definition, Vm.AddLayerAsync).ShowDialog<bool>(this);
+        }
+        catch (Exception ex) { Vm.Error = ex.Message; }
+    }
     private async void NewStackClick(object? sender, RoutedEventArgs e) => await EditAsync(false);
     private async void EditStackClick(object? sender, RoutedEventArgs e) => await EditAsync(true);
     private async Task EditAsync(bool existing)
@@ -197,6 +258,7 @@ public partial class MainWindow : Window
         {
             var git = new TextBox { Text = Vm.Settings.GitPath, Watermark = "Auto-detect Git" };
             var gh = new TextBox { Text = Vm.Settings.GhPath, Watermark = "Auto-detect gh" };
+            var editor = new TextBox { Text = Vm.Settings.EditorCommand, Watermark = "Empty uses git core.editor, then $EDITOR" };
             var savedCredentials = new CheckBox { Content = "Use saved gh credentials (ignore environment tokens)", IsChecked = Vm.Settings.UseSavedGhCredentials };
             var background = new CheckBox { Content = "Update GitHub in the background while active", IsChecked = Vm.Settings.BackgroundRefresh };
             var theme = new ComboBox { ItemsSource = new[] { "Dark", "Light" }, SelectedItem = Vm.Settings.Theme, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -207,10 +269,12 @@ public partial class MainWindow : Window
                 Content = new StackPanel { Margin = new Thickness(24), Spacing = 14, Children =
                 {
                     new TextBlock { Text = "Git executable", FontWeight = Avalonia.Media.FontWeight.SemiBold }, git, new TextBlock { Text = "GitHub CLI executable" }, gh,
+                    new TextBlock { Text = "Editor for conflicts and commit messages" }, editor,
+                    new TextBlock { Text = "Add a wait flag (for example \"code --wait\") if your editor returns immediately.", FontSize = 11, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
                     savedCredentials, background, new TextBlock { Text = "Connection changes are checked automatically.", FontSize = 12 }, new TextBlock { Text = "Theme" }, theme, save
                 } }
             };
-            save.Click += async (_, _) => { Vm.Settings.GitPath = string.IsNullOrWhiteSpace(git.Text) ? null : git.Text.Trim(); Vm.Settings.GhPath = string.IsNullOrWhiteSpace(gh.Text) ? null : gh.Text.Trim(); Vm.Settings.UseSavedGhCredentials = savedCredentials.IsChecked == true; Vm.Settings.BackgroundRefresh = background.IsChecked == true; Vm.Settings.Theme = theme.SelectedItem as string ?? "Dark"; await Vm.SaveSettingsAsync(); ApplyTheme(); foreach (var section in Vm.Sections) { section.Theme = Vm.Settings.Theme; await section.LoadAsync(section.SelectedFile); } window.Close(); await Vm.RefreshAllAsync(); };
+            save.Click += async (_, _) => { Vm.Settings.GitPath = string.IsNullOrWhiteSpace(git.Text) ? null : git.Text.Trim(); Vm.Settings.GhPath = string.IsNullOrWhiteSpace(gh.Text) ? null : gh.Text.Trim(); Vm.Settings.EditorCommand = string.IsNullOrWhiteSpace(editor.Text) ? null : editor.Text.Trim(); Vm.Settings.UseSavedGhCredentials = savedCredentials.IsChecked == true; Vm.Settings.BackgroundRefresh = background.IsChecked == true; Vm.Settings.Theme = theme.SelectedItem as string ?? "Dark"; await Vm.SaveSettingsAsync(); ApplyTheme(); foreach (var section in Vm.Sections) { section.Theme = Vm.Settings.Theme; await section.LoadAsync(section.SelectedFile); } window.Close(); await Vm.RefreshAllAsync(); };
             await window.ShowDialog(this);
         }
         catch (Exception ex) { Vm.Error = ex.Message; }

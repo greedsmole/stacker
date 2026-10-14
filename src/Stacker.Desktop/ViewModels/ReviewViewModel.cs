@@ -4,6 +4,7 @@ using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Stacker.Core;
+using Stacker.Core.Framework;
 using Stacker.Infrastructure;
 namespace Stacker.Desktop.ViewModels;
 
@@ -30,7 +31,12 @@ public partial class ReviewViewModel : ObservableObject
     public string DecisionLabel { get => Decision switch { "APPROVE" => "Approve", "REQUEST_CHANGES" => "Request changes", _ => "Comment" }; set => Decision = value switch { "Approve" => "APPROVE", "Request changes" => "REQUEST_CHANGES", _ => "COMMENT" }; }
     public IReadOnlyList<string> DecisionLabels { get; } = ["Comment", "Approve", "Request changes"];
     [ObservableProperty] private int _panelTab;
-    partial void OnPanelTabChanged(int value) { if (value == 1 || value == 2) CloseInlineEditors(); }
+    partial void OnPanelTabChanged(int value)
+    {
+        if (value == 1 || value == 2) CloseInlineEditors();
+        // The discussion tab always edits the pull-request buffer, never whatever reply was open last.
+        if (value == 0) SelectComposer("pr");
+    }
     public event Action? DiscussionChanged;
     public void Attach(DiffSectionViewModel section)
     {
@@ -219,20 +225,32 @@ public partial class ReviewViewModel : ObservableObject
             foreach (var path in discussion.Threads.Select(t => t.Path).OfType<string>().Concat(_draft.FileComposers.Keys).Distinct())
                 if (!ReviewFiles.Contains(path)) ReviewFiles.Add(path);
             UpdateFileThreads();
-            if (_draft.PendingOperation is { } pending)
+            if (_draft.PendingOperation is { } pendingText)
             {
-                var parts = pending.Split('|'); var found = false;
-                if (parts[0] == "resolve") found = discussion.Threads.Any(t => t.Id == parts[1] && t.IsResolved == bool.Parse(parts[2]));
+                if (!PendingOperation.TryParse(pendingText, out var pending))
+                {
+                    // A damaged marker cannot be reconciled; clearing it is better than blocking every reload.
+                    _draft.PendingOperation = null; _draft.PendingFilePath = null;
+                    Message = "A saved publication marker was unreadable and has been cleared. Check GitHub before retrying.";
+                    QueueSave();
+                }
                 else
                 {
-                    var marker = "<!-- stacker:" + parts[1] + " -->";
-                    found = discussion.Comments.Any(c => c.Author == Context.User && c.Body.Contains(marker, StringComparison.Ordinal)) || discussion.Reviews.Any(r => r.Author == Context.User && r.Body.Contains(marker, StringComparison.Ordinal)) || discussion.Threads.SelectMany(t => t.Comments).Any(c => c.Author == Context.User && c.Body.Contains(marker, StringComparison.Ordinal));
+                    var marker = "<!-- stacker:" + pending.Marker + " -->";
+                    var found = pending.Kind == PendingKind.Resolve
+                        ? discussion.Threads.Any(t => t.Id == pending.ThreadId && t.IsResolved == pending.Resolved)
+                        : discussion.Comments.Any(c => c.Author == Context.User && c.Body.Contains(marker, StringComparison.Ordinal))
+                          || discussion.Reviews.Any(r => r.Author == Context.User && r.Body.Contains(marker, StringComparison.Ordinal))
+                          || discussion.Threads.SelectMany(t => t.Comments).Any(c => c.Author == Context.User && c.Body.Contains(marker, StringComparison.Ordinal));
+                    if (found)
+                    {
+                        if (pending.Kind == PendingKind.Review) ClearSubmittedDraft();
+                        else if (pending.Kind == PendingKind.FileComment && _draft.PendingFilePath is { } path) ClearPublishedFile(path);
+                        else if (pending.Kind is PendingKind.Comment or PendingKind.Inline or PendingKind.Reply) ClearPublishedComposer();
+                        _draft.PendingOperation = null; _draft.PendingFilePath = null; Message = "Previous publication confirmed on GitHub."; QueueSave();
+                    }
+                    else Message = "Publication result is uncertain. Check GitHub before unlocking a retry; no automatic resend will occur.";
                 }
-                if (found) { if (parts[0] == "review") ClearSubmittedDraft();
-                    else if (parts[0] == "file" && _draft.PendingFilePath is { } path) ClearPublishedFile(path);
-                    else if (parts[0] is "comment" or "inline" or "reply") ClearPublishedComposer();
-                    _draft.PendingOperation = null; _draft.PendingFilePath = null; Message = "Previous publication confirmed on GitHub."; QueueSave(); }
-                else Message = "Publication result is uncertain. Check GitHub before unlocking a retry; no automatic resend will occur.";
             }
             NotifyPublicationState();
         }
@@ -256,7 +274,9 @@ public partial class ReviewViewModel : ObservableObject
     }
     private void ClearPublishedComposer()
     {
-        var key = _draft.PendingComposerKey ?? "pr";
+        // A reload can reconcile a send before the send itself returns; without an owned key there is nothing to clear.
+        var key = _draft.PendingComposerKey;
+        if (key is null) { _draft.PendingBody = null; return; }
         if (_draft.ContextComposers.GetValueOrDefault(key) == _draft.PendingBody || _draft.PendingBody is null)
         { _draft.ContextComposers[key] = ""; if (key == "pr") _draft.Composer = ""; if (key == _composerKey) Composer = ""; }
         _draft.PendingComposerKey = null; _draft.PendingBody = null;
@@ -329,7 +349,7 @@ public partial class ReviewViewModel : ObservableObject
         {
             await VerifyAsync(anchors);
             if (filePath is not null) await _reader.ValidateFileAsync(Context, PullRequest, filePath);
-            var marker = Guid.NewGuid().ToString("N"); _draft.PendingOperation = kind + "|" + marker; _draft.PendingFilePath = filePath; _draft.PendingComposerKey = _composerKey; _draft.PendingBody = kind == "file" ? FileComposer : Composer;
+            var marker = Guid.NewGuid().ToString("N"); _draft.PendingOperation = PendingOperation.For(kind, marker).Encode(); _draft.PendingFilePath = filePath; _draft.PendingComposerKey = _composerKey; _draft.PendingBody = kind == "file" ? FileComposer : Composer;
             if (kind == "review") { _draft.PendingSummary = Summary; _draft.PendingReviewComments = _draft.Comments.ToList(); }
             QueueSave(); await FlushAsync();
             await send(marker);
@@ -347,7 +367,7 @@ public partial class ReviewViewModel : ObservableObject
         _discussionLoad?.Cancel(); IsBusy = true;
         try
         {
-            await VerifyAsync([]); _draft.PendingOperation = $"resolve|{thread.Id}|{!thread.IsResolved}"; QueueSave(); await FlushAsync();
+            await VerifyAsync([]); _draft.PendingOperation = PendingOperation.ForResolve(thread.Id, !thread.IsResolved).Encode(); QueueSave(); await FlushAsync();
             await _writer.ResolveAsync(Context, thread.Id, !thread.IsResolved);
             _draft.PendingOperation = null; QueueSave(); await FlushAsync(); await ReloadAsync();
         }

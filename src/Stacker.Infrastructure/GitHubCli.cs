@@ -18,7 +18,7 @@ public sealed class GhExecutable
         .Concat(new[] { "/opt/homebrew/bin/gh", "/usr/local/bin/gh" }).FirstOrDefault(File.Exists) ?? "gh";
 }
 
-public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecutable gh) : IGitHubReader, IGitHubWriter
+public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecutable gh) : IGitHubReader, IGitHubWriter, IGitHubPullRequestWriter
 {
     /// <summary>Extracts host and repository from HTTPS, SSH, or SCP-style Git remote syntax.</summary>
     /// <remarks>Git aliases that do not identify a hostname must be configured explicitly by the user.</remarks>
@@ -50,14 +50,25 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
     {
         var response = await runner.RunAsync(new(gh.Resolve(), args, Timeout: TimeSpan.FromSeconds(60), MaxOutputBytes: 32 * 1024 * 1024,
             Environment: new Dictionary<string, string> { ["GH_PROMPT_DISABLED"] = "1", ["GH_PAGER"] = "cat", ["GH_DEBUG"] = "" }, StandardInput: body, UnsetEnvironment: gh.UnsetEnvironment), ct);
-        if (response.ExitCode != 0 && response.StdErr.Contains("HTTP 401", StringComparison.OrdinalIgnoreCase)) throw new GitHubAuthenticationException(response.StdErr.Trim());
-        if (response.ExitCode != 0) throw new StackerException($"GitHub request failed ({response.ExitCode}): {response.StdErr.Trim()}");
-        try { return JsonDocument.Parse(string.IsNullOrWhiteSpace(response.StdOut) ? "{}" : response.StdOut).RootElement.Clone(); }
-        catch (JsonException) { throw new StackerException("gh returned invalid JSON. Check the GitHub host and CLI version."); }
+        // gh reports "not authenticated" with a non-zero exit and a JSON payload; the payload carries the useful diagnosis.
+        var parsed = TryParse(response.StdOut);
+        if (response.ExitCode != 0)
+        {
+            if (response.StdErr.Contains("HTTP 401", StringComparison.OrdinalIgnoreCase)) throw new GitHubAuthenticationException(response.StdErr.Trim());
+            if (parsed is null) throw new StackerException($"GitHub request failed ({response.ExitCode}): {response.StdErr.Trim()}");
+        }
+        return parsed ?? throw new StackerException("gh returned invalid JSON. Check the GitHub host and CLI version.");
+    }
+    /// <summary>The root element of a JSON payload, or null when the output is not JSON at all.</summary>
+    private static JsonElement? TryParse(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        try { return JsonDocument.Parse(text).RootElement.Clone(); }
+        catch (JsonException) { return null; }
     }
     // All API calls pin the hostname. POST bodies go through stdin so review text is never interpreted as CLI arguments.
-    private Task<JsonElement> Api(string host, string endpoint, CancellationToken ct, object? body = null, bool paginate = false) =>
-        RunJsonAsync(["api", "--hostname", host, "--method", body is null ? "GET" : "POST", endpoint,
+    private Task<JsonElement> Api(string host, string endpoint, CancellationToken ct, object? body = null, bool paginate = false, string? method = null) =>
+        RunJsonAsync(["api", "--hostname", host, "--method", method ?? (body is null ? "GET" : "POST"), endpoint,
             .. (paginate ? new[] { "--paginate", "--slurp" } : []), .. (body is null ? [] : new[] { "--input", "-" })], ct, body is null ? null : JsonSerializer.Serialize(body));
     /// <summary>Returns only the active, valid account for this host, while explaining environment-token precedence.</summary>
     private async Task<string> ActiveUser(string host, CancellationToken ct)
@@ -220,6 +231,23 @@ public sealed class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecut
         if (draft.Decision is not ("COMMENT" or "APPROVE" or "REQUEST_CHANGES")) throw new StackerException("Invalid review decision.");
         _ = await Api(context.Host, $"{Repo(context)}/pulls/{draft.PullRequest}/reviews", ct,
             new { commit_id = draft.HeadSha, body = draft.Summary, @event = draft.Decision, comments = draft.Comments.Select(AnchorBody).ToArray() });
+    }
+    /// <summary>Creates a pull request whose base is the layer's parent branch.</summary>
+    public async Task<PullRequest> CreatePullRequestAsync(GitHubRepositoryContext context, string headBranch, string baseBranch,
+        string title, string body, bool draft, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(headBranch) || string.IsNullOrWhiteSpace(baseBranch))
+            throw new StackerException("A pull request needs both a head and a base branch.");
+        var value = await Api(context.Host, Repo(context) + "/pulls", ct,
+            new { title, head = headBranch, @base = baseBranch, body, draft }, method: "POST");
+        return ParsePr(value);
+    }
+    /// <summary>Retargets one existing pull request after its layer's parent changed.</summary>
+    public async Task<PullRequest> UpdatePullRequestBaseAsync(GitHubRepositoryContext context, long number, string baseBranch, CancellationToken ct = default)
+    {
+        if (number <= 0 || string.IsNullOrWhiteSpace(baseBranch)) throw new StackerException("A pull request needs a valid number and a base branch.");
+        var value = await Api(context.Host, $"{Repo(context)}/pulls/{number}", ct, new { @base = baseBranch }, method: "PATCH");
+        return ParsePr(value);
     }
     // GitHub's current review-comment contract uses line/side and optional start_line/start_side, never legacy position.
     private static Dictionary<string, object> AnchorBody(DraftComment comment)

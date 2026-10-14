@@ -26,8 +26,8 @@ public sealed class RefreshCoordinator(Func<CancellationToken, Task> refresh, Ti
                 await Task.Delay(Interval, _clock, source.Token);
                 try { await refresh(source.Token); Interval = TimeSpan.FromMinutes(1); }
                 catch (OperationCanceledException) when (source.IsCancellationRequested) { return; }
-                catch (Stacker.Core.GitHubAuthenticationException) { Suspended = true; return; }
-                catch { Interval = TimeSpan.FromMinutes(Math.Min(8, Interval.TotalMinutes * 2)); }
+                catch (Stacker.Core.GitHubAuthenticationException) { if (source.IsCancellationRequested) return; Suspended = true; return; }
+                catch { if (source.IsCancellationRequested) return; Interval = TimeSpan.FromMinutes(Math.Min(8, Interval.TotalMinutes * 2)); }
             }
         }
         catch (OperationCanceledException) when (source.IsCancellationRequested) { }

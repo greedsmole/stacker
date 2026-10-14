@@ -3,14 +3,20 @@
 import argparse
 import pathlib
 import plistlib
+import re
 import shutil
 import subprocess
 import tarfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-VERSION = "0.4.1"
+# One source of truth: the desktop project file that the application also displays at runtime.
+PROJECT = ROOT / "src/Stacker.Desktop/Stacker.Desktop.csproj"
+match = re.search(r"<Version>([^<]+)</Version>", PROJECT.read_text(encoding="utf-8"))
+if match is None:
+    raise SystemExit(f"No <Version> found in {PROJECT}")
+VERSION = match.group(1)
 parser = argparse.ArgumentParser()
-parser.add_argument("rid", choices=["win-x64", "osx-arm64", "osx-x64", "linux-x64"])
+parser.add_argument("rid", choices=["win-x64", "osx-arm64", "osx-x64"])
 args = parser.parse_args()
 output = ROOT / "artifacts" / args.rid
 if output.exists():

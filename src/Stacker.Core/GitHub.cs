@@ -91,6 +91,15 @@ public interface IGitHubWriter
     Task ResolveAsync(GitHubRepositoryContext context, string threadId, bool resolved, CancellationToken ct = default);
     Task SubmitReviewAsync(GitHubRepositoryContext context, ReviewDraft draft, CancellationToken ct = default);
 }
+/// <summary>Creates and retargets the pull requests a stack layer needs; every call is explicit and revalidated by the caller.</summary>
+public interface IGitHubPullRequestWriter
+{
+    /// <summary>Opens a pull request for one layer, with the layer's parent as its base branch.</summary>
+    Task<PullRequest> CreatePullRequestAsync(GitHubRepositoryContext context, string headBranch, string baseBranch,
+        string title, string body, bool draft, CancellationToken ct = default);
+    /// <summary>Points an existing pull request at a different base branch after a layer's parent changed.</summary>
+    Task<PullRequest> UpdatePullRequestBaseAsync(GitHubRepositoryContext context, long number, string baseBranch, CancellationToken ct = default);
+}
 /// <summary>Fetches remote PR objects into an application-owned repository cache without touching the user's checkout.</summary>
 public interface IGitObjectCache
 {

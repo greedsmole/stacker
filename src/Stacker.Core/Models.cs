@@ -57,6 +57,9 @@ public sealed class OutputLimitException() : StackerException("Output exceeds th
 
 public sealed class AppSettings
 {
+    /// <summary>Bumped when a property is renamed or its meaning changes; unknown files are treated as defaults.</summary>
+    public const int CurrentSchema = 3;
+    public int SchemaVersion { get; set; } = CurrentSchema;
     /// <summary>Most recently opened local repository paths, ordered newest first by the UI.</summary>
     public List<string> RecentRepositories { get; set; } = [];
     public bool BackgroundRefresh { get; set; } = true;
@@ -64,6 +67,8 @@ public sealed class AppSettings
     public string? LastRepository { get; set; }
     public string? GitPath { get; set; }
     public string? GhPath { get; set; }
+    /// <summary>Editor used for conflicts and commit messages; empty means git core.editor, then the environment, then a platform default.</summary>
+    public string? EditorCommand { get; set; }
     public bool UseSavedGhCredentials { get; set; }
     public string Theme { get; set; } = "Dark";
     public double NavigationWidth { get; set; } = 270;

@@ -120,7 +120,11 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
                     if (line.Kind != DiffLineKind.Notice || line.Text.StartsWith("\\ No newline", StringComparison.Ordinal))
                         Lines.Add(new(line.Kind == DiffLineKind.Notice ? line with { Text = "No newline at end of file" } : line) { TextWrapping = WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap });
             }
-            Message = file.IsBinary ? "Binary file — text preview unavailable." : file.IsSubmodule ? "Submodule commit changed." : file.ModeChanged ? file.Detail : diff.Lines.Count == 0 ? "No textual changes." : "";
+            Message = file.IsBinary ? "Binary file — text preview unavailable."
+                : file.IsSubmodule ? "Submodule commit changed."
+                : file.ModeChanged && diff.Hunks.Count == 0 ? file.Detail
+                : diff.Hunks.Count == 0 ? $"{file.Detail} — no textual changes in this comparison."
+                : "";
             IsBusy = false; ApplyThreads();
             if (!file.IsBinary && !file.IsSubmodule) await HighlightAsync(file, load.Token);
         }
@@ -168,5 +172,10 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
             ReplaceIfChanged(line.Drafts, drafts[left].Concat(drafts[right]).ToArray());
         }
     }
-    public void Dispose() { Review?.Detach(this); _disposed = true; _load?.Cancel(); }
+    public void Dispose()
+    {
+        Review?.Detach(this); _disposed = true; _load?.Cancel();
+        // An evicted comparison must not keep a patch, its rows or their token tables alive.
+        Lines.Clear(); Threads.Clear(); FileThreads.Clear(); Patch = "";
+    }
 }

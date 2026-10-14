@@ -23,7 +23,7 @@ public sealed partial class MainViewModel
 {
     private WorkspaceState _workspace = new();
     private Task _workspaceSave = Task.CompletedTask;
-    private readonly Dictionary<string, ReviewSession> _reviews = [];
+    private readonly Dictionary<string, ReviewViewModel> _reviews = [];
     private readonly SemaphoreSlim _reviewGate = new(1, 1);
     private readonly SemaphoreSlim _syncGate = new(1, 1);
     private string? _displayedStateKey;
@@ -105,7 +105,13 @@ public sealed partial class MainViewModel
         var active = _workspace.Stacks[activeKey];
         _workspace.ActiveGroup = activeKey;
         if (_displayedStateKey is not null)
-            active.Comparisons[_displayedStateKey] = Sections.Select(s => new SectionViewState(s.Result.Layer, s.SelectedFile?.NewPath, s.Filter, s.ScrollX, s.ScrollY, s.IsExpanded)).ToArray();
+        {
+            // Stored comparison views are a cache: keep the recent ones and the one on screen.
+            var current = _displayedStateKey;
+            foreach (var stale in active.Comparisons.Keys.Where(key => !string.Equals(key, current, StringComparison.Ordinal)).Take(Math.Max(0, active.Comparisons.Count - 40)).ToArray())
+                active.Comparisons.Remove(stale);
+            active.Comparisons[current] = Sections.Select(s => new SectionViewState(s.Result.Layer, s.SelectedFile?.NewPath, s.Filter, s.ScrollX, s.ScrollY, s.IsExpanded)).ToArray();
+        }
     }
     /// <summary>Persists the active selection and per-stack view state in the application data directory.</summary>
     public async Task SaveWorkspaceAsync()
@@ -158,6 +164,13 @@ public sealed partial class MainViewModel
                 session = new(_github, _writer, _applicationStore, _git, context, pr, section, IsDemo);
                 await session.InitializeAsync(ct: ct); ct.ThrowIfCancellationRequested();
                 _reviews[key] = session;
+                // Keep the working set bounded, but never discard a draft that has not been written yet.
+                foreach (var stale in _reviews.Keys.Take(Math.Max(0, _reviews.Count - 12)).ToArray())
+                {
+                    if (ReferenceEquals(_reviews[stale], session) || _reviews[stale].IsBusy) continue;
+                    try { await _reviews[stale].FlushAsync(); } catch (Exception) { continue; }
+                    _reviews.Remove(stale);
+                }
                 session.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ReviewViewModel.ReviewLabel)) OnPropertyChanged(nameof(ReviewLabel)); };
             }
             session.Attach(section); return session;
@@ -175,4 +188,20 @@ public sealed partial class MainViewModel
     partial void OnActiveReviewChanged(ReviewViewModel? value) => OnPropertyChanged(nameof(ReviewLabel));
     [RelayCommand] private void CloseReview() => IsReviewOpen = false;
     public async Task FlushReviewsAsync() { foreach (var review in _reviews.Values) await review.FlushAsync(); }
+
+    /// <summary>Best-effort shutdown: persists everything it can, collects what it cannot, and never throws.</summary>
+    /// <remarks>The window must always be able to close; a failing save is reported instead of trapping the user.</remarks>
+    public async Task<IReadOnlyList<string>> ShutdownAsync()
+    {
+        var problems = new List<string>();
+        try { await SaveWorkspaceAsync(); } catch (Exception ex) { problems.Add("Workspace: " + ex.Message); }
+        foreach (var review in _reviews.Values.ToArray())
+        {
+            try { await review.FlushAsync(); }
+            catch (Exception ex) { problems.Add("Draft: " + ex.Message); }
+        }
+        try { await SaveSettingsAsync(); } catch (Exception ex) { problems.Add("Settings: " + ex.Message); }
+        Dispose();
+        return problems;
+    }
 }

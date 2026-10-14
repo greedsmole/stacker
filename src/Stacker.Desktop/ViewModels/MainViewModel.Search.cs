@@ -44,16 +44,21 @@ public sealed partial class MainViewModel
         }
         catch (ArgumentException ex) { SearchStatus = "Invalid regex: " + ex.Message; return; }
         using var load = new CancellationTokenSource(); _searchLoad = load;
-        var sections = Sections.ToArray(); var hits = new List<ChangeSearchHit>(); var skipped = 0; var truncated = false;
+        var sections = Sections.ToArray(); var hits = new List<ChangeSearchHit>(); var skipped = 0; var truncated = false; var patternTimeouts = 0;
+        // One budget for the whole search: a per-match timeout can still add up to minutes across a large stack.
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var budget = TimeSpan.FromSeconds(5); var stopped = false;
         IsSearchBusy = true; SearchStatus = "Searching…";
         try
         {
             bool Matches(string text) => pattern?.IsMatch(text) ?? text.Contains(query, StringComparison.OrdinalIgnoreCase);
             foreach (var section in sections)
             {
+                if (watch.Elapsed > budget) { stopped = true; break; }
                 foreach (var file in section.Result.Files)
                 {
                     load.Token.ThrowIfCancellationRequested();
+                    if (watch.Elapsed > budget) { stopped = true; break; }
                     if (SearchScope == "Files")
                     {
                         if (Matches(file.DisplayPath)) hits.Add(new(section, file, null));
@@ -68,7 +73,7 @@ public sealed partial class MainViewModel
                                 { hits.Add(new(section, file, line)); if (hits.Count == 500) break; }
                         }
                         catch (OperationCanceledException) { throw; }
-                        catch (RegexMatchTimeoutException) { skipped++; }
+                        catch (RegexMatchTimeoutException) { patternTimeouts++; }
                         catch (StackerException) { skipped++; }
                     }
                     if (hits.Count >= 500) { truncated = true; break; }
@@ -77,7 +82,10 @@ public sealed partial class MainViewModel
             }
             load.Token.ThrowIfCancellationRequested();
             foreach (var hit in hits) SearchResults.Add(hit);
-            SearchStatus = $"{hits.Count} result(s)" + (truncated ? " · first 500 shown" : "") + (skipped > 0 ? $" · {skipped} file(s) unavailable" : "");
+            SearchStatus = $"{hits.Count} result(s)" + (truncated ? " · first 500 shown" : "")
+                + (stopped ? $" · stopped after {budget.TotalSeconds:0} s, narrow the search" : "")
+                + (patternTimeouts > 0 ? $" · {patternTimeouts} file(s) where the pattern timed out" : "")
+                + (skipped > 0 ? $" · {skipped} file(s) unavailable" : "");
         }
         catch (OperationCanceledException) { }
         catch (RegexMatchTimeoutException) { SearchStatus = "Regex took too long. Try a narrower pattern."; }

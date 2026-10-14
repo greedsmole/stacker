@@ -6,15 +6,19 @@ namespace Stacker.Infrastructure;
 public sealed record DemoExpectation(string Stack, DiffMode Mode, int[] Positions, int Files, int Additions, int Deletions);
 public sealed class DemoRepositoryGenerator(IProcessRunner runner, GitExecutable executable, IStackStore stacks, ApplicationStore store)
 {
+    /// <summary>An empty directory used as the hooks path; "/dev/null" is not a directory on Windows.</summary>
+    private static readonly string NoHooks = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "stacker-no-hooks")).FullName;
+
     /// <summary>Builds an isolated repository with independent stacks, shared PR ancestry, boundary branches, and offline review fixtures.</summary>
     /// <remarks>A unique directory is created on each call so opening the demo never overwrites existing user work.</remarks>
     public async Task<string> CreateAsync(CancellationToken ct = default)
     {
+        PruneDemos();
         var root = Path.Combine(store.Root, "demos", "demo-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..6]);
         Directory.CreateDirectory(root);
         async Task<string> Git(params string[] args)
         {
-            var result = await runner.RunAsync(new(executable.Resolve(), ["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgSign=false", .. args], root,
+            var result = await runner.RunAsync(new(executable.Resolve(), ["-c", "core.hooksPath=" + NoHooks, "-c", "commit.gpgSign=false", .. args], root,
                 Environment: new Dictionary<string, string> { ["GIT_CONFIG_GLOBAL"] = OperatingSystem.IsWindows() ? "NUL" : "/dev/null", ["GIT_CONFIG_NOSYSTEM"] = "1" }), ct);
             if (result.ExitCode != 0) throw new StackerException("Demo: " + result.StdErr);
             return result.StdOut.Trim();
@@ -23,6 +27,8 @@ public sealed class DemoRepositoryGenerator(IProcessRunner runner, GitExecutable
         async Task Branch(string name, string from) => _ = await Git("checkout", "-b", name, from);
         await Git("init", "-b", "main"); await Git("config", "user.name", "Stacker demo"); await Git("config", "user.email", "demo@example.invalid"); await Git("config", "core.autocrlf", "false");
         await Commit("README.md", "# Stacker demo\n\nClick Overview inside Authorization for all changes. Layer 2 shows only its contribution. Through this layer shows layers 1–2. Check 1 and 3 to compare those separately. Switch to Payments and back: the file/filter/scroll state is retained.\n\nSelect Session API and click Review to open the PR snapshot. Use the + beside a line to add a local review comment; Review (N) collects pending comments. Comment on file opens the file composer; Discussion opens PR comments. GitHub data is offline. Publishing is disabled. Branches main, master and test are discovery boundaries.\n", "Demo instructions");
+        // Stacker's own workspace files stay out of the working tree so the demo can be restacked like a real repository.
+        await Commit(".gitignore", ".stackpr.yml\n.stacker-demo.json\ndemo-manifest.json\n", "Ignore Stacker workspace files");
         await Branch("auth/model", "main");
         var auth = "namespace Demo;\npublic static class Auth\n{\n    public static string Login() => \"guest\";\n}\n";
         await Commit("Auth.cs", auth, "Session model");
@@ -54,6 +60,19 @@ public sealed class DemoRepositoryGenerator(IProcessRunner runner, GitExecutable
         await File.WriteAllTextAsync(Path.Combine(root, "demo-manifest.json"), JsonSerializer.Serialize(expectations), ct);
         return root;
     }
+    /// <summary>Keeps a couple of demos for comparison and deletes the rest, including any half-built leftovers.</summary>
+    private void PruneDemos()
+    {
+        try
+        {
+            var directory = Path.Combine(store.Root, "demos");
+            if (!Directory.Exists(directory)) return;
+            foreach (var stale in Directory.GetDirectories(directory).OrderByDescending(Directory.GetLastWriteTimeUtc).Skip(2))
+                Directory.Delete(stale, true);
+        }
+        catch (Exception) { /* Housekeeping must never stop the demo from opening. */ }
+    }
+
     /// <summary>Supplies realistic read-only discussion fixtures, including an outdated thread for UI behavior.</summary>
     public static ReviewDiscussion Discussion(PullRequest pr) => new(
         [new("1", "reviewer", "Please check the contribution of this layer, then compare the entire stack.", pr.Url, DateTimeOffset.UtcNow)],

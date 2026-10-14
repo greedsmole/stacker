@@ -4,28 +4,22 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Stacker.Core;
+using Stacker.Core.Framework;
 using Stacker.Infrastructure;
+using Stacker.Infrastructure.Framework;
 using Stacker.Desktop.ViewModels;
 namespace Stacker.Desktop;
 public partial class App : Application
 {
+    /// <summary>Everything Stacker owns lives here: drafts, snapshots, journals, locks.</summary>
+    public static string AppRoot { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Stacker", "v3");
     private ServiceProvider? _services;
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            _services = new ServiceCollection()
-                .AddSingleton<GitExecutable>().AddSingleton<GhExecutable>().AddSingleton<GitCommandLog>()
-                .AddSingleton<IProcessRunner>(s => new ProcessRunner(s.GetRequiredService<GitCommandLog>()))
-                .AddSingleton<ApplicationStore>().AddSingleton<GitHubCli>()
-                .AddSingleton<IGitHubReader>(s => s.GetRequiredService<GitHubCli>()).AddSingleton<IGitHubWriter>(s => s.GetRequiredService<GitHubCli>())
-                .AddSingleton<IGitObjectCache, GitObjectCache>().AddSingleton<ISyntaxHighlighter, TextMateSyntaxHighlighter>()
-                .AddSingleton<DemoRepositoryGenerator>()
-                .AddSingleton<IGitRepositoryReader, GitRepositoryReader>()
-                .AddSingleton<IStackStore, YamlStackStore>().AddSingleton<ISettingsStore>(_ => new JsonSettingsStore())
-                .AddSingleton<StackService>().AddSingleton<DiffService>().AddSingleton<MainViewModel>()
-                .BuildServiceProvider();
+            _services = Composition.Build();
             desktop.MainWindow = new MainWindow { DataContext = _services.GetRequiredService<MainViewModel>() };
             desktop.Exit += (_, _) => _services.Dispose();
         }

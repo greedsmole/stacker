@@ -33,6 +33,8 @@ public sealed partial class StackGroupViewModel : ObservableObject
         : $"{Layers.Count} {(IsRemote ? "PRs" : "layers")}{(SharedPrefix ? " · shared foundation" : "")}";
     public string BaseLabel => "Base: " + (IsRemote ? PullRequests[0].BaseRef : Definition.Base.Replace("refs/heads/", "").Replace("refs/remotes/", ""));
     public bool SharedPrefix { get; }
+    /// <summary>True when this stack's last restack can still be undone.</summary>
+    [ObservableProperty] private bool _undoAvailable;
     [ObservableProperty] private bool _isExpanded = true;
     partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(ShowLayers));
     [ObservableProperty] private bool _isSelected;

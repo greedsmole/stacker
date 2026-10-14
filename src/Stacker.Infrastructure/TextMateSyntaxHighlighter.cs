@@ -38,8 +38,9 @@ public sealed class TextMateSyntaxHighlighter : ISyntaxHighlighter
                 if (language is null) return output;
                 var grammar = registry.Registry.LoadGrammar(registry.Options.GetScopeByLanguageId(language.Id));
                 if (grammar is null) return output;
+                // Tokenizing an empty line yields the initial rule stack that the first real line continues from.
                 var state = grammar.TokenizeLine("", null, TimeSpan.FromMilliseconds(100)).RuleStack;
-                state = null;
+                var palette = registry.Registry.GetTheme();
                 var lines = text.Split('\n');
                 for (var index = 0; index < lines.Length; index++)
                 {
@@ -48,7 +49,7 @@ public sealed class TextMateSyntaxHighlighter : ISyntaxHighlighter
                     var line = lines[index]; var lineWatch = Stopwatch.StartNew();
                     var tokenized = grammar.TokenizeLine(line, state, TimeSpan.FromMilliseconds(100)); state = tokenized.RuleStack;
                     if (lineWatch.Elapsed > TimeSpan.FromMilliseconds(150)) return new Dictionary<int, IReadOnlyList<SyntaxSpan>>();
-                    var spans = new List<SyntaxSpan>(); var palette = registry.Registry.GetTheme();
+                    var spans = new List<SyntaxSpan>();
                     foreach (var token in tokenized.Tokens)
                     {
                         var start = Math.Clamp(token.StartIndex, 0, line.Length); var end = Math.Clamp(token.EndIndex, start, line.Length);
@@ -62,7 +63,13 @@ public sealed class TextMateSyntaxHighlighter : ISyntaxHighlighter
                 }
                 return output;
             }, ct);
-            if (_cache.Count >= 24) _cache.Remove(_cache.Keys.First()); _cache[key] = result; return result;
+            // Only successful work is cached: an empty fallback would evict a real result for the same file.
+            if (result.Count > 0)
+            {
+                if (_cache.Count >= 24) _cache.Remove(_cache.Keys.First());
+                _cache[key] = result;
+            }
+            return result;
         }
         catch (OperationCanceledException) { throw; }
         catch { return new Dictionary<int, IReadOnlyList<SyntaxSpan>>(); }

@@ -1,0 +1,63 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Stacker.Desktop.SyncPreviewWindow" Title="Sync stack" Width="900" Height="760" MinWidth="700" MinHeight="560" WindowStartupLocation="CenterOwner">
+  <Grid Margin="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto" RowSpacing="10">
+    <StackPanel Spacing="6">
+      <TextBlock x:Name="HeadingText" FontSize="22" FontWeight="SemiBold"/>
+      <TextBlock x:Name="SubheadingText" Classes="muted" TextWrapping="Wrap"/>
+      <TextBlock Text="Nothing runs until you press an action. Every rewritten branch is backed up under refs/stacker/backup first; a conflict stops the restack so you can resolve it in your own editor." Classes="muted" FontSize="11" TextWrapping="Wrap"/>
+    </StackPanel>
+    <ItemsControl Grid.Row="1" x:Name="BlockerList">
+      <ItemsControl.ItemTemplate><DataTemplate><Border Classes="notice" Padding="10,7" Margin="0,0,0,4"><TextBlock Text="{Binding}" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}"/></Border></DataTemplate></ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="10">
+        <Border x:Name="ConflictPanel" Classes="notice" Padding="12" IsVisible="False">
+          <StackPanel Spacing="8">
+            <TextBlock x:Name="ConflictTitle" FontWeight="SemiBold" TextWrapping="Wrap"/>
+            <ListBox x:Name="ConflictList" MaxHeight="150" Background="Transparent" BorderThickness="0"/>
+            <WrapPanel>
+              <Button x:Name="ResolveButton" Content="Resolve in editor" Margin="0,0,8,6" Click="ResolveClick"/>
+              <Button x:Name="StageButton" Content="Stage resolved files" Margin="0,0,8,6" Click="StageClick"/>
+              <Button x:Name="ContinueButton" Content="Continue" Margin="0,0,8,6" Click="ContinueClick"/>
+              <Button x:Name="SkipButton" Content="Skip commit" Margin="0,0,8,6" Click="SkipClick"/>
+              <Button x:Name="AbortButton" Content="Abort and restore" Margin="0,0,8,6" Click="AbortClick"/>
+            </WrapPanel>
+          </StackPanel>
+        </Border>
+        <ListBox x:Name="StepList" Background="Transparent" BorderThickness="0">
+          <ListBox.ItemTemplate><DataTemplate><Border Padding="10,7" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}"><StackPanel Spacing="3">
+            <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding Status}"/>
+            <TextBlock Text="{Binding Detail}" Classes="muted" FontSize="11" TextWrapping="Wrap"/>
+          </StackPanel></Border></DataTemplate></ListBox.ItemTemplate>
+        </ListBox>
+        <ListBox x:Name="PullRequestList" IsVisible="False" MaxHeight="200" Background="Transparent" BorderThickness="0">
+          <ListBox.ItemTemplate><DataTemplate><Border Padding="10,7" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}"><StackPanel Spacing="3">
+            <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding Status}"/>
+          </StackPanel></Border></DataTemplate></ListBox.ItemTemplate>
+        </ListBox>
+      </StackPanel>
+    </ScrollViewer>
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+      <TextBlock x:Name="WorkingTreeLabel" Classes="muted" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"/>
+      <Button Grid.Column="1" x:Name="StashButton" Content="Stash and restack" Click="StashClick" IsVisible="False"/>
+      <Button Grid.Column="2" x:Name="RestoreButton" Content="Restore stashed changes" Click="RestoreClick" IsVisible="False"/>
+    </Grid>
+    <StackPanel Grid.Row="4" Spacing="8">
+      <WrapPanel>
+        <Button x:Name="CheckPrsButton" Content="Check pull requests" Margin="0,0,8,6" Click="CheckPrsClick"/>
+        <Button x:Name="PublishButton" Content="Publish pull requests" Margin="0,0,8,6" IsVisible="False" Click="PublishClick"/>
+        <CheckBox x:Name="PreserveMergesToggle" Content="Preserve merge commits" Margin="0,0,8,6" VerticalAlignment="Center" Click="PreserveClick"/>
+        <ComboBox x:Name="BranchInput" MinWidth="180" Margin="0,0,8,6" PlaceholderText="Go to branch"/>
+        <Button x:Name="SwitchButton" Content="Switch" Margin="0,0,8,6" Click="SwitchClick"/>
+      </WrapPanel>
+      <TextBlock x:Name="MessageLabel" TextWrapping="Wrap" MaxHeight="120"/>
+    </StackPanel>
+    <Grid Grid.Row="5" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+      <Button Content="Close" Click="CloseClick" HorizontalAlignment="Left"/>
+      <Button Grid.Column="1" x:Name="UndoButton" Content="Undo last restack" Click="UndoClick" IsVisible="False"/>
+      <Button Grid.Column="2" x:Name="PushButton" Content="Push the stack" Click="PushClick" IsVisible="False"/>
+      <Button Grid.Column="3" x:Name="RestackButton" Content="Restack (local)" Classes="primary" Click="RestackClick"/>
+    </Grid>
+  </Grid>
+</Window>

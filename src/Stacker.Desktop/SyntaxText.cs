@@ -31,9 +31,22 @@ public sealed class SyntaxText : SelectableTextBlock
         {
             var start = Math.Clamp(span.Start, cursor, text.Length); var length = Math.Clamp(span.Length, 0, text.Length - start);
             if (start > cursor) Inlines!.Add(new Run(text[cursor..start]));
-            if (length > 0) Inlines!.Add(new Run(text.Substring(start, length)) { Foreground = Brush.Parse(span.Color) });
+            if (length > 0) Inlines!.Add(new Run(text.Substring(start, length)) { Foreground = BrushFor(span.Color) });
             cursor = start + length;
         }
         if (cursor < text.Length) Inlines!.Add(new Run(text[cursor..]));
+    }
+    // Themes come from a grammar bundle, so a colour is data: parse it defensively and reuse the brush.
+    private static readonly Dictionary<string, IBrush> BrushCache = new(StringComparer.Ordinal);
+    private static readonly IBrush FallbackBrush = new SolidColorBrush(Colors.Transparent);
+    private static IBrush BrushFor(string colour)
+    {
+        lock (BrushCache)
+        {
+            if (BrushCache.TryGetValue(colour, out var cached)) return cached;
+            var brush = Color.TryParse(colour, out var parsed) ? new SolidColorBrush(parsed) : FallbackBrush;
+            BrushCache[colour] = brush;
+            return brush;
+        }
     }
 }

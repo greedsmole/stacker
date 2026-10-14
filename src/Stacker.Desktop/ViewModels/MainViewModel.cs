@@ -1,5 +1,6 @@
 // Purpose: Central screen state and comparison navigation; turns stack/layer selection into explicit diff requests.
 using System.Collections.ObjectModel;
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Stacker.Core;
@@ -7,7 +8,7 @@ using Stacker.Infrastructure;
 
 namespace Stacker.Desktop.ViewModels;
 
-public sealed partial class MainViewModel : ObservableObject, IDisposable
+public sealed partial class MainViewModel : ObservableObject, IDisposable, ISyncActions
 {
     private readonly IGitRepositoryReader _git;
     private readonly IStackStore _store;
@@ -47,16 +48,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public bool HasNoSections => Sections.Count == 0;
     public bool HasSelectedLayer => _selectedPositions.Length == 1;
     public bool IsLocalSelected => _activeGroup is { IsRemote: false } && CanEdit;
+    /// <summary>Packaged product version, read from the assembly so the status bar cannot drift from the release.</summary>
+    public static string ProductVersion => "Stacker " + (typeof(MainViewModel).Assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "dev");
     public string BaseLabel => _activeGroup?.BaseLabel ?? "No stack selected";
     public MainViewModel(IGitRepositoryReader git, IStackStore store, ISettingsStore settingsStore, GitExecutable executable, StackService stacks, DiffService diff,
         IGitHubReader? github = null, IGitHubWriter? writer = null, IGitObjectCache? cache = null, ApplicationStore? applicationStore = null,
-        ISyntaxHighlighter? highlighter = null, DemoRepositoryGenerator? demo = null, GhExecutable? ghExecutable = null, GitCommandLog? commandLog = null)
+        ISyntaxHighlighter? highlighter = null, DemoRepositoryGenerator? demo = null, GhExecutable? ghExecutable = null, GitCommandLog? commandLog = null,
+        IGitBranchWriter? branchWriter = null, IGitHubPullRequestWriter? pullRequestWriter = null, IEditorLauncher? editorLauncher = null)
     {
         _git = git; _store = store; _settingsStore = settingsStore; _executable = executable; _stacks = stacks; _diff = diff; _highlighter = highlighter;
+        _branchWriter = branchWriter; _pullRequestWriter = pullRequestWriter; _editorLauncher = editorLauncher;
         _github = github; _writer = writer; _objectCache = cache; _applicationStore = applicationStore ?? new(); _demo = demo; _ghExecutable = ghExecutable;
         _commandLog = commandLog;
         if (_commandLog is not null) { foreach (var entry in _commandLog.Snapshot()) GitLogEntries.Add(entry); _commandLog.Changed += LogChanged; }
-        Sections.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoSections));
+        Sections.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasNoSections));
+            // Search results point at sections; when the sections go, the results must go with them.
+            if (Sections.Count == 0) ResetSearch();
+        };
     }
     partial void OnErrorChanged(string value) => OnPropertyChanged(nameof(HasError));
     partial void OnSelectedStackChanged(StackDefinition? value)
@@ -92,6 +103,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var document = await _store.LoadAsync(repo.Root, refresh.Token);
             var sameRepo = _repository?.Root == repo.Root;
             var unchanged = sameRepo && _document?.Revision == document.Revision && _repository!.Refs.SequenceEqual(repo.Refs);
+            if (opening) { _pendingLocal = false; _pendingRemote = null; HasPendingChanges = false; }
             if (sameRepo && !opening && !unchanged && Sections.Count > 0 && !_applyingChanges)
             { _pendingLocal = true; HasPendingChanges = true; Status = "New local changes available"; return; }
             var groups = new List<StackGroupViewModel>();
@@ -115,6 +127,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                         if (FindLocalPr(group.Layers[i].Snapshot.Branch) is { } pr) group.Layers[i] = new(group.Layers[i].Snapshot, pr) { Group = group };
                     Stacks.Add(group.Definition); LocalGroups.Add(group);
                 }
+                await RefreshSyncAvailabilityAsync(refresh.Token);
                 var selected = sameRepo && previousGroup?.IsRemote == true ? previousGroup : groups.FirstOrDefault(g => GroupKey(g) == _workspace.ActiveGroup) ?? groups.FirstOrDefault(g => g.Definition.Id == previousGroup?.Definition.Id) ?? groups.FirstOrDefault();
                 if (selected is not null)
                 {
@@ -128,6 +141,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 }
                 else { _activeGroup = null; _suppress = true; SelectedStack = null; _suppress = false; Layers.Clear(); Sections.Clear(); EmptyMessage = "Create a stack, or connect GitHub to discover PRs."; }
             }
+            // The working tree can change without any ref changing, so its state is re-read on every load.
+            await RefreshWorkingTreeAsync(refresh.Token);
             if (opening)
             {
                 Settings.RecentRepositories.Remove(repo.Root); Settings.RecentRepositories.Insert(0, repo.Root); Settings.RecentRepositories = Settings.RecentRepositories.Take(10).ToList();
@@ -155,7 +170,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         foreach (var g in LocalGroups.Concat(RemoteGroups).Concat(OtherGroups)) { g.IsSelected = ReferenceEquals(g, group); foreach (var l in g.Layers) { l.IsSelected = false; l.IsChecked = false; } }
         _activeGroup = group; _suppress = true; SelectedStack = group.Definition; _suppress = false;
         Layers.Clear(); foreach (var layer in group.Layers) Layers.Add(layer);
-        OnPropertyChanged(nameof(BaseLabel)); OnPropertyChanged(nameof(IsLocalSelected));
+        OnPropertyChanged(nameof(BaseLabel)); OnPropertyChanged(nameof(IsLocalSelected)); OnPropertyChanged(nameof(CanRestackActiveStack));
     }
     /// <summary>Selects a stack overview and requests its final layer as the complete stack comparison.</summary>
     public async Task SelectGroupAsync(StackGroupViewModel group, bool saveCurrent = true)
@@ -276,7 +291,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task<bool> SaveStacksAsync(IReadOnlyList<StackDefinition> stacks)
     {
         if (_repository is null || _document is null) return false;
-        try { await _store.SaveAsync(_repository.Root, stacks, _document.Revision); _applyingChanges = true; try { await RefreshAsync(); } finally { _applyingChanges = false; } return !HasError; }
+        try
+        {
+            await _store.SaveAsync(_repository.Root, stacks, _document.Revision);
+            // The refresh reports its own problems; the save has already succeeded by here.
+            _applyingChanges = true;
+            try { await RefreshAsync(); } finally { _applyingChanges = false; }
+            return true;
+        }
         catch (Exception ex) { Error = ex.Message; return false; }
     }
     public async Task SaveSettingsAsync()
@@ -291,5 +313,5 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         await SaveSettingsAsync();
     }
     private void DisposeViews() { foreach (var section in _views.Values.SelectMany(v => v).Distinct()) section.Dispose(); _views.Clear(); }
-    public void Dispose() { _disposed = true; if (_commandLog is not null) _commandLog.Changed -= LogChanged; _searchLoad?.Cancel(); _refresh?.Cancel(); _comparison?.Cancel(); _githubLoad?.Cancel(); _coordinator?.Dispose(); DisposeViews(); }
+    public void Dispose() { if (_disposed) return; _disposed = true; if (_commandLog is not null) _commandLog.Changed -= LogChanged; _searchLoad?.Cancel(); _refresh?.Cancel(); _comparison?.Cancel(); _githubLoad?.Cancel(); _coordinator?.Dispose(); DisposeViews(); }
 }

@@ -1,30 +1,63 @@
 // Purpose: Stores application-owned snapshots, preferences, and drafts under stable hashed identities outside the user repository.
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
+using Stacker.Core.Framework;
+using Stacker.Infrastructure.Framework;
 namespace Stacker.Infrastructure;
 
-public sealed class ApplicationStore(string? root = null)
+/// <summary>Application data keyed by identity; reads never throw, damaged documents are quarantined.</summary>
+public sealed class ApplicationStore
 {
-    public string Root { get; } = root ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Stacker", "v2");
+    public string Root { get; }
+    private readonly IAtomicFile _files;
     private readonly SemaphoreSlim _gate = new(1, 1);
-    public static string Key(string identity) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant();
-    public async Task<T?> ReadAsync<T>(string kind, string identity, CancellationToken ct = default)
+
+    public ApplicationStore(string? root = null, IAtomicFile? files = null)
     {
-        var path = Path.Combine(Root, kind, Key(identity) + ".json");
-        if (!File.Exists(path)) return default;
-        return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(path, ct));
+        Root = root ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Stacker", "v3");
+        _files = files ?? new AtomicFile();
+        ImportLegacy(Root);
     }
-    public async Task WriteAsync<T>(string kind, string identity, T value, CancellationToken ct = default)
+    /// <summary>Set when a damaged document was moved aside, so the UI can mention it once.</summary>
+    public string? LastProblem { get; private set; }
+
+    public static string Key(string identity) => FileLockFactory.Hash(identity);
+
+    /// <summary>Brings forward data written by the previous layout, once, without deleting the original.</summary>
+    private static void ImportLegacy(string root)
+    {
+        try
+        {
+            var legacy = Path.Combine(Path.GetDirectoryName(root)!, "v2");
+            if (Directory.Exists(root) || !Directory.Exists(legacy)) return;
+            Directory.CreateDirectory(root);
+            foreach (var file in Directory.EnumerateFiles(legacy, "*.json", SearchOption.AllDirectories))
+            {
+                var target = Path.Combine(root, Path.GetRelativePath(legacy, file));
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Copy(file, target, false);
+            }
+        }
+        catch (Exception) { /* best effort: a failure leaves the previous data untouched */ }
+    }
+
+    public async Task<T?> ReadAsync<T>(string kind, string identity, CancellationToken ct = default) where T : class
+    {
+        await Task.CompletedTask;
+        var result = Store<T>(kind).Read(identity);
+        if (result.IsFailed) LastProblem = result.Problem!.Message;
+        return result.Value;
+    }
+
+    public async Task WriteAsync<T>(string kind, string identity, T value, CancellationToken ct = default) where T : class
     {
         await _gate.WaitAsync(ct);
         try
         {
-            var directory = Path.Combine(Root, kind); Directory.CreateDirectory(directory);
-            var path = Path.Combine(directory, Key(identity) + ".json"); var tmp = path + ".tmp";
-            try { await File.WriteAllTextAsync(tmp, JsonSerializer.Serialize(value), ct); File.Move(tmp, path, true); }
-            finally { if (File.Exists(tmp)) File.Delete(tmp); }
+            var result = await Store<T>(kind).WriteAsync(identity, value, ct);
+            if (result.IsFailed) LastProblem = result.Problem!.Message;
         }
         finally { _gate.Release(); }
     }
+
+    private JsonStateStore<T> Store<T>(string kind) where T : class => new(_files, Path.Combine(Root, kind));
 }

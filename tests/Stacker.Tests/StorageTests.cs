@@ -41,6 +41,18 @@ public sealed class StorageTests
         var fresh = await store.LoadAsync(f.Root); await store.SaveAsync(f.Root, [], fresh.Revision);
         Assert.Empty((await store.LoadAsync(f.Root)).Stacks);
     }
+    // Scenario: A definition that the current branch does not carry is created instead of refused.
+    [Fact]
+    public async Task An_absent_definition_is_created_even_after_the_window_last_saw_one()
+    {
+        await using var f = new GitFixture(); var store = new YamlStackStore();
+        var saved = await store.SaveAsync(f.Root, [f.Stack], null);
+        // Checking out a branch that does not contain the definition removes it from the working tree.
+        File.Delete(Path.Combine(f.Root, ".stackpr.yml"));
+        var again = await store.SaveAsync(f.Root, [f.Stack with { Name = "Renamed" }], saved.Revision);
+        Assert.Equal("Renamed", Assert.Single((await store.LoadAsync(f.Root)).Stacks).Name);
+        Assert.NotEqual(saved.Revision, again.Revision);
+    }
     // Scenario: Validation rejects duplicates and base as layer but allows shared refs across stacks.
     [Fact]
     public void Validation_rejects_duplicates_and_base_as_layer_but_allows_shared_refs_across_stacks()

@@ -31,7 +31,9 @@ public partial class ThreadView : UserControl
     private async void ReplyClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not ReviewThread thread || Session is not { } session || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
-        session.BeginReply(thread); main.ActiveReview = session; main.IsReviewOpen = true; await session.FlushAsync();
+        session.BeginReply(thread); main.ActiveReview = session; main.IsReviewOpen = true;
+        try { await session.FlushAsync(); }
+        catch (Exception ex) { main.Error = ex.Message; }
     }
     private async void ResolveClick(object? sender, RoutedEventArgs e)
     { if (DataContext is ReviewThread thread && Session is { } session) { session.SelectedThread = thread; await session.ToggleResolvedCommand.ExecuteAsync(null); } }

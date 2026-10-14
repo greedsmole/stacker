@@ -84,7 +84,7 @@ public sealed class WorkspaceV3Tests
         await using var f = new GitFixture(); var hub = new FakeGitHub(); var store = new ApplicationStore(f.Root);
         hub.Published.Add(new("1", "alice", "Existing comment", "", DateTimeOffset.UtcNow));
         using var section = new DiffSectionViewModel(f.Reader, f.Root, new("feature", "main", hub.Current.BaseSha, hub.Current.HeadSha, null, [])) { AssociatedPr = hub.Current, GitHubContext = FakeGitHub.Context };
-        var review = new ReviewSession(hub, hub, store, f.Reader, FakeGitHub.Context, hub.Current, section, false); await review.InitializeAsync();
+        var review = new ReviewViewModel(hub, hub, store, f.Reader, FakeGitHub.Context, hub.Current, section, false); await review.InitializeAsync();
         var original = review.Comments[0]; review.Composer = "Unsent"; await review.RefreshDiscussionAsync();
         Assert.Same(original, review.Comments[0]); Assert.Equal("Unsent", review.Composer);
         hub.Published.Add(new("2", "bob", "New comment", "", DateTimeOffset.UtcNow)); await review.RefreshDiscussionAsync();
@@ -136,7 +136,7 @@ public sealed class WorkspaceV3Tests
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub();
         using var section = new DiffSectionViewModel(f.Reader, f.Root, new("feature", "main", hub.Current.BaseSha, hub.Current.HeadSha, null, []));
-        var review = new ReviewSession(hub, hub, new ApplicationStore(f.Root), f.Reader, FakeGitHub.Context, hub.Current, section, false); await review.InitializeAsync();
+        var review = new ReviewViewModel(hub, hub, new ApplicationStore(f.Root), f.Reader, FakeGitHub.Context, hub.Current, section, false); await review.InitializeAsync();
         hub.DiscussionGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
         var read = review.RefreshDiscussionAsync(); Assert.False(review.IsBusy);
         review.Composer = "Typed while loading";
@@ -148,7 +148,7 @@ public sealed class WorkspaceV3Tests
         await using var f = new GitFixture(); var hub = new FakeGitHub(); var store = new ApplicationStore(f.Root);
         await store.WriteAsync("drafts", FakeGitHub.Context.Identity + "/42", new ReviewDraft { HeadSha = hub.Current.HeadSha, BaseSha = hub.Current.BaseSha, Composer = "Old ambiguous text" });
         using var section = new DiffSectionViewModel(f.Reader, f.Root, new("feature", "main", hub.Current.BaseSha, hub.Current.HeadSha, null, []));
-        var review = new ReviewSession(hub, hub, store, f.Reader, FakeGitHub.Context, hub.Current, section, false); await review.InitializeAsync();
+        var review = new ReviewViewModel(hub, hub, store, f.Reader, FakeGitHub.Context, hub.Current, section, false); await review.InitializeAsync();
         Assert.True(review.HasRecoveredText); Assert.Equal("", review.Composer); Assert.Equal("Old ambiguous text", review.RecoveredText);
         review.RestoreRecoveredTextCommand.Execute(null); Assert.Equal("Old ambiguous text", review.Composer); Assert.False(review.HasRecoveredText); await review.FlushAsync();
     }
@@ -156,7 +156,7 @@ public sealed class WorkspaceV3Tests
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub { FailAfterSend = true };
         using var section = new DiffSectionViewModel(f.Reader, f.Root, new("feature", "main", hub.Current.BaseSha, hub.Current.HeadSha, null, []));
-        var review = new ReviewSession(hub, hub, new ApplicationStore(f.Root), f.Reader, FakeGitHub.Context, hub.Current, section, false); await review.InitializeAsync();
+        var review = new ReviewViewModel(hub, hub, new ApplicationStore(f.Root), f.Reader, FakeGitHub.Context, hub.Current, section, false); await review.InitializeAsync();
         review.Summary = "First review"; await review.SubmitReviewCommand.ExecuteAsync(null); Assert.True(review.HasPendingPublication);
         review.Summary = "New unsent summary"; await review.ReloadAsync();
         Assert.False(review.HasPendingPublication); Assert.Equal("New unsent summary", review.Summary); Assert.Equal(1, hub.Writes); await review.FlushAsync();
@@ -166,7 +166,7 @@ public sealed class WorkspaceV3Tests
         await using var f = new GitFixture(); var hub = new FakeGitHub();
         var file = new FileChange("old.cs", "new.cs", FileChangeKind.Renamed, 1, 1, "100644", "100644");
         using var section = new DiffSectionViewModel(f.Reader, f.Root, new("feature", "main", hub.Current.BaseSha, hub.Current.HeadSha, null, [file])) { IsPrSnapshot = true };
-        var review = new ReviewSession(hub, hub, new ApplicationStore(f.Root), f.Reader, FakeGitHub.Context, hub.Current, section, false); await review.InitializeAsync();
+        var review = new ReviewViewModel(hub, hub, new ApplicationStore(f.Root), f.Reader, FakeGitHub.Context, hub.Current, section, false); await review.InitializeAsync();
         var context = new RenderedDiffLine(new(DiffLineKind.Context, 1, 1, " same"));
         var removed = new RenderedDiffLine(new(DiffLineKind.Removed, 2, null, "-old"));
         review.SetSelection([context, removed], "LEFT"); Assert.False(review.HasSelection);
@@ -185,7 +185,7 @@ public sealed class WorkspaceV3Tests
         var key = FakeGitHub.Context.Identity + "/42";
         await store.WriteAsync("drafts", key, new ReviewDraft { Summary = "Must survive cancellation" });
         using var section = new DiffSectionViewModel(f.Reader, f.Root, new("feature", "main", hub.Current.BaseSha, hub.Current.HeadSha, null, []));
-        var review = new ReviewSession(hub, hub, store, f.Reader, FakeGitHub.Context, hub.Current, section, false);
+        var review = new ReviewViewModel(hub, hub, store, f.Reader, FakeGitHub.Context, hub.Current, section, false);
         using var cancel = new CancellationTokenSource(); cancel.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => review.InitializeAsync(ct: cancel.Token));
         await review.FlushAsync(); Assert.Equal("Must survive cancellation", (await store.ReadAsync<ReviewDraft>("drafts", key))!.Summary);

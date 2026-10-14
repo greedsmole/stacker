@@ -14,12 +14,14 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
         ["GIT_OPTIONAL_LOCKS"] = "0", ["GIT_NO_LAZY_FETCH"] = "1", ["GIT_LITERAL_PATHSPECS"] = "1",
         ["LC_ALL"] = "C"
     };
+    // Reads on a large repository or a network mount routinely exceed the process default; give them a real budget.
+    private static readonly TimeSpan ReadTimeout = TimeSpan.FromMinutes(2);
     /// <summary>Runs a non-interactive Git read and converts unexpected exit codes into an actionable UI error.</summary>
     private async Task<ProcessResult> Run(string root, string[] args, CancellationToken ct, int limit = 16 * 1024 * 1024, bool allowOne = false)
     {
         var result = await runner.RunAsync(new(executable.Resolve(),
             ["--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c", "core.quotePath=false", .. args],
-            root, MaxOutputBytes: limit, Environment: EnvironmentOverrides), ct);
+            root, ReadTimeout, MaxOutputBytes: limit, Environment: EnvironmentOverrides), ct);
         if (result.ExitCode != 0 && !(allowOne && result.ExitCode == 1))
             throw new StackerException($"Git exited with code {result.ExitCode}: {result.StdErr.Trim()}");
         return result;
@@ -57,7 +59,7 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
         var values = (await Run(root, ["rev-list", "--left-right", "--count", $"{parent}...{head}"], ct)).StdOut.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         return (int.Parse(values[1], CultureInfo.InvariantCulture), int.Parse(values[0], CultureInfo.InvariantCulture));
     }
-    private static string[] DiffArgs(string @base, string head) => ["diff", "--no-color", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--no-relative", "--src-prefix=a/", "--dst-prefix=b/", "--find-renames=50%", "-l1000", @base, head];
+    private static string[] DiffArgs(string @base, string head) => ["diff", "--no-color", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--submodule=short", "--no-relative", "--src-prefix=a/", "--dst-prefix=b/", "--find-renames=50%", "-l1000", @base, head];
     // NUL-delimited name-status output keeps spaces, Unicode, and embedded newlines in paths unambiguous.
     public async Task<IReadOnlyList<FileChange>> FilesAsync(string root, string @base, string head, CancellationToken ct = default)
     {
@@ -106,8 +108,9 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
     {
         Sha(commit);
         var objectName = commit + ":" + path;
-        // Missing paths are normal for added/deleted files. Nonzero lookup is not a renderer error.
-        var exists = await runner.RunAsync(new(executable.Resolve(), ["rev-parse", "--verify", objectName], root), ct);
+        // Missing paths are normal for added/deleted files. Nonzero lookup is not a renderer error, but the call still
+        // goes through the hardened wrapper so a partial clone cannot lazily fetch or prompt while highlighting.
+        var exists = await Run(root, ["rev-parse", "--verify", objectName], ct, allowOne: true);
         if (exists.ExitCode != 0) return null;
         var blob = exists.StdOut.Trim(); Sha(blob);
         try { return new(blob, (await Run(root, ["cat-file", "blob", blob], ct, 2 * 1024 * 1024)).StdOut); }

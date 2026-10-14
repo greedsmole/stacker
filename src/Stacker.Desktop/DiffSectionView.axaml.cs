@@ -29,6 +29,7 @@ public partial class DiffSectionView : UserControl
         };
         Loaded += (_, _) =>
         {
+            if (_section is not null) _section.PropertyChanged -= SectionChanged;
             _section = DataContext as DiffSectionViewModel;
             if (_section is not null) _section.PropertyChanged += SectionChanged;
             RestoreScroll();
@@ -93,7 +94,7 @@ public partial class DiffSectionView : UserControl
         SelectedRangeButton.Height = Math.Max(0, bottom - top);
         SelectedRangeButton.IsVisible = bottom > top;
     }
-    private int? _rangeStart;
+    private (string? Path, int Index)? _rangeStart;
     private bool _extendRange;
     private RenderedDiffLine? _commentLine;
     private RenderedDiffLine[]? _commentSelection;
@@ -173,8 +174,12 @@ public partial class DiffSectionView : UserControl
         if (!section.IsPrSnapshot) { section.Message = section.HasPr ? "Review the PR snapshot to comment on code. Use Review PR in the file menu." : "Select a GitHub PR layer to comment on code."; return; }
         var session = await main.EnsureReviewAsync(section); if (session is null || session.IsBusy) return;
         var end = section.Lines.IndexOf(line);
-        var start = range && _rangeStart is { } first ? first : end; _rangeStart = start;
-        var selected = selectedRows ?? section.Lines.Skip(Math.Min(start, end)).Take(Math.Abs(end - start) + 1).ToArray();
+        // A range is only meaningful inside one file and across commentable rows: hunk headers and notices are skipped.
+        var file = section.SelectedFile?.NewPath;
+        var start = range && _rangeStart is { } first && string.Equals(first.Path, file, StringComparison.Ordinal) ? first.Index : end;
+        _rangeStart = (file, start);
+        var selected = (selectedRows ?? section.Lines.Skip(Math.Min(start, end)).Take(Math.Abs(end - start) + 1).ToArray())
+            .Where(row => row.IsCode).ToArray();
         session.SetSelection(selected, side);
         if (!session.HasSelection) { section.Message = session.Message; return; }
         foreach (var row in section.Lines) row.Editor = null;

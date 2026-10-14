@@ -5,8 +5,24 @@ using Stacker.Core;
 
 namespace Stacker.Infrastructure;
 
-public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRunner
+public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRunner, IProcessLauncher
 {
+    /// <summary>Starts a program without waiting for it, for editors and other interactive tools.</summary>
+    public void Start(ProcessRequest request)
+    {
+        var info = new ProcessStartInfo(request.Executable)
+        {
+            UseShellExecute = false, CreateNoWindow = true,
+            WorkingDirectory = request.WorkingDirectory ?? Environment.CurrentDirectory
+        };
+        foreach (var arg in request.Arguments) info.ArgumentList.Add(arg);
+        if (request.Environment is not null)
+            foreach (var (key, value) in request.Environment) info.Environment[key] = value;
+        try { using var process = Process.Start(info); }
+        catch (System.ComponentModel.Win32Exception ex)
+        { throw new StackerException($"Cannot start {request.Executable}. Set the full path in Settings if it is not on PATH. {ex.Message}"); }
+    }
+
     /// <summary>Executes without a shell, logs Git-only diagnostics, and returns structured process output.</summary>
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {
@@ -86,7 +102,10 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
             try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
             catch (InvalidOperationException) { /* The process exited between HasExited and Kill. */ }
             await linked.CancelAsync();
-            try { await process.WaitForExitAsync(CancellationToken.None); } catch (InvalidOperationException) { }
+            using var reap = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try { await process.WaitForExitAsync(reap.Token); }
+            catch (OperationCanceledException) { /* An unreapable child must not hang the timeout path. */ }
+            catch (InvalidOperationException) { }
             try { await Task.WhenAll(stdout, stderr, stdin); } catch { /* Observe both pipe readers before disposing. */ }
             if (stdout.Exception?.GetBaseException() is OutputLimitException || stderr.Exception?.GetBaseException() is OutputLimitException)
                 throw new OutputLimitException();
@@ -99,18 +118,21 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
 
 public sealed class GitExecutable
 {
+    private string? _override;
+    private string? _resolved;
     /// <summary>Explicit executable path; null enables normal PATH and common-installation lookup.</summary>
-    public string? Override { get; set; }
-    /// <summary>Finds Git without requiring a shell command or changing machine-wide configuration.</summary>
+    public string? Override { get => _override; set { _override = value; _resolved = null; } }
+    /// <summary>Finds Git once and remembers it; PATH is not re-scanned for every command.</summary>
     public string Resolve()
     {
-        if (!string.IsNullOrWhiteSpace(Override)) return Override;
+        if (!string.IsNullOrWhiteSpace(_override)) return _override;
+        if (_resolved is not null) return _resolved;
         var name = OperatingSystem.IsWindows() ? "git.exe" : "git";
         var paths = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
             .Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => Path.Combine(p.Trim('"'), name));
         var defaults = OperatingSystem.IsWindows()
             ? new[] { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "cmd", "git.exe"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Git", "cmd", "git.exe") }
             : new[] { "/opt/homebrew/bin/git", "/usr/local/bin/git", "/usr/bin/git" };
-        return paths.Concat(defaults).FirstOrDefault(File.Exists) ?? name;
+        return _resolved = paths.Concat(defaults).FirstOrDefault(File.Exists) ?? name;
     }
 }

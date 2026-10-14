@@ -1,4 +1,4 @@
-# Stacker v0.4
+# Stacker v0.5
 
 A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Release targets: **macOS Apple Silicon** and **Windows x64**. Linux and Intel Mac release work is deferred.
 
@@ -75,7 +75,7 @@ Discovery does not rewrite `.stackpr.yml`. Save as local stack is an explicit ac
 
 ## Isolated Git cache
 
-Selecting a remote PR or stack fetches objects into an application-owned bare repository, partitioned by host, repository ID and account. Stacker does not clone the user repository or run pull on it. A single PR fetches only its own base/head refs; stack comparisons request just the PRs needed for that mode, and missing refs are combined into one fetch. Existing objects are reused. The fetch uses gh's credential helper only for that child Git invocation. User branches, refs, index, configuration and working tree are untouched.
+Selecting a remote PR or stack fetches objects into an application-owned bare repository, partitioned by host, repository ID and account. Stacker does not clone the user repository or run pull on it. A single PR fetches only its own base/head refs; stack comparisons request just the PRs needed for that mode, and missing refs are combined into one fetch. Existing objects are reused. The fetch uses gh's credential helper only for that child Git invocation. Reading, reviewing and downloading never touch user branches, refs, index, configuration or the working tree. The explicit actions described below do: **Restack**, **Push**, **Publish**, **Add layer**, **Commit**, **Stash and restack**, **Switch** and the conflict actions each change exactly what they say, and every rewrite is backed up and reversible.
 
 On Windows, cache downloads use Git's **Schannel** backend, which uses the Windows certificate store by default. This supports corporate GHES certificates already trusted by Windows. The backend is selected only for the download process; Stacker does not disable certificate/revocation checks or change global Git configuration. Existing explicit Schannel CA-bundle settings remain effective. Use Git for Windows with Schannel support.
 
@@ -103,7 +103,42 @@ Before publication Stacker rechecks the account, access, current PR base/head an
 
 Writes are never automatically retried. A hidden operation marker allows uncertain sends to be reconciled by subsequent discussion reads. Retry recovery controls only appear when needed; if the result is still uncertain, inspect GitHub before explicitly unlocking a retry. Draft changes made after an uncertain send are retained when it is confirmed.
 
-Not included: editing/deleting published comments, emoji reactions, GitLab, PR creation, merging, checkout, rebase, restack, push or CI dashboards.
+Not included: editing/deleting published comments, emoji reactions, GitLab, merging two branches, interactive rebase (`rebase -i`), reordering a stack and retargeting its pull requests, per-file staging with diff selection, editing pull-request titles and descriptions beyond the suggested commit subject, or CI dashboards. Linux and Intel Mac releases are deferred. A restack rewrites only the branches of the selected local stack.
+
+## Starting and extending a stack
+
+**Add layer…** in a local stack's `···` menu creates the next branch: give it a name and a start point (the current checkout, the stack's base, or any layer). Stacker creates and checks the branch out, then appends it to the stack definition — your commits, and committing the updated `.stackpr.yml`, stay with you. A layer that has no commits yet is still valid: it follows its parent, so a restack carries it along.
+
+Starting a layer is refused when the working tree is dirty, when a rebase, merge or cherry-pick is in progress, when the name already exists, or when the name is not a valid Git branch name. If the branch you start from does not carry `.stackpr.yml`, Stacker writes the definition onto the new branch.
+
+## Working on the stack locally
+
+Stacker runs the local Git a stacked workflow needs, and never hides what it is doing.
+
+**Conflicts are yours to resolve.** When a layer does not apply cleanly the restack stops there: the rebase stays in progress, the layers already rewritten stay rewritten, and the conflicting files are listed in the sync window and in a banner in the main window. Then:
+
+- **Resolve in editor** opens the conflicted files in the editor you chose — the command in **Settings → Editor command**, otherwise `git config core.editor`, otherwise `GIT_EDITOR`/`VISUAL`/`EDITOR`, otherwise the platform default. Add a wait flag (`code --wait`) if your editor returns immediately.
+- **Stage resolved files** stages exactly the files that were in conflict.
+- **Continue** resumes the rebase with your editor for the commit message; **Skip commit** drops the conflicting commit instead. When a layer is finished the app tells you which layers are still behind — press **Restack** again to finish them.
+- **Abort and restore** aborts the rebase and puts every branch the interrupted run moved back where it was, including the branch you started on.
+
+The banner survives closing the app, and it also notices a rebase, merge, cherry-pick or revert that was started in a terminal.
+
+**Everyday local commands.** **Commit…** in a stack's menu stages the working tree (optionally including new files) and commits it with your message — your hooks and signing configuration run exactly as in a terminal. **Stash and restack** takes your uncommitted *tracked* changes out of the way, restacks, and leaves the stash for **Restore stashed changes**. A conflicting restore simply shows up as conflicts to resolve. Untracked files never block anything. The sync window can also check out another branch (`Switch`), and **the working tree** line always shows what the repository currently holds.
+
+## Restacking and publishing
+
+Local stacks can be rewritten in place. **Restack…** appears in a stack's `···` menu and in the comparison header whenever a local stack is selected. It opens a preview first: every layer, its parent, the commits it will replay, and any blocker. Nothing is written until you press **Restack (local)**, and the preview re-reads the repository so it cannot describe a stale snapshot.
+
+- **What moves:** each layer is replayed onto its parent with `git rebase --onto`, starting at the lowest diverged layer and cascading upward. Only the branches of that stack move; other refs, the index and unrelated files are left alone.
+- **Before anything runs:** the tracked working tree must be clean (untracked files are ignored, and *Stash and restack* clears the rest), no rebase, merge or cherry-pick may be in progress, no stack branch may be checked out in another worktree, and a layer with merge commits is refused until you tick **Preserve merge commits** (`--rebase-merges`). Every rewritten branch is backed up under `refs/stacker/backup/<timestamp>/<branch>` first; the ten most recent runs are kept.
+- **Conflicts:** the restack stops and leaves the rebase for you — see **Working on the stack locally** above. Only an unexpected failure rolls everything back; a conflict never throws your resolution away.
+- **Undo:** a successful restack is journaled outside the repository. **Undo last restack** in the stack menu restores the previous commits and refuses when the working tree is dirty or a branch has moved since. Undo never changes remote branches.
+- **Pushing:** **Push the stack** publishes every layer — a plain push when the remote is an ancestor, a `--force-with-lease` only when it is not. Each branch is fetched first and pushed only when the remote still holds exactly the commit the preview recorded; if someone pushed it in the meantime, nothing is pushed and the window says so. Stacker never uses a bare `--force`.
+- **Pull requests:** **Check pull requests** reads the live open pull requests and lists what each layer needs — a new pull request into its parent, or a new base when a layer's parent changed. Nothing is written until you press **Publish**. Layers are matched by repository and branch identity only: a fork's pull request is never borrowed, and two open pull requests for one layer are refused rather than guessed at. A new pull request is titled with the layer's newest commit subject. Publishing is idempotent, so a second check reports nothing left to do.
+- Existing pull requests pick up the rewritten commits by themselves. Drafts pinned to the previous commits are flagged by the existing stale-draft handling, and the demo repository disables every remote action.
+
+The Git logs tab records every command these actions run.
 
 ## Syntax highlighting
 
@@ -117,7 +152,9 @@ File patches retain the v0.1 limit of 5 MiB / 50,000 lines. Binary, submodule, r
 
 `.stackpr.yml` retains the v1 schema: stable IDs, full base ref and ordered branch refs. Saves use atomic replacement, content revision checks and a writer lock. Invalid/externally changed configuration is not overwritten. Formatting/comments are rewritten on save.
 
-Preferences, PR snapshots, repository boundaries, drafts, Git objects and generated demos are under the platform ApplicationData/Stacker folder (`v2` for new data). No credentials are written there. Syntax caches are memory-only.
+Preferences, PR snapshots, repository boundaries, drafts, Git objects, the recovery journal and generated demos are under the platform ApplicationData/Stacker folder (`v3`; data from the older `v2` layout is imported once and the original is kept). No credentials are written there. Syntax caches are memory-only. Lock files live there too, never in your repository. Only one instance runs at a time: starting a second one exits with a message so no two windows can write the same files.
+
+The layering, the three contract rules and the recipe for adding a feature are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```sh
 dotnet build

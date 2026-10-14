@@ -84,6 +84,38 @@ public sealed class GitHubCliTests
         await cli.ValidateAnchorsAsync(Context, pr, [new(1, pr.HeadSha, pr.BaseSha, "a.cs", "RIGHT", 1)]);
         await Assert.ThrowsAsync<StackerException>(() => cli.ValidateAnchorsAsync(Context, pr, [new(1, pr.HeadSha, pr.BaseSha, "a.cs", "LEFT", 1)]));
     }
+    // Scenario: Creating and retargeting pull requests pin the host, choose the method, and send text through stdin.
+    [Fact] public async Task Pull_request_writes_pin_host_choose_method_and_send_text_through_stdin()
+    {
+        static string Method(ProcessRequest request) => request.Arguments[request.Arguments.ToList().IndexOf("--method") + 1];
+        object Pr(long n, string baseRef, string headRef) => new { number = n, title = "Title", @base = new { repo = new { id = 1 }, @ref = baseRef, sha = new string('a', 40) },
+            head = new { repo = new { id = 1 }, @ref = headRef, sha = new string('b', 40) }, draft = false, html_url = "https://example.invalid/pr/" + n };
+        var runner = new ScriptedRunner(_ => new(0, JsonSerializer.Serialize(Pr(42, "A", "B")), ""));
+        var cli = new GitHubCli(runner, new(), new());
+        var created = await cli.CreatePullRequestAsync(Context, "B", "A", "Title $(rm -rf)", "", false);
+        Assert.Equal(42, created.Number); Assert.Equal("A", created.BaseRef); Assert.Equal("B", created.HeadRef);
+        var create = runner.Calls[0];
+        Assert.Equal("POST", Method(create)); Assert.Contains(Context.Host, create.Arguments); Assert.Contains("repos/team/repo/pulls", create.Arguments);
+        Assert.DoesNotContain(create.Arguments, argument => argument.Contains("Title $(rm -rf)"));
+        var payload = JsonDocument.Parse(create.StandardInput!).RootElement;
+        Assert.Equal("B", payload.GetProperty("head").GetString()); Assert.Equal("A", payload.GetProperty("base").GetString()); Assert.False(payload.GetProperty("draft").GetBoolean());
+        var updated = await cli.UpdatePullRequestBaseAsync(Context, 42, "A");
+        Assert.Equal(42, updated.Number);
+        var patch = runner.Calls[1];
+        Assert.Equal("PATCH", Method(patch)); Assert.Contains("repos/team/repo/pulls/42", patch.Arguments);
+        Assert.Equal("A", JsonDocument.Parse(patch.StandardInput!).RootElement.GetProperty("base").GetString());
+        await Assert.ThrowsAsync<StackerException>(() => cli.CreatePullRequestAsync(Context, "", "A", "t", "", false));
+        await Assert.ThrowsAsync<StackerException>(() => cli.UpdatePullRequestBaseAsync(Context, 0, "A"));
+    }
+    // Scenario: gh exits non-zero when a host is unauthenticated, so the JSON payload must still be read for its diagnosis.
+    [Fact] public async Task A_non_zero_auth_exit_still_explains_an_invalid_environment_token()
+    {
+        var runner = new ScriptedRunner(_ => new(1, """{"hosts":{"github.com":[{"active":true,"state":"error","tokenSource":"GITHUB_TOKEN"}]}}""", "failed to authenticate"));
+        var error = await Assert.ThrowsAsync<GitHubAuthenticationException>(() => new GitHubCli(runner, new(), new()).ConnectAsync(".", "github.com/team/repo"));
+        Assert.Contains("GITHUB_TOKEN is invalid", error.Message);
+        Assert.Contains("Use saved gh credentials", error.Message);
+    }
+
     // Scenario: Server patch validation rejects unavailable lines.
     [Fact] public async Task Server_patch_validation_rejects_unavailable_lines()
     {
