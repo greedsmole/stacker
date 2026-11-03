@@ -16,7 +16,7 @@ if match is None:
     raise SystemExit(f"No <Version> found in {PROJECT}")
 VERSION = match.group(1)
 parser = argparse.ArgumentParser()
-parser.add_argument("rid", choices=["win-x64", "osx-arm64", "osx-x64"])
+parser.add_argument("rid", choices=["win-x64", "osx-arm64"])
 args = parser.parse_args()
 output = ROOT / "artifacts" / args.rid
 if output.exists():
@@ -48,8 +48,6 @@ if is_mac:
     with tarfile.open(archive, "w:gz") as tar:
         for child in output.iterdir():
             tar.add(child, arcname=child.name)
-elif args.rid == "linux-x64":
-    archive = shutil.make_archive(str(archive_base), "gztar", output)
 else:
     archive = shutil.make_archive(str(archive_base), "zip", output)
 print(f"Package: {archive}")

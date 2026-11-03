@@ -71,7 +71,7 @@ public sealed partial class ArchitectureTests
     [Fact] public void No_source_file_is_a_monolith()
     {
         var biggest = ProductSources(Products).OrderByDescending(source => source.Text.Count(c => c == '\n')).First();
-        Assert.True(biggest.Text.Count(c => c == '\n') <= 700, $"{biggest.Path} has grown past the limit");
+        Assert.True(biggest.Text.Count(c => c == '\n') <= 300, $"{biggest.Path} has grown past the limit");
     }
 
     // Scenario: Only Infrastructure implements the git ports, so no other layer can run a command.
@@ -90,7 +90,7 @@ public sealed partial class ArchitectureTests
         {
             using var services = Stacker.Desktop.Composition.Build(root);
             Assert.NotNull(services.GetRequiredService<MainViewModel>());
-            foreach (var contract in new[] { typeof(IGitBranchWriter), typeof(IGitRepositoryReader), typeof(IJournal), typeof(IEditorLauncher), typeof(IStackStore), typeof(ISettingsStore), typeof(Stacker.Core.Framework.IClock) })
+            foreach (var contract in new[] { typeof(IGitBranchWriter), typeof(IGitRepositoryReader), typeof(IJournal), typeof(IEditorLauncher), typeof(IStackStore), typeof(ISettingsStore), typeof(Stacker.Core.Framework.IClock), typeof(IHistoryStore), typeof(IHistoryGit) })
                 Assert.NotNull(services.GetRequiredService(contract));
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
@@ -99,11 +99,37 @@ public sealed partial class ArchitectureTests
     // Scenario: A command that exists must be reachable from the composition root.
     [Fact] public void Every_command_is_reachable_from_the_composition_root()
     {
-        var composition = File.ReadAllText(Path.Combine(Root, "src", "Stacker.Desktop", "App.axaml.cs"))
-            + File.ReadAllText(Path.Combine(Root, "src", "Stacker.Desktop", "ViewModels", "MainViewModel.cs"));
-        foreach (var assembly in new[] { Core, Infrastructure, Desktop })
-            foreach (var type in assembly.GetTypes().Where(type => !type.IsAbstract && !type.IsInterface && typeof(IStackCommand).IsAssignableFrom(type)))
-                Assert.Contains(type.Name, composition, StringComparison.Ordinal);
+        var adapters = string.Join("\n", ProductSources("Infrastructure").Select(source => source.Text));
+        var commands = Core.GetTypes().Where(type => !type.IsAbstract && !type.IsInterface && typeof(IStackCommand).IsAssignableFrom(type)).ToArray();
+        Assert.NotEmpty(commands);
+        foreach (var type in commands) Assert.Contains("new " + type.Name + "(", adapters, StringComparison.Ordinal);
+
+    }
+
+    [Fact] public void Fallible_ports_return_results()
+    {
+        Type[] ports = [typeof(IProcessRunner), typeof(IProcessLauncher), typeof(IEditorLauncher),
+            typeof(IGitRepositoryReader), typeof(IGitBranchWriter), typeof(IStackStore), typeof(ISettingsStore),
+            typeof(IBlobReader), typeof(IGitHubReader), typeof(IGitHubWriter), typeof(IGitHubPullRequestWriter),
+            typeof(IGitObjectCache), typeof(ISyntaxHighlighter), typeof(IJournal), typeof(IApplicationState),
+            typeof(IDemoRepository), typeof(IDemoSnapshotReader), typeof(IAtomicFile), typeof(IHistoryStore), typeof(IHistoryGit), typeof(IHistoryRemoteReader)];
+        foreach (var port in ports)
+            foreach (var method in port.GetMethods().Where(method => !method.IsSpecialName))
+            {
+                var type = method.ReturnType;
+                if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Task<>)) type = type.GetGenericArguments()[0];
+                Assert.True(type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Result<>), $"{port.Name}.{method.Name} must return Result<T>");
+            }
+    }
+
+    [Fact] public void Ui_features_use_ports_and_the_event_error_boundary()
+    {
+        foreach (var source in ProductSources("Desktop").Where(source => source.Path.Contains("Features") || source.Path.Contains("Shell")))
+        {
+            Assert.DoesNotContain("using Stacker.Infrastructure", source.Text);
+            Assert.DoesNotContain("async void", source.Text);
+            Assert.DoesNotMatch(@"\b(File|Directory)\.(Read|Write|Exists|Open|Create|Delete|Move|Enumerate)", source.Text);
+        }
     }
 
     [GeneratedRegex("Problem\\.Of\\(\"|Result<[^>]+>\\.Fail\\(\"")]

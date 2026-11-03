@@ -1,3 +1,4 @@
+using Stacker.Core.Framework;
 // Purpose: Workspace regression scenarios for refresh behavior and retaining the prior visible snapshot after failures.
 using System.Text.Json;
 using Avalonia.Controls;
@@ -12,11 +13,21 @@ public sealed class CountingReader(IGitRepositoryReader inner) : IGitRepositoryR
 {
     public int Opens { get; private set; }
     public bool FailOpen { get; set; }
-    public Task<RepositorySnapshot> OpenAsync(string path,CancellationToken ct=default) { Opens++; if(FailOpen) throw new StackerException("Test refresh failure"); return inner.OpenAsync(path,ct); }
-    public Task<IReadOnlyList<string>> MergeBasesAsync(string root,string left,string right,CancellationToken ct=default)=>inner.MergeBasesAsync(root,left,right,ct);
-    public Task<(int Ahead,int Behind)> CountsAsync(string root,string parent,string head,CancellationToken ct=default)=>inner.CountsAsync(root,parent,head,ct);
-    public Task<IReadOnlyList<FileChange>> FilesAsync(string root,string @base,string head,CancellationToken ct=default)=>inner.FilesAsync(root,@base,head,ct);
-    public Task<FileDiff> PatchAsync(string root,string @base,string head,FileChange file,CancellationToken ct=default)=>inner.PatchAsync(root,@base,head,file,ct);
+    public Task<RepositorySnapshot> OpenAsync(string path,CancellationToken ct=default) { Opens++; if(FailOpen) throw new StackerException("Test refresh failure"); return Boundary.UnwrapAsync(inner.OpenAsync(path,ct)); }
+    public Task<IReadOnlyList<string>> MergeBasesAsync(string root,string left,string right,CancellationToken ct=default)=>Boundary.UnwrapAsync(inner.MergeBasesAsync(root,left,right,ct));
+    public Task<(int Ahead,int Behind)> CountsAsync(string root,string parent,string head,CancellationToken ct=default)=>Boundary.UnwrapAsync(inner.CountsAsync(root,parent,head,ct));
+    public Task<IReadOnlyList<FileChange>> FilesAsync(string root,string @base,string head,CancellationToken ct=default)=>Boundary.UnwrapAsync(inner.FilesAsync(root,@base,head,ct));
+    public Task<FileDiff> PatchAsync(string root,string @base,string head,FileChange file,CancellationToken ct=default)=>Boundary.UnwrapAsync(inner.PatchAsync(root,@base,head,file,ct));
+
+    Task<Result<RepositorySnapshot>> IGitRepositoryReader.OpenAsync(string path,CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(path, ct), ProblemCodes.GitFailed);
+
+    Task<Result<IReadOnlyList<string>>> IGitRepositoryReader.MergeBasesAsync(string root,string left,string right,CancellationToken ct) => Boundary.CaptureAsync(() => MergeBasesAsync(root, left, right, ct), ProblemCodes.GitFailed);
+
+    Task<Result<(int Ahead, int Behind)>> IGitRepositoryReader.CountsAsync(string root,string parent,string head,CancellationToken ct) => Boundary.CaptureAsync(() => CountsAsync(root, parent, head, ct), ProblemCodes.GitFailed);
+
+    Task<Result<IReadOnlyList<FileChange>>> IGitRepositoryReader.FilesAsync(string root,string @base,string head,CancellationToken ct) => Boundary.CaptureAsync(() => FilesAsync(root, @base, head, ct), ProblemCodes.GitFailed);
+
+    Task<Result<FileDiff>> IGitRepositoryReader.PatchAsync(string root,string @base,string head,FileChange file,CancellationToken ct) => Boundary.CaptureAsync(() => PatchAsync(root, @base, head, file, ct), ProblemCodes.GitFailed);
 }
 public sealed class WorkspaceV2Tests
 {
@@ -43,7 +54,7 @@ public sealed class WorkspaceV2Tests
     {
         await using var f=new GitFixture(); await f.Linear(); var store=new YamlStackStore();
         await store.SaveAsync(f.Root,[f.Stack,new("second","Second","refs/heads/main",["refs/heads/A","refs/heads/C"]),new("third","Third","refs/heads/main",["refs/heads/B"])],null);
-        var reader=new CountingReader(f.Reader); using var vm=new MainViewModel(reader,store,new JsonSettingsStore(Path.Combine(f.Root,"preferences")),new(),new(reader),new(reader),applicationStore:new ApplicationStore(Path.Combine(f.Root,"appdata")));
+        var reader=new CountingReader(f.Reader); using var vm=new MainViewModel(reader,store,new JsonSettingsStore(Path.Combine(f.Root,"preferences")),new GitExecutable(),new(reader),new(reader),applicationStore:new ApplicationStore(Path.Combine(f.Root,"appdata")));
         var window=new MainWindow{DataContext=vm}; window.Show(); await vm.OpenRepositoryAsync(f.Root);
         Assert.Equal(3,vm.LocalGroups.Count); Assert.Equal(DiffMode.FullStack,vm.Mode);
         var first=Assert.Single(vm.Sections); first.SelectedFile=first.Files.Single(f=>f.NewPath=="B.txt"); first.Filter=".txt"; first.ScrollY=41; first.IsExpanded=false;
@@ -67,7 +78,7 @@ public sealed class WorkspaceV2Tests
         await using var f=new GitFixture(); await f.Linear(); await using var g=new GitFixture(); await g.Linear();
         var store=new YamlStackStore(); var second=f.Stack with{Id="second",Name="Second"};
         await store.SaveAsync(f.Root,[f.Stack,second],null); await store.SaveAsync(g.Root,[g.Stack],null);
-        using var vm=new MainViewModel(f.Reader,store,new JsonSettingsStore(Path.Combine(f.Root,"preferences")),new(),new(f.Reader),new(f.Reader),applicationStore:new ApplicationStore(Path.Combine(f.Root,"appdata")));
+        using var vm=new MainViewModel(f.Reader,store,new JsonSettingsStore(Path.Combine(f.Root,"preferences")),new GitExecutable(),new(f.Reader),new(f.Reader),applicationStore:new ApplicationStore(Path.Combine(f.Root,"appdata")));
         await vm.OpenRepositoryAsync(f.Root); var original=vm.Sections[0];
         Assert.True(await vm.SaveStackAsync(f.Stack with{Name="Renamed"})); Assert.Equal("Second",(await store.LoadAsync(f.Root)).Stacks[1].Name);
         await vm.OpenRepositoryAsync(g.Root); Assert.NotSame(original,vm.Sections[0]); Assert.Equal("Test",vm.LocalGroups[0].Name);

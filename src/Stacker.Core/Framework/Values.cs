@@ -6,7 +6,7 @@ public readonly record struct RepoRoot
 {
     public string Value { get; }
     private RepoRoot(string value) => Value = value;
-    public static RepoRoot From(string canonical) => new(canonical);
+    public static RepoRoot From(string canonical) => Parse(canonical).OrThrow();
     public static Result<RepoRoot> Parse(string? path) =>
         string.IsNullOrWhiteSpace(path) ? Result<RepoRoot>.Fail(ProblemCodes.StateInvalid, "A repository root is required.") : Result<RepoRoot>.Ok(new RepoRoot(path));
     public override string ToString() => Value;
@@ -122,13 +122,13 @@ public readonly record struct ShellCommand
         var builder = new System.Text.StringBuilder(value.Length + 2).Append('"');
         foreach (var character in value)
         {
-            if (character == '"' || character == Backslash) builder.Append(Backslash);
+            if (character is '"' or '$' or '`' || character == Backslash) builder.Append(Backslash);
             builder.Append(character);
         }
         return builder.Append('"').ToString();
     }
     private static bool NeedsQuoting(char character) => char.IsWhiteSpace(character)
-        || character == '"' || character == Backslash || character is '$' or '`' or '&' or '|' or ';' or '<' or '>' or '(' or ')';
+        || character is '"' or '\'' || character == Backslash || character is '$' or '`' or '&' or '|' or ';' or '<' or '>' or '(' or ')';
     public override string ToString() => ForGitEditor();
 }
 

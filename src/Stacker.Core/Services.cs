@@ -42,7 +42,7 @@ public sealed class StackService(IGitRepositoryReader git)
             if (head is null || parentSha is null) warning = $"Missing ref: {(head is null ? stack.Branches[i] : parent)}";
             else
             {
-                (ahead, behind) = await git.CountsAsync(repository.Root, parentSha, head, ct);
+                (ahead, behind) = (await git.CountsAsync(repository.Root, parentSha, head, ct)).OrThrow();
                 if (behind > 0) warning = "Parent is not an ancestor. Diff uses merge-base, not a merge preview.";
             }
             layers.Add(new(i, stack.Branches[i], parent, head, parentSha, ahead, behind, warning));
@@ -71,11 +71,11 @@ public sealed class DiffService(IGitRepositoryReader git)
             var parent = request.Mode is DiffMode.Cumulative or DiffMode.FullStack || position == 0 ? stack.Base : stack.Branches[position - 1];
             if (!refs.TryGetValue(parent, out var parentSha)) throw new StackerException($"Missing ref: {parent}");
             if (!refs.TryGetValue(branch, out var headSha)) throw new StackerException($"Missing ref: {branch}");
-            var bases = await git.MergeBasesAsync(request.Repository.Root, parentSha, headSha, ct);
+            var bases = (await git.MergeBasesAsync(request.Repository.Root, parentSha, headSha, ct)).OrThrow();
             if (bases.Count == 0) throw new StackerException($"{branch}: no common ancestor with {parent}.");
             if (bases.Count > 1) throw new StackerException($"{branch}: multiple merge-bases; this history is ambiguous.");
             var warning = bases[0] == parentSha ? null : "Parent is not an ancestor. Showing changes from merge-base; this is not a merge preview.";
-            var files = await git.FilesAsync(request.Repository.Root, bases[0], headSha, ct);
+            var files = (await git.FilesAsync(request.Repository.Root, bases[0], headSha, ct)).OrThrow();
             results.Add(new(branch, parent, bases[0], headSha, warning, files));
         }
         return results;

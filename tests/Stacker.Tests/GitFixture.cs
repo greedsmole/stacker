@@ -25,7 +25,7 @@ public sealed class GitFixture : IAsyncDisposable
     public Stacker.Core.Framework.IJournal CreateJournal() =>
         new JsonJournal(new JsonStateStore<JournalLog>(new AtomicFile(), Root + " journal"), new SystemClock());
     /// <summary>A write-path adapter wired to this fixture's journal.</summary>
-    public GitBranchWriter Writer() => new(Runner, new GitExecutable(), Reader, CreateJournal(), new SystemClock());
+    public LocalGitClient Writer() => new(Runner, new GitExecutable(), Reader, CreateJournal(), new SystemClock());
     /// <summary>The repository path Git itself reports, which resolves temporary-directory symlinks.</summary>
     public async Task<string> ResolvedRoot() => await Git("rev-parse", "--show-toplevel");
     /// <summary>Runs Git that is expected to fail, returning its exit code instead of asserting.</summary>

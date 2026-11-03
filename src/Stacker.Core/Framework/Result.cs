@@ -57,7 +57,12 @@ public sealed class Result<T>
     /// <summary>Chains a further fallible step without nesting results.</summary>
     public Result<TOut> Bind<TOut>(Func<T, Result<TOut>> next) => IsOk ? next(Value!) : Result<TOut>.Fail(Problem!);
     /// <summary>Uses the value or throws; only for call sites where a problem is a programming error.</summary>
-    public T OrThrow() => IsOk ? Value! : throw new StackerException(Problem!.Message);
+    public T OrThrow()
+    {
+        if (IsOk) return Value!;
+        if (Problem!.Code == ProblemCodes.GitHubAuth) throw new GitHubAuthenticationException(Problem.Message);
+        throw new StackerException(Problem);
+    }
 }
 
 /// <summary>Helpers for results that carry nothing.</summary>

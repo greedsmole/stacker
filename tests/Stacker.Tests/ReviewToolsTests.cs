@@ -1,3 +1,4 @@
+using Stacker.Core.Framework;
 // Purpose: UI-oriented review tool scenarios for line ranges, file comments, and comment navigation.
 using Avalonia.Controls;
 using Avalonia;
@@ -27,9 +28,13 @@ public sealed class ReviewToolsTests
             return Task.FromResult(new RepositorySnapshot(root,
                 prs.SelectMany(pr => new[] { new BranchRef(GitObjectCache.HeadRef(pr), pr.HeadSha), new BranchRef(GitObjectCache.BaseRef(pr), pr.BaseSha) }).ToArray(), 0));
         }
+
+    Task<Result<RepositorySnapshot>> IGitObjectCache.PrepareAsync(GitHubRepositoryContext context,IReadOnlyList<PullRequest> prs,CancellationToken ct) => Boundary.CaptureAsync(() => PrepareAsync(context, prs, ct), ProblemCodes.GitFailed);
+
+    Task<Result<Unit>> IGitObjectCache.ClearAsync(GitHubRepositoryContext context,CancellationToken ct) => Boundary.CaptureAsync(() => ClearAsync(context, ct), ProblemCodes.GitFailed);
     }
     private static MainViewModel Create(GitFixture f, FakeGitHub hub, RecordingCache cache) =>
-        new(f.Reader, new YamlStackStore(), new JsonSettingsStore(Path.Combine(f.Root,"settings")), new(), new(f.Reader), new(f.Reader),
+        new(f.Reader, new YamlStackStore(), new JsonSettingsStore(Path.Combine(f.Root,"settings")), new GitExecutable(), new(f.Reader), new(f.Reader),
             hub, hub, cache, new ApplicationStore(Path.Combine(f.Root,"app")));
 
     [AvaloniaFact] public async Task Selecting_a_standalone_PR_opens_its_reviewable_changes()
@@ -65,7 +70,7 @@ public sealed class ReviewToolsTests
     [AvaloniaFact] public async Task File_and_changed_line_search_open_matching_file_and_wrap_persists_in_view()
     {
         await using var f = new GitFixture(); await f.Linear(); await new YamlStackStore().SaveAsync(f.Root,[f.Stack],null);
-        using var vm = new MainViewModel(f.Reader,new YamlStackStore(),new JsonSettingsStore(Path.Combine(f.Root,"settings")),new(),new(f.Reader),new(f.Reader));
+        using var vm = new MainViewModel(f.Reader,new YamlStackStore(),new JsonSettingsStore(Path.Combine(f.Root,"settings")),new GitExecutable(),new(f.Reader),new(f.Reader));
         await vm.OpenRepositoryAsync(f.Root);
         vm.SearchScope="Files"; vm.SearchQuery="B.txt"; await vm.SearchAsync();
         var fileHit=Assert.Single(vm.SearchResults); Assert.Equal("B.txt",fileHit.Path); await vm.OpenSearchHitAsync(fileHit);

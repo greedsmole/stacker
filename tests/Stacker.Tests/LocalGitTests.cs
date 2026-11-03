@@ -1,10 +1,11 @@
+using Stacker.Core.Framework;
 // Purpose: Real-Git checks for the local commands — editor resolution, working-tree state, commit, stash, switch and stack push.
 using Stacker.Core;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 public sealed class LocalGitTests
 {
-    private static GitBranchWriter Writer(GitFixture f) => f.Writer();
+    private static LocalGitClient Writer(GitFixture f) => f.Writer();
 
     private static async Task MoveBase(GitFixture f)
     {
@@ -16,6 +17,8 @@ public sealed class LocalGitTests
     {
         public List<ProcessRequest> Started { get; } = [];
         public void Start(ProcessRequest request) => Started.Add(request);
+
+    Result<Unit> IProcessLauncher.Start(ProcessRequest request) => Boundary.Capture(() => Start(request), ProblemCodes.GitFailed);
     }
 
     // Scenario: Porcelain v1 output decides staged, untracked, renamed and conflicted entries.

@@ -1,3 +1,4 @@
+using Stacker.Core.Framework;
 // Purpose: Review workflow scenarios using a fake GitHub service to verify draft preservation and safe publication behavior.
 using Avalonia.Headless.XUnit;
 using Stacker.Core;
@@ -36,6 +37,34 @@ public sealed class FakeGitHub : IGitHubReader, IGitHubWriter
     public Task ReplyAsync(GitHubRepositoryContext context,long number,string commentId,string body,CancellationToken ct=default)=>CommentAsync(context,number,body,ct);
     public Task ResolveAsync(GitHubRepositoryContext context,string threadId,bool resolved,CancellationToken ct=default){Writes++;return Task.CompletedTask;}
     public Task SubmitReviewAsync(GitHubRepositoryContext context,ReviewDraft draft,CancellationToken ct=default){Writes++;Submitted.Add(new("1","alice",draft.Summary,draft.Decision,DateTimeOffset.UtcNow));if(FailAfterSend)throw new StackerException("Timed out after send");return Task.CompletedTask;}
+
+    Task<Result<GitHubRepositoryContext>> IGitHubReader.ConnectAsync(string root,string? repositoryOverride,CancellationToken ct) => Boundary.CaptureAsync(() => ConnectAsync(root, repositoryOverride, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<GitHubSnapshot>> IGitHubReader.SnapshotAsync(GitHubRepositoryContext context,CancellationToken ct) => Boundary.CaptureAsync(() => SnapshotAsync(context, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<PullRequest>> IGitHubReader.PullRequestAsync(GitHubRepositoryContext context,long number,CancellationToken ct) => Boundary.CaptureAsync(() => PullRequestAsync(context, number, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<ReviewDiscussion>> IGitHubReader.DiscussionAsync(GitHubRepositoryContext context,PullRequest pr,CancellationToken ct) => Boundary.CaptureAsync(() => DiscussionAsync(context, pr, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<Unit>> IGitHubReader.ValidateAnchorsAsync(GitHubRepositoryContext context,PullRequest pr,IReadOnlyList<ReviewAnchor> anchors,CancellationToken ct) => Boundary.CaptureAsync(() => ValidateAnchorsAsync(context, pr, anchors, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<IReadOnlyList<string>>> IGitHubReader.ChangedFilePathsAsync(GitHubRepositoryContext context,PullRequest pr,CancellationToken ct) => Boundary.CaptureAsync(() => ChangedFilePathsAsync(context, pr, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<Unit>> IGitHubReader.ValidateFileAsync(GitHubRepositoryContext context,PullRequest pr,string path,CancellationToken ct) => Boundary.CaptureAsync(() => ValidateFileAsync(context, pr, path, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<Unit>> IGitHubReader.VerifyAccessAsync(GitHubRepositoryContext context,CancellationToken ct) => Boundary.CaptureAsync(() => VerifyAccessAsync(context, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<Unit>> IGitHubWriter.CommentAsync(GitHubRepositoryContext context,long number,string body,CancellationToken ct) => Boundary.CaptureAsync(() => CommentAsync(context, number, body, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<Unit>> IGitHubWriter.FileCommentAsync(GitHubRepositoryContext context,PullRequest pr,string path,string body,CancellationToken ct) => Boundary.CaptureAsync(() => FileCommentAsync(context, pr, path, body, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<Unit>> IGitHubWriter.InlineCommentAsync(GitHubRepositoryContext context,DraftComment comment,CancellationToken ct) => Boundary.CaptureAsync(() => InlineCommentAsync(context, comment, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<Unit>> IGitHubWriter.ReplyAsync(GitHubRepositoryContext context,long number,string commentId,string body,CancellationToken ct) => Boundary.CaptureAsync(() => ReplyAsync(context, number, commentId, body, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<Unit>> IGitHubWriter.ResolveAsync(GitHubRepositoryContext context,string threadId,bool resolved,CancellationToken ct) => Boundary.CaptureAsync(() => ResolveAsync(context, threadId, resolved, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<Unit>> IGitHubWriter.SubmitReviewAsync(GitHubRepositoryContext context,ReviewDraft draft,CancellationToken ct) => Boundary.CaptureAsync(() => SubmitReviewAsync(context, draft, ct), ProblemCodes.GitHubRequest);
 }
 public sealed class ReviewTests
 {

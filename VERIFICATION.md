@@ -1,3 +1,58 @@
+# Verification — architecture migration A–G
+
+Recorded on **2026-10-16**, on macOS ARM64 with .NET SDK 10.0.201. This is the current record; sections below
+are historical observations of earlier source revisions, not a statement of current architecture or outstanding work.
+
+## Local checks
+
+`dotnet test -c Release --no-restore --logger 'trx;LogFileName=migration.trx' --results-directory artifacts/test-results`
+completed successfully: **234 passed, 0 failed, 0 skipped**, duration **2 min 36 s**. All four projects compiled in
+Release without reported warnings. Machine-readable evidence: `artifacts/test-results/migration.trx`.
+
+New coverage includes all eight independent safety findings (11 cases including API status variants), the real
+local and remote command paths, foreground single-flight execution, failed-return and cancellation compensation,
+explicit partial outcomes, preservation of corrupt/future journals, v2 startup import, draft persistence failures,
+replay after amend, transactional Undo, remote preflight across the whole stack, multiple stash identities across
+restart, workspace migration/incremental saves, future settings preservation, review LRU eviction and stale sync/PR
+previews. Two further recovery regressions prevent Abort of a terminal merge from undoing a completed restack,
+and prevent a partial push from offering branch restoration or claiming remote rollback. Git histories, worktrees and remotes are temporary local fixtures; publication tests use transport/server
+doubles and never send comments or reviews to a live service.
+
+Architecture fitness checks cover Core's OS boundary, Result-returning ports, UI feature isolation and async-event
+handling, service resolution, nonempty concrete command reachability, problem codes and the 300-line product-source
+limit. Largest product source: `GitHub/GitHubCli.cs`, 293 lines. Existing project and package declarations are unchanged.
+`git diff --check` is clean. The detailed distinction between tests and code inspection is in
+[docs/MIGRATION.md](docs/MIGRATION.md), with 47 original findings and ten additional regressions.
+
+## Local packages
+
+Both packaging commands completed successfully on the final source:
+
+| Target | Archive | Size | Executable | Integrity |
+| --- | --- | --- | --- | --- |
+| macOS ARM64 | `artifacts/Stacker-0.5.0-osx-arm64.tar.gz` | 44.0 MiB | Mach-O 64-bit arm64 | gzip stream checked; 237 archive entries |
+| Windows x64 | `artifacts/Stacker-0.5.0-win-x64.zip` | 45.9 MiB | PE32+ GUI x86-64 | ZIP CRC checked; 235 archive entries |
+
+Each archive contains the application, runtime configuration, CoreCLR, SkiaSharp, HarfBuzzSharp, README and
+third-party notices. SHA-256 checksums, byte sizes and executable identification are recorded in
+`artifacts/package-manifest.json`. Archive validation does not establish successful interactive execution.
+
+## Deliberate limits and external acceptance
+
+- Native macOS walkthrough could not run: computer-use inventory reported that the Mac is locked and automatic
+  unlock failed. Headless Avalonia tests load the real XAML and exercise window actions, but are not native visual QA.
+- Windows x64 is cross-published on this Mac. This session did not run the application or tests on Windows, and
+  did not run GitHub Actions. The repository still defines separate macOS/Windows test-and-package jobs.
+- No live GitHub/GHES publication or corporate Windows certificate-chain test was performed.
+- Unknown ref effects without a provable expected SHA remain blocked for manual inspection. The journal is evidence,
+  not permission to reset unrelated work. Remote multi-branch publication can partially succeed and is not rolled back.
+- An arbitrary external editor cannot participate in a filesystem compare-and-swap. A racing YAML preimage is preserved
+  in a `.conflict` backup and reported; ordinary stale revisions are refused before replacement.
+- Cache byte limits estimate retained structures; no whole-process heap or large-repository latency benchmark was run.
+- macOS bundles are not Developer ID signed or notarized. Packages are local artifacts; no release was published.
+
+## Earlier verification records
+
 # Verification — shutdown contract and recovery banner
 
 Recorded on 2026-10-13. `dotnet build -c Release` is clean and `dotnet test -c Release` reports **201 passed, 0 failed** — the 197 scenarios of the previous phase plus 4 for the shutdown path and the recovery banner.
@@ -234,3 +289,29 @@ Local verification of the comments update: **62 tests passed**, Release build wi
 Cache downloads now select Schannel on Windows without writing Git configuration or disabling TLS/revocation verification. Certificate-chain errors include remediation and retain the original Git diagnostic. Regression coverage checks process-scoped options, preserved saved-account handling, no automatic retries after certificate failures, and unchanged handling of unrelated fetch errors.
 
 Local verification: **67 tests passed** on macOS ARM64; Windows x64 self-contained archive cross-published successfully. The OS-specific backend assertion runs for the host platform; the new Windows branch and live corporate GHES certificate chain have not been exercised on a Windows machine in this local run. The GitHub release assets have not been updated with this change.
+
+## Versioned review history — 2026-11-03
+
+Implemented the six planned review/history capabilities on the current feature-folder architecture: captured
+versions and base-normalized comparison, persistent dependency graphs, snapshot-bound trial-merge analysis,
+personal review checkpoints and blocking questions, independent durable publication rules, and file evolution
+with textual line attribution. The History window is reachable from the main toolbar and menu. Old draft
+anchors can be proposed across a rename and are changed only after confirmation, with the original retained.
+
+Validation includes real temporary Git repositories, SQLite migration/concurrent-writer/schema checks, offline
+closed-PR fixtures, headless History windows, restart persistence, seeded demo history, and explicit-confirmation
+reanchoring. References and index tree IDs are compared before/after analysis. An unresolved question on a file
+that disappears from the current diff remains in the attention queue until explicitly cleared.
+
+Self-contained macOS ARM64 and Windows x64 archives were rebuilt. The packaged SQLite libraries were checked
+as Mach-O arm64 and PE32+ x86-64 respectively. Windows was cross-published; native Windows execution was not
+performed. NuGet's configured vulnerability sources reported no vulnerable Infrastructure dependencies.
+
+No live GitHub comment/review publication, account changes, user-repository restack or push was performed for
+these checks. Analysis is textual and does not run project code. History cannot guarantee recovery of commits
+that were never downloaded or whose historical cache was explicitly removed. Interactive native UI walkthrough
+and production-scale performance benchmarks are not claimed by the headless tests.
+
+Final Release verification for this update: **251 passed, 0 failed, 0 skipped** (17 new history/workflow/safety
+scenarios on top of the 234-test baseline). The build completed without warnings or errors. `git diff --check`
+passed. Final archives: `artifacts/Stacker-0.5.0-osx-arm64.tar.gz` and `artifacts/Stacker-0.5.0-win-x64.zip`.

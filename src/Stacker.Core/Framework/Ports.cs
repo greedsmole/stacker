@@ -1,13 +1,22 @@
+using Stacker.Core.Framework;
 namespace Stacker.Core.Framework;
 
 /// <summary>Writes a file atomically: unique temporary name, atomic move, verification, no stale leftovers.</summary>
 public interface IAtomicFile
 {
     Task<Result<Unit>> WriteAsync(string path, ReadOnlyMemory<byte> bytes, CancellationToken ct = default);
+    async Task<Result<Unit>> WriteIfUnchangedAsync(string path, ReadOnlyMemory<byte> bytes, byte[]? expected, CancellationToken ct = default)
+    {
+        var current = Read(path);
+        if (current.IsFailed) return Result<Unit>.Fail(current.Problem!);
+        if ((current.Value is null) != (expected is null) || (expected is not null && !expected.AsSpan().SequenceEqual(current.Value)))
+            return Result<Unit>.Fail(ProblemCodes.StoreStaleRevision, "The file changed before saving. Reload it first.");
+        return await WriteAsync(path, bytes, ct);
+    }
     /// <summary>The file's bytes, or null when it does not exist; IO failures come back as problems.</summary>
     Result<byte[]?> Read(string path);
     /// <summary>Removes temporary files a killed process left behind next to this path.</summary>
-    void SweepTemporaries(string path);
+    Result<Unit> SweepTemporaries(string path);
 }
 
 /// <summary>A held exclusive lock; the operating system releases it when the process dies.</summary>

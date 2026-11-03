@@ -10,20 +10,36 @@ public sealed class RecoveryTests
     private sealed class FaultyJournal(IJournal inner, int failOnStep) : IJournal
     {
         private int _steps;
-        public Task<JournalEntry> OpenAsync(string repository, string kind, IReadOnlyList<JournalStep> planned, CancellationToken ct = default) => inner.OpenAsync(repository, kind, planned, ct);
+        public Task<JournalEntry> OpenAsync(string repository, string kind, IReadOnlyList<JournalStep> planned, CancellationToken ct = default) => Boundary.UnwrapAsync(inner.OpenAsync(repository, kind, planned, ct));
         public Task<JournalEntry> StepAsync(JournalEntry entry, JournalStep step, CancellationToken ct = default)
         {
             _steps++;
             if (_steps == failOnStep) throw new InvalidOperationException("injected journal failure");
-            return inner.StepAsync(entry, step, ct);
+            return Boundary.UnwrapAsync(inner.StepAsync(entry, step, ct));
         }
         public Task<JournalEntry> CloseAsync(JournalEntry entry, JournalPhase phase, string? stashRef = null, string? pendingStepId = null, string? message = null, CancellationToken ct = default)
-            => inner.CloseAsync(entry, phase, stashRef, pendingStepId, message, ct);
-        public Task<JournalEntry> SetStashAsync(JournalEntry entry, string? stashRef, CancellationToken ct = default) => inner.SetStashAsync(entry, stashRef, ct);
-        public Task<JournalEntry?> ActiveAsync(string repository, CancellationToken ct = default) => inner.ActiveAsync(repository, ct);
-        public Task<JournalEntry?> UndoableAsync(string repository, CancellationToken ct = default) => inner.UndoableAsync(repository, ct);
-        public Task<JournalEntry?> ByIdAsync(string repository, string id, CancellationToken ct = default) => inner.ByIdAsync(repository, id, ct);
-        public IReadOnlyList<JournalEntry> Recent(string repository, int count = 20) => inner.Recent(repository, count);
+            => Boundary.UnwrapAsync(inner.CloseAsync(entry, phase, stashRef, pendingStepId, message, ct));
+        public Task<JournalEntry> SetStashAsync(JournalEntry entry, string? stashRef, CancellationToken ct = default) => Boundary.UnwrapAsync(inner.SetStashAsync(entry, stashRef, ct));
+        public Task<JournalEntry?> ActiveAsync(string repository, CancellationToken ct = default) => Boundary.UnwrapAsync(inner.ActiveAsync(repository, ct));
+        public Task<JournalEntry?> UndoableAsync(string repository, CancellationToken ct = default) => Boundary.UnwrapAsync(inner.UndoableAsync(repository, ct));
+        public Task<JournalEntry?> ByIdAsync(string repository, string id, CancellationToken ct = default) => Boundary.UnwrapAsync(inner.ByIdAsync(repository, id, ct));
+        public IReadOnlyList<JournalEntry> Recent(string repository, int count = 20) => (inner.Recent(repository, count)).OrThrow();
+
+    Task<Result<JournalEntry>> IJournal.OpenAsync(string repository,string kind,IReadOnlyList<JournalStep> planned,CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(repository, kind, planned, ct), ProblemCodes.StoreWrite);
+
+    Task<Result<JournalEntry>> IJournal.StepAsync(JournalEntry entry,JournalStep step,CancellationToken ct) => Boundary.CaptureAsync(() => StepAsync(entry, step, ct), ProblemCodes.StoreWrite);
+
+    Task<Result<JournalEntry>> IJournal.CloseAsync(JournalEntry entry,JournalPhase phase,string? stashRef ,string? pendingStepId ,string? message ,CancellationToken ct) => Boundary.CaptureAsync(() => CloseAsync(entry, phase, stashRef, pendingStepId, message, ct), ProblemCodes.StoreWrite);
+
+    Task<Result<JournalEntry>> IJournal.SetStashAsync(JournalEntry entry,string? stashRef,CancellationToken ct) => Boundary.CaptureAsync(() => SetStashAsync(entry, stashRef, ct), ProblemCodes.StoreWrite);
+
+    Task<Result<JournalEntry?>> IJournal.ActiveAsync(string repository,CancellationToken ct) => Boundary.CaptureAsync(() => ActiveAsync(repository, ct), ProblemCodes.StoreWrite);
+
+    Task<Result<JournalEntry?>> IJournal.UndoableAsync(string repository,CancellationToken ct) => Boundary.CaptureAsync(() => UndoableAsync(repository, ct), ProblemCodes.StoreWrite);
+
+    Task<Result<JournalEntry?>> IJournal.ByIdAsync(string repository,string id,CancellationToken ct) => Boundary.CaptureAsync(() => ByIdAsync(repository, id, ct), ProblemCodes.StoreWrite);
+
+    Result<IReadOnlyList<JournalEntry>> IJournal.Recent(string repository,int count ) => Boundary.Capture(() => Recent(repository, count), ProblemCodes.StoreWrite);
     }
 
     /// <summary>main ← A ← B where main and A both touch conflict.txt, so A conflicts on the replay.</summary>
@@ -52,8 +68,8 @@ public sealed class RecoveryTests
         Assert.True(resumed.Applied, resumed.Message);
         // The layer the user resolved is rewritten and recorded, so undo can reverse it.
         Assert.NotEqual(oldA, await f.Git("rev-parse", "A"));
-        // The layer above it still waits for the next restack, exactly as the panel says.
-        Assert.Equal(oldB, await f.Git("rev-parse", "B"));
+        // Continue uses the original replay boundaries to complete the remaining cascade.
+        Assert.NotEqual(oldB, await f.Git("rev-parse", "B"));
         var entry = await writer.LastJournalAsync(root);
         Assert.NotNull(entry);
         Assert.Contains(entry!.Moved, step => step.Target == "refs/heads/A");
@@ -91,7 +107,7 @@ public sealed class RecoveryTests
     {
         await using var f = new GitFixture(); await f.Linear();
         var journal = f.CreateJournal();
-        var writer = new GitBranchWriter(f.Runner, new GitExecutable(), f.Reader, new FaultyJournal(journal, failOnStep: 2), new SystemClock());
+        var writer = new LocalGitClient(f.Runner, new GitExecutable(), f.Reader, new FaultyJournal(journal, failOnStep: 2), new SystemClock());
         await f.Git("checkout", "main"); await f.Write("main2.txt", "moved\n"); await f.Commit("base moved");
         var before = new Dictionary<string, string>();
         foreach (var branch in new[] { "A", "B", "C" }) before[branch] = await f.Git("rev-parse", branch);
@@ -101,8 +117,8 @@ public sealed class RecoveryTests
         Assert.Equal("main", await f.Git("branch", "--show-current"));
         Assert.Empty((await f.Git("status", "--porcelain")).Trim());
         var root = await f.ResolvedRoot();
-        Assert.Null(await journal.UndoableAsync(root));
-        Assert.Equal(JournalPhase.RolledBack, journal.Recent(root)[0].Phase);
+        Assert.Null((await journal.UndoableAsync(root)).OrThrow());
+        Assert.Equal(JournalPhase.RolledBack, (journal.Recent(root)).OrThrow()[0].Phase);
     }
 
     // Given a crash left an entry running with one branch already moved, when recovery runs, then that branch is restored.
@@ -110,16 +126,16 @@ public sealed class RecoveryTests
     {
         await using var f = new GitFixture(); await f.Linear();
         var journal = f.CreateJournal();
-        var writer = new GitBranchWriter(f.Runner, new GitExecutable(), f.Reader, journal, new SystemClock());
+        var writer = new LocalGitClient(f.Runner, new GitExecutable(), f.Reader, journal, new SystemClock());
         var root = await f.ResolvedRoot();
         var oldA = await f.Git("rev-parse", "A");
         // What a killed process leaves behind: the entry opened, the first effect done, nothing closed.
-        var entry = await journal.OpenAsync(root, "restack",
+        var entry = (await journal.OpenAsync(root, "restack",
             [new JournalStep("original", "original", "main", "main", null, StepState.Planned),
-             new JournalStep("layer:0", "rebase", "refs/heads/A", oldA, null, StepState.Planned)]);
+             new JournalStep("layer:0", "rebase", "refs/heads/A", oldA, null, StepState.Planned)])).OrThrow();
         await f.Git("checkout", "A"); await f.Git("commit", "--amend", "-m", "A rewritten");
         var moved = await f.Git("rev-parse", "A");
-        await journal.StepAsync(entry, entry.Steps[1].Finished(oldA, moved, StepState.Done));
+        (await journal.StepAsync(entry, entry.Steps[1].Finished(oldA, moved, StepState.Done))).OrThrow();
         Assert.NotEqual(oldA, moved);
         var active = await writer.ActiveJournalAsync(root);
         Assert.NotNull(active); Assert.True(active!.NeedsAttention);

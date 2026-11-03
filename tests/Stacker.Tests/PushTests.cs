@@ -5,10 +5,10 @@ using Stacker.Infrastructure;
 namespace Stacker.Tests;
 public sealed class PushTests
 {
-    private static GitBranchWriter Writer(GitFixture f) => f.Writer();
+    private static LocalGitClient Writer(GitFixture f) => f.Writer();
 
     /// <summary>Publishes the stack, moves the base, and restacks it, leaving a plan whose push steps are ready.</summary>
-    private static async Task<(GitBranchWriter Writer, RestackPlan Plan)> RestackedStack(GitFixture f)
+    private static async Task<(LocalGitClient Writer, RestackPlan Plan)> RestackedStack(GitFixture f)
     {
         await f.Linear(); await f.AddOrigin();
         await f.Git("push", "origin", "main", "A", "B", "C");

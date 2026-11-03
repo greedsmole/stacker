@@ -6,7 +6,7 @@ using Stacker.Infrastructure.Framework;
 namespace Stacker.Tests;
 public sealed class RestackTests
 {
-    private static GitBranchWriter Writer(GitFixture f) => f.Writer();
+    private static LocalGitClient Writer(GitFixture f) => f.Writer();
 
     /// <summary>Advances main past the layers so every layer needs a rebase.</summary>
     private static async Task MoveBase(GitFixture f)
@@ -188,7 +188,7 @@ public sealed class RestackTests
         await using var f = new GitFixture();
         var applicationStore = new ApplicationStore(f.Root + " app");
         var root = await new DemoRepositoryGenerator(f.Runner, new GitExecutable(), new YamlStackStore(), applicationStore).CreateAsync();
-        var writer = new GitBranchWriter(f.Runner, new GitExecutable(), f.Reader, new JsonJournal(new JsonStateStore<JournalLog>(new AtomicFile(), root + " journal"), new SystemClock()), new SystemClock());
+        var writer = new LocalGitClient(f.Runner, new GitExecutable(), f.Reader, new JsonJournal(new JsonStateStore<JournalLog>(new AtomicFile(), root + " journal"), new SystemClock()), new SystemClock());
         await f.GitAt(root, "checkout", "main");
         await File.WriteAllTextAsync(Path.Combine(root, "later.txt"), "later\n");
         await f.GitAt(root, "add", "--all");
@@ -215,7 +215,7 @@ public sealed class RestackTests
     {
         await using var f = new GitFixture(); await f.Linear(); await MoveBase(f);
         var log = new GitCommandLog();
-        var writer = new GitBranchWriter(new ProcessRunner(log), new GitExecutable(), f.Reader, f.CreateJournal(), new SystemClock());
+        var writer = new LocalGitClient(new ProcessRunner(log), new GitExecutable(), f.Reader, f.CreateJournal(), new SystemClock());
         var plan = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack);
         Assert.True((await writer.RestackAsync(plan)).Applied);
         Assert.Contains(log.Snapshot(), entry => entry.Command.Contains("rebase --onto", StringComparison.Ordinal));

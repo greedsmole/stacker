@@ -11,3 +11,10 @@ Stacker uses the following open-source components. Retain their package license 
 - .NET runtime — https://github.com/dotnet/runtime — MIT and third-party notices included by the self-contained publish.
 
 Git and GitHub CLI are separately installed tools and are not redistributed by Stacker.
+
+## Versioned review storage
+
+Microsoft.Data.Sqlite 10.0.14 (Microsoft, MIT) and its transitive SQLitePCLRaw components provide local transactional
+storage. SQLite is in the public domain. Their managed and native runtime components are included by .NET publish.
+See [Microsoft.Data.Sqlite](https://github.com/dotnet/efcore) and
+[SQLitePCLRaw](https://github.com/ericsink/SQLitePCL.raw) for source and license notices.

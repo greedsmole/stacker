@@ -143,7 +143,7 @@ public sealed class WindowInteractionTests
     }
 
     private static MainViewModel CreateVm(GitFixture fixture) => new(fixture.Reader, new YamlStackStore(),
-        new JsonSettingsStore(Path.Combine(fixture.Root, "settings")), new(), new(fixture.Reader), new(fixture.Reader),
+        new JsonSettingsStore(Path.Combine(fixture.Root, "settings")), new GitExecutable(), new(fixture.Reader), new(fixture.Reader),
         applicationStore: new ApplicationStore(Path.Combine(fixture.Root, "app-data")));
 
     private static void ClickOpen(MainWindow window) => window.FindControl<Button>("OpenFolderButton")!

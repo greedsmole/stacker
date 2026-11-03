@@ -1,3 +1,4 @@
+using Stacker.Core.Framework;
 // Purpose: Headless scenarios for the sync window, the restack flow, and publishing a stack's pull requests.
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -23,6 +24,10 @@ public sealed class StackSyncUiTests
         public Task<string?> ResolveAsync(string root, string? overrideCommand, CancellationToken ct = default) => Task.FromResult<string?>(_command);
         public Task<string?> OpenAsync(string root, IReadOnlyList<string> paths, string? overrideCommand, CancellationToken ct = default)
         { Opened.Add(paths); return Task.FromResult<string?>(_command); }
+
+    Task<Result<string?>> IEditorLauncher.ResolveAsync(string root,string? overrideCommand,CancellationToken ct) => Boundary.CaptureAsync(() => ResolveAsync(root, overrideCommand, ct), ProblemCodes.GitFailed);
+
+    Task<Result<string?>> IEditorLauncher.OpenAsync(string root,IReadOnlyList<string> paths,string? overrideCommand,CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(root, paths, overrideCommand, ct), ProblemCodes.GitFailed);
     }
 
     /// <summary>A real no-op program git can run as an editor on either platform, in a path without spaces (git runs GIT_EDITOR through a shell).</summary>
@@ -228,6 +233,39 @@ public sealed class StackSyncUiTests
         finally { window.Close(); }
     }
 
+    [AvaloniaFact]
+    public async Task Preview_replans_after_restack_and_undo_in_the_same_window()
+    {
+        await using var f = new GitFixture(); await Prepared(f, moveBase: true);
+        using var vm = CreateVm(f); await vm.OpenRepositoryAsync(f.Root);
+        var plan = (await vm.BuildRestackPlanAsync())!;
+        var window = new SyncPreviewWindow(plan, vm, false); window.Show();
+        try
+        {
+            var restack = window.FindControl<Button>("RestackButton")!;
+            var undo = window.FindControl<Button>("UndoButton")!;
+            restack.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await WaitUntilAsync(() => window.IsEnabled && !restack.IsEnabled && undo.IsVisible);
+            Assert.All(window.FindControl<ListBox>("StepList")!.Items.Cast<RestackStep>(), step => Assert.False(step.NeedsRebase));
+            undo.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await WaitUntilAsync(() => window.IsEnabled && restack.IsEnabled && !undo.IsVisible);
+            Assert.All(window.FindControl<ListBox>("StepList")!.Items.Cast<RestackStep>(), step => Assert.True(step.NeedsRebase));
+            Assert.False(vm.HasError, vm.Error);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task Publication_refuses_a_plan_owned_by_another_context()
+    {
+        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
+        var github = new FakeGitHub([]); using var vm = CreateVm(f, github, github);
+        await vm.OpenRepositoryAsync(f.Root);
+        var (plan, _) = await vm.CheckPullRequestsAsync("test"); Assert.NotNull(plan);
+        var (ok, message) = await vm.PublishPullRequestsAsync(plan! with { ContextIdentity = "another identity" });
+        Assert.False(ok); Assert.Contains("identity changed", message); Assert.Empty(github.Calls);
+    }
+
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -276,12 +314,12 @@ public sealed class StackSyncUiTests
             Assert.Equal(1, window.FindControl<ListBox>("ConflictList")!.ItemCount);
             Assert.True(window.FindControl<Button>("ContinueButton")!.IsVisible);
             window.FindControl<Button>("ResolveButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await WaitUntilAsync(() => editor.Opened.Count > 0);
+            await WaitUntilAsync(() => editor.Opened.Count > 0 && window.IsEnabled);
             Assert.Contains("conflict.txt", Assert.Single(editor.Opened));
             // Resolve on disk, then stage and continue through the window.
             await f.Write("conflict.txt", "resolved\n");
             window.FindControl<Button>("StageButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await WaitUntilAsync(() => vm.WorkingTree?.HasConflicts == false);
+            await WaitUntilAsync(() => vm.WorkingTree?.HasConflicts == false && window.IsEnabled);
             window.FindControl<Button>("ContinueButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await WaitUntilAsync(() => !vm.HasOperation);
             Assert.False(vm.HasConflicts);
@@ -394,5 +432,25 @@ public sealed class StackSyncUiTests
         public Task ValidateAnchorsAsync(GitHubRepositoryContext context, PullRequest pr, IReadOnlyList<ReviewAnchor> anchors, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<string>> ChangedFilePathsAsync(GitHubRepositoryContext context, PullRequest pr, CancellationToken ct = default) => throw new NotSupportedException();
         public Task ValidateFileAsync(GitHubRepositoryContext context, PullRequest pr, string path, CancellationToken ct = default) => throw new NotSupportedException();
+
+    Task<Result<GitHubRepositoryContext>> IGitHubReader.ConnectAsync(string root,string? repositoryOverride,CancellationToken ct) => Boundary.CaptureAsync(() => ConnectAsync(root, repositoryOverride, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<GitHubSnapshot>> IGitHubReader.SnapshotAsync(GitHubRepositoryContext context,CancellationToken ct) => Boundary.CaptureAsync(() => SnapshotAsync(context, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<PullRequest>> IGitHubReader.PullRequestAsync(GitHubRepositoryContext context,long number,CancellationToken ct) => Boundary.CaptureAsync(() => PullRequestAsync(context, number, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<ReviewDiscussion>> IGitHubReader.DiscussionAsync(GitHubRepositoryContext context,PullRequest pr,CancellationToken ct) => Boundary.CaptureAsync(() => DiscussionAsync(context, pr, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<Unit>> IGitHubReader.ValidateAnchorsAsync(GitHubRepositoryContext context,PullRequest pr,IReadOnlyList<ReviewAnchor> anchors,CancellationToken ct) => Boundary.CaptureAsync(() => ValidateAnchorsAsync(context, pr, anchors, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<IReadOnlyList<string>>> IGitHubReader.ChangedFilePathsAsync(GitHubRepositoryContext context,PullRequest pr,CancellationToken ct) => Boundary.CaptureAsync(() => ChangedFilePathsAsync(context, pr, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<Unit>> IGitHubReader.ValidateFileAsync(GitHubRepositoryContext context,PullRequest pr,string path,CancellationToken ct) => Boundary.CaptureAsync(() => ValidateFileAsync(context, pr, path, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<Unit>> IGitHubReader.VerifyAccessAsync(GitHubRepositoryContext context,CancellationToken ct) => Boundary.CaptureAsync(() => VerifyAccessAsync(context, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<PullRequest>> IGitHubPullRequestWriter.CreatePullRequestAsync(GitHubRepositoryContext context,string headBranch,string baseBranch,        string title,string body,bool draft,CancellationToken ct) => Boundary.CaptureAsync(() => CreatePullRequestAsync(context, headBranch, baseBranch, title, body, draft, ct), ProblemCodes.GitHubRequest);
+
+    Task<Result<PullRequest>> IGitHubPullRequestWriter.UpdatePullRequestBaseAsync(GitHubRepositoryContext context,long number,string baseBranch,CancellationToken ct) => Boundary.CaptureAsync(() => UpdatePullRequestBaseAsync(context, number, baseBranch, ct), ProblemCodes.GitHubRequest);
     }
 }

@@ -86,6 +86,22 @@ public sealed class FrameworkTests
         public Task<JournalEntry?> UndoableAsync(string repository, CancellationToken ct = default) => Task.FromResult(Last);
         public Task<JournalEntry?> ByIdAsync(string repository, string id, CancellationToken ct = default) => Task.FromResult(Last);
         public IReadOnlyList<JournalEntry> Recent(string repository, int count = 20) => Last is null ? [] : [Last];
+
+    Task<Result<JournalEntry>> IJournal.OpenAsync(string repository,string kind,IReadOnlyList<JournalStep> planned,CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(repository, kind, planned, ct), ProblemCodes.StoreWrite);
+
+    Task<Result<JournalEntry>> IJournal.StepAsync(JournalEntry entry,JournalStep step,CancellationToken ct) => Boundary.CaptureAsync(() => StepAsync(entry, step, ct), ProblemCodes.StoreWrite);
+
+    Task<Result<JournalEntry>> IJournal.CloseAsync(JournalEntry entry,JournalPhase phase,string? stashRef ,string? pendingStepId ,string? message ,CancellationToken ct) => Boundary.CaptureAsync(() => CloseAsync(entry, phase, stashRef, pendingStepId, message, ct), ProblemCodes.StoreWrite);
+
+    Task<Result<JournalEntry>> IJournal.SetStashAsync(JournalEntry entry,string? stashRef,CancellationToken ct) => Boundary.CaptureAsync(() => SetStashAsync(entry, stashRef, ct), ProblemCodes.StoreWrite);
+
+    Task<Result<JournalEntry?>> IJournal.ActiveAsync(string repository,CancellationToken ct) => Boundary.CaptureAsync(() => ActiveAsync(repository, ct), ProblemCodes.StoreWrite);
+
+    Task<Result<JournalEntry?>> IJournal.UndoableAsync(string repository,CancellationToken ct) => Boundary.CaptureAsync(() => UndoableAsync(repository, ct), ProblemCodes.StoreWrite);
+
+    Task<Result<JournalEntry?>> IJournal.ByIdAsync(string repository,string id,CancellationToken ct) => Boundary.CaptureAsync(() => ByIdAsync(repository, id, ct), ProblemCodes.StoreWrite);
+
+    Result<IReadOnlyList<JournalEntry>> IJournal.Recent(string repository,int count ) => Boundary.Capture(() => Recent(repository, count), ProblemCodes.StoreWrite);
     }
 
     private sealed class RefusingCommand : IStackCommand
@@ -104,7 +120,7 @@ public sealed class FrameworkTests
         public Task<CommandPlan> PlanAsync(CancellationToken ct = default) => Task.FromResult(CommandPlan.Ready([JournalStep.Planned("s1", "move", "refs/heads/A")]));
         public async Task<CommandOutcome> ExecuteAsync(CommandContext context, CancellationToken ct = default)
         {
-            await context.Journal.StepAsync(context.Entry, context.Entry.Steps[0].Finished(new string('a', 40), new string('b', 40), StepState.Done), ct);
+            (await context.Journal.StepAsync(context.Entry, context.Entry.Steps[0].Finished(new string('a', 40), new string('b', 40), StepState.Done), ct)).OrThrow();
             throw new InvalidOperationException("boom");
         }
         public Task<CommandOutcome> UndoAsync(JournalEntry entry, CancellationToken ct = default)

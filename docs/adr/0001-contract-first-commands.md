@@ -19,9 +19,9 @@ missing was an enforcing mechanism at the boundary and a single owner for effect
 
 Adopt **Design by Contract** as the working methodology, expressed as:
 
-1. **Validated value types** for every boundary input (R1).
+1. **Validated value types** for user command inputs and publication ownership (R1).
 2. **`Result<T>`/`Problem`** on ports instead of thrown exceptions (R2).
-3. **`IStackCommand` + write-ahead `IJournal`** as the only way to change git, disk or GitHub, run by one
+3. **`IStackCommand` + write-ahead `IJournal`** for foreground Git, configuration and GitHub mutations, run by one
    `CommandRunner` (R3).
 4. **Fitness functions** in the test suite so the rules fail the build instead of relying on review comments.
 
@@ -42,13 +42,22 @@ types; the planners stay a **functional core** so the risky logic is testable wi
 
 ## Consequences
 
-- Every mutation is recoverable and every interruption is visible; the app can offer *Restore* after a crash.
-- New features cost one slice, one command and one spec; the primitives remove the need to think about atomicity.
+- Foreground mutations leave durable evidence. Proven local ref effects can be restored; unknown effects and remote writes may require user reconciliation.
+- New mutations use a feature slice and a command. Recovery still requires explicit preconditions and provenance; a journal alone does not prove ownership.
 - Boundary calls are slightly more verbose (`Result` handling), and pure planners keep throwing for programmer
   errors — the churn is limited to ports.
 - The review's finding list becomes the acceptance checklist for the migration, phase by phase.
 
-## Follow-up phases (tracked in the migration plan)
+## Implementation update — 2026-10-16
 
-A framework contracts ✔ · B storage and lifecycle ✔ (this change) · C write path as commands · D GitHub and review
-as commands · E diff, search and syntax · F UX pass (uniform reporting, recovery banner) · G documentation ✔.
+A–G are implemented in the existing projects. The migration closes the original finding register and the ten
+additional safety regressions; see [MIGRATION.md](../MIGRATION.md) for evidence per item.
+
+The original absolute wording is narrowed deliberately: draft autosave, preferences and caches are not journaled
+commands. Low-level adapter APIs retain some string parameters and concrete compatibility methods; Core ports
+return Result and user commands use validated values. Only operations with proven reversible effects compensate.
+Unknown crash windows remain blocked for inspection, and remote multi-step actions report partial success.
+
+The [architecture document](../ARCHITECTURE.md) defines current ownership, schemas, concurrency and recovery policy.
+The [verification record](../../VERIFICATION.md) distinguishes local automated checks, cross-built packages and
+external platform/integration checks.

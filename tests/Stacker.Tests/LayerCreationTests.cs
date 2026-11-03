@@ -4,7 +4,7 @@ using Stacker.Infrastructure;
 namespace Stacker.Tests;
 public sealed class LayerCreationTests
 {
-    private static GitBranchWriter Writer(GitFixture f) => f.Writer();
+    private static LocalGitClient Writer(GitFixture f) => f.Writer();
 
     // Scenario: A layer starts at the chosen ref, is checked out, and leaves the working tree clean.
     [Fact] public async Task A_layer_is_created_at_the_chosen_start_point_and_checked_out()

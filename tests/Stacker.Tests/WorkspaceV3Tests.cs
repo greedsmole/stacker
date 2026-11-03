@@ -1,3 +1,4 @@
+using Stacker.Core.Framework;
 // Purpose: Workspace scenarios for multiple independent stacks, saved view state, and selection-driven comparison modes.
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -12,12 +13,16 @@ namespace Stacker.Tests;
 public sealed class WorkspaceV3Tests
 {
     private static MainViewModel Create(GitFixture f, ApplicationStore store, FakeGitHub? hub = null) =>
-        new(f.Reader, new YamlStackStore(), new JsonSettingsStore(Path.Combine(f.Root, "settings")), new(), new(f.Reader), new(f.Reader), hub, hub, new SeededCache(f.Root), store);
+        new(f.Reader, new YamlStackStore(), new JsonSettingsStore(Path.Combine(f.Root, "settings")), new GitExecutable(), new(f.Reader), new(f.Reader), hub, hub, new SeededCache(f.Root), store);
     private sealed class SeededCache(string root) : IGitObjectCache
     {
         public Task<RepositorySnapshot> PrepareAsync(GitHubRepositoryContext context, IReadOnlyList<PullRequest> prs, CancellationToken ct = default) =>
             Task.FromResult(new RepositorySnapshot(root, prs.SelectMany(p => new[] { new BranchRef(GitObjectCache.HeadRef(p), p.HeadSha), new BranchRef(GitObjectCache.BaseRef(p), p.BaseSha) }).ToArray(), 0));
         public Task ClearAsync(GitHubRepositoryContext context, CancellationToken ct = default) => Task.CompletedTask;
+
+    Task<Result<RepositorySnapshot>> IGitObjectCache.PrepareAsync(GitHubRepositoryContext context,IReadOnlyList<PullRequest> prs,CancellationToken ct) => Boundary.CaptureAsync(() => PrepareAsync(context, prs, ct), ProblemCodes.GitFailed);
+
+    Task<Result<Unit>> IGitObjectCache.ClearAsync(GitHubRepositoryContext context,CancellationToken ct) => Boundary.CaptureAsync(() => ClearAsync(context, ct), ProblemCodes.GitFailed);
     }
     [AvaloniaFact] public async Task Clean_diff_preserves_patch_numbers_and_newline_annotation()
     {

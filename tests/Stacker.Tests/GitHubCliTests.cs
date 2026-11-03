@@ -1,3 +1,4 @@
+using Stacker.Core.Framework;
 // Purpose: Fixture-driven checks for gh origin parsing, authentication interpretation, and GitHub API payload handling.
 using System.Text.Json;
 using Stacker.Core;
@@ -7,6 +8,8 @@ public sealed class ScriptedRunner(Func<ProcessRequest,ProcessResult> handler) :
 {
     public List<ProcessRequest> Calls { get; } = [];
     public Task<ProcessResult> RunAsync(ProcessRequest request,CancellationToken ct=default) { ct.ThrowIfCancellationRequested(); Calls.Add(request); return Task.FromResult(handler(request)); }
+
+    Task<Result<ProcessResult>> IProcessRunner.RunAsync(ProcessRequest request,CancellationToken ct) => Boundary.CaptureAsync(() => RunAsync(request, ct), ProblemCodes.GitFailed);
 }
 public sealed class GitHubCliTests
 {

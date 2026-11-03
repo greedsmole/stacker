@@ -9,7 +9,8 @@ public sealed record BranchRef(string Name, string Sha)
     public override string ToString() => DisplayName;
 }
 /// <summary>Immutable view of the repository refs and working-tree summary used by a comparison.</summary>
-public sealed record RepositorySnapshot(string Root, IReadOnlyList<BranchRef> Refs, int ChangedFiles);
+public sealed record RepositorySnapshot(string Root, IReadOnlyList<BranchRef> Refs, int ChangedFiles)
+{ public bool IsDemo { get; init; } }
 /// <summary>Resolved state for one ordered layer, including parent relationship and divergence warning.</summary>
 public sealed record StackLayerSnapshot(int Position, string Branch, string Parent, string? HeadSha,
     string? ParentSha, int Ahead, int Behind, string? Warning);
@@ -51,7 +52,12 @@ public sealed record ProcessRequest(string Executable, IReadOnlyList<string> Arg
     IReadOnlyDictionary<string, string>? Environment = null, string? StandardInput = null, IReadOnlyList<string>? UnsetEnvironment = null);
 public sealed record ProcessResult(int ExitCode, string StdOut, string StdErr);
 /// <summary>Expected user-facing failure that can be shown without treating it as an application crash.</summary>
-public class StackerException(string message) : Exception(message);
+public class StackerException : Exception
+{
+    public Framework.Problem? Problem { get; }
+    public StackerException(string message) : base(message) { }
+    public StackerException(Framework.Problem problem) : base(problem.Message) => Problem = problem;
+}
 public sealed class GitHubAuthenticationException(string message) : StackerException(message);
 public sealed class OutputLimitException() : StackerException("Output exceeds the display limit. Select a smaller file or comparison.");
 
