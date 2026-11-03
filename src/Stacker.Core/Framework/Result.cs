@@ -8,8 +8,11 @@ public readonly record struct Unit
 
 /// <summary>What went wrong at a boundary, with a stable code the UI can act on.</summary>
 /// <remarks>Messages are ready for display; details carry the raw tool output for the diagnostics tab.</remarks>
+public enum EffectCertainty { NotStarted,Rejected,Confirmed,Unknown }
+
 public sealed record Problem(string Code, string Message, IReadOnlyList<string> Details)
 {
+    public EffectCertainty Certainty { get; init; } = EffectCertainty.Unknown;
     public static Problem Of(string code, string message, params string[] details) => new(code, message, details);
     public override string ToString() => Code + ": " + Message;
 }
@@ -60,7 +63,7 @@ public sealed class Result<T>
     public T OrThrow()
     {
         if (IsOk) return Value!;
-        if (Problem!.Code == ProblemCodes.GitHubAuth) throw new GitHubAuthenticationException(Problem.Message);
+        if (Problem!.Code == ProblemCodes.GitHubAuth) throw new GitHubAuthenticationException(Problem);
         throw new StackerException(Problem);
     }
 }

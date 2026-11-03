@@ -168,7 +168,7 @@ See VERIFICATION.md for the actual local verification record and THIRD_PARTY_NOT
 
 ## Review history and stack analysis
 
-Choose **History** beside the comparison toolbar after selecting a stack or PR. The separate history window captures the selected path into a private bare object cache. Open a layer to preserve its version automatically; metadata refresh records versions without downloading objects. History begins when Stacker observes a version—it cannot reconstruct a force-pushed version that was never downloaded.
+Choose **History** beside the comparison toolbar after selecting a stack or PR. History opens inside the main window, shares its layer/file selection, and captures the selected path into a private bare object cache. Back/Forward restores the selected version, mode and file. Historical patches use the same diff viewer as current code, with commenting disabled. Open a layer to preserve its version automatically; metadata refresh records versions without downloading objects. History begins when Stacker observes a version—it cannot reconstruct a force-pushed version that was never downloaded.
 
 Select a layer and **Load layer**, then select a file. **Mark reviewed** records an explicit, personal checkpoint; merely reading a file does not mark it. **Since my review** and **Compare versions** show what changed. When the base moved, Stacker replays the old patch onto the new merge-base and compares that expected tree with the current head. Conflicting replay, missing objects or unsupported Git capabilities produce an unavailable result, never a false “unchanged” result. This is textual analysis, not proof of semantic equivalence.
 
@@ -178,6 +178,28 @@ The **Graph and history** section shows earlier dependency snapshots. Explicit p
 
 In the Review panel, **Reattach…** on an old draft comment proposes a unique exact text/context match. Inspect the old and new locations, then **Confirm new anchor**. Published comments are never moved. Ambiguous matches require manual selection.
 
-History, review checkpoints and revision-checked drafts live in `review-history.db` under the existing application-data directory. Existing draft JSON files are imported on first read and preserved. SQLite transactions refuse competing stale draft writes. Prepared publication payloads are kept independently of later edits, and uncertain writes are reconciled without automatic resend. Downloaded historical objects live in `history-objects`, separately from the replaceable GitHub download cache; clearing that download cache retains history. **Remove historical code** requires a second click and deletes that scope’s downloaded history while retaining metadata and drafts; unreachable old commits may then be unavailable permanently.
+History, review checkpoints and revision-checked drafts live in `review-history.db` under the existing application-data directory. Existing draft JSON files are imported on first read and preserved. SQLite transactions refuse competing stale draft writes. Prepared publication payloads are kept independently of later edits, and uncertain writes are reconciled without automatic resend. Downloaded historical objects live in `history-objects`, separately from the replaceable GitHub download cache; clearing that download cache retains history. **Remove historical code** requires a second click; removal waits for active readers to release the objects and retains metadata and drafts; unreachable old commits may then be unavailable permanently.
 
 The offline demo seeds a previously reviewed Session API version. Open Authorization → History → Session API → Load layer → Auth.cs → Since my review to inspect the subsequent change. Demo publication remains disabled.
+
+## Workspace durability and recovery
+
+History belongs to a repository identity shared by its worktrees; navigation belongs to the individual worktree.
+Matching local branches and PRs share review checkpoints after the active GitHub account is verified. Other
+accounts retain separate remote histories and drafts. To reconnect a moved repository, use **Settings and help
+→ Locate moved repository…**, select its previous location, and choose the new folder.
+
+**Export workspace…** saves a ZIP containing the SQLite history/drafts, navigation, settings, journals and pinned
+historical objects. Disposable downloads and credentials are excluded. **Restore workspace copy…** verifies the
+checksums and database into a separate empty folder. **Open restored workspace** opens that profile; the original
+profile remains available. The source repository and its YAML definitions remain in their Git working directory;
+use **Locate moved repository…** if that directory moved. `--data-root /path/to/profile` also opens a separate profile.
+
+If closing cannot save work, Stacker offers Retry, Save a text copy, Continue editing, or explicit Close without
+saving. The text copy includes unsent review text and anchor information. **Operations and recovery** shows
+operation IDs and recorded effects across restarts. An explicit server rejection permits a later manual send;
+an unknown result keeps sending blocked until reconciliation or a manual GitHub check.
+
+Settings include a disposable download budget (2 GiB by default). Active readers are protected from eviction;
+historical objects are removed only by explicit action, with a warning after 5 GiB. **Export diagnostics…** copies
+bounded local metadata logs containing operation IDs, stages, durations, byte counts and problem codes.

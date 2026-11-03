@@ -84,13 +84,14 @@ public sealed class HistoryWorkflowTests
             {
                 var vm = services.GetRequiredService<MainViewModel>(); await vm.OpenRepositoryAsync(f.Root);
                 using var history = await vm.OpenHistoryAsync(); Assert.NotNull(history);
-                var window = new HistoryWindow { DataContext = history }; window.Show();
+                var panel = new HistoryPanel { DataContext = history };
+                var window = new Window { Content = panel }; window.Show();
                 Assert.Equal(3, history.Nodes.Count); Assert.Single(history.Files);
                 await history.MarkReviewedCommand.ExecuteAsync(null);
                 Assert.Equal(FileReviewState.Reviewed, Assert.Single(history.Files).State);
-                await history.ShowCurrentCommand.ExecuteAsync(null); Assert.Contains("A.txt", history.Preview);
+                await history.ShowCurrentCommand.ExecuteAsync(null); Assert.Contains(history.DocumentSections, section => section.Result.Files.Any(file => file.NewPath == "A.txt"));
                 await history.AttentionCommand.ExecuteAsync(null); Assert.Equal(2, history.Attention.Count);
-                Assert.NotNull(window.FindControl<ListBox>("ReviewFiles"));
+                Assert.NotNull(panel.FindControl<ListBox>("ReviewFiles"));
                 window.Close(); await vm.ShutdownAsync();
             }
             using (var services = Composition.Build(root))

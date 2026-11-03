@@ -3,8 +3,9 @@ using Stacker.Core.Framework;
 using Stacker.Core;
 namespace Stacker.Infrastructure;
 
-public sealed class GitObjectCache(IProcessRunner runner, GitExecutable git, GhExecutable gh, ApplicationStore store, IGitHubReader? reader = null) : IGitObjectCache
+public sealed class GitObjectCache(IProcessRunner runner, GitExecutable git, GhExecutable gh, ApplicationStore store, IGitHubReader? reader = null, IObjectStore? objects = null) : IGitObjectCache
 {
+    private readonly IObjectStore _objects = objects ?? new ObjectStore(store);
     private readonly SemaphoreSlim _gate = new(1, 1);
     private string DirectoryFor(GitHubRepositoryContext context) => Path.Combine(store.Root, "objects", ApplicationStore.Key(context.Identity));
     public async Task<RepositorySnapshot> PrepareAsync(GitHubRepositoryContext context, IReadOnlyList<PullRequest> prs, CancellationToken ct = default)
@@ -12,7 +13,7 @@ public sealed class GitObjectCache(IProcessRunner runner, GitExecutable git, GhE
         await _gate.WaitAsync(ct);
         try
         {
-            var root = DirectoryFor(context); Directory.CreateDirectory(root);
+            var root = DirectoryFor(context); using var lease=(await _objects.AcquireAsync(root,true,ct)).OrThrow();
             if (!File.Exists(Path.Combine(root, "HEAD"))) await Run(root, ["init", "--bare"], ct);
             var requested = prs.DistinctBy(pr => pr.Number).ToArray();
             var missing = new List<PullRequest>();
@@ -46,31 +47,15 @@ public sealed class GitObjectCache(IProcessRunner runner, GitExecutable git, GhE
                 }
             }
             var refs = requested.SelectMany(pr => new[] { new BranchRef(HeadRef(pr), pr.HeadSha), new BranchRef(BaseRef(pr), pr.BaseSha) }).ToArray();
+            (await _objects.TrimAsync(ct)).OrThrow();
             return new(root, refs.DistinctBy(r => r.Name).ToArray(), 0);
         }
         finally { _gate.Release(); }
     }
     public static string HeadRef(PullRequest pr) => $"refs/heads/__pr_{pr.Number}";
     public static string BaseRef(PullRequest pr) => $"refs/heads/__base_{pr.Number}";
-    public async Task ClearAsync(GitHubRepositoryContext context, CancellationToken ct = default)
-    {
-        await _gate.WaitAsync(ct);
-        try
-        {
-            var path = DirectoryFor(context);
-            if (Directory.Exists(path))
-            {
-                // Git stores read-only object files on Windows. Clear only our private cache.
-                foreach (var file in Directory.EnumerateFiles(path, "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint }))
-                {
-                    ct.ThrowIfCancellationRequested();
-                    File.SetAttributes(file, File.GetAttributes(file) & ~FileAttributes.ReadOnly);
-                }
-                Directory.Delete(path, true);
-            }
-        }
-        finally { _gate.Release(); }
-    }
+    public async Task ClearAsync(GitHubRepositoryContext context,CancellationToken ct=default)
+    { (await _objects.RemoveAsync(DirectoryFor(context),ct)).OrThrow(); }
     private async Task<bool> Exists(string root, string sha, CancellationToken ct)
     {
         if (sha.Length is not (40 or 64) || !sha.All(Uri.IsHexDigit)) throw new StackerException("Invalid GitHub commit SHA.");

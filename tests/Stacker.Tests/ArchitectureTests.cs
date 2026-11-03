@@ -90,7 +90,7 @@ public sealed partial class ArchitectureTests
         {
             using var services = Stacker.Desktop.Composition.Build(root);
             Assert.NotNull(services.GetRequiredService<MainViewModel>());
-            foreach (var contract in new[] { typeof(IGitBranchWriter), typeof(IGitRepositoryReader), typeof(IJournal), typeof(IEditorLauncher), typeof(IStackStore), typeof(ISettingsStore), typeof(Stacker.Core.Framework.IClock), typeof(IHistoryStore), typeof(IHistoryGit) })
+            foreach (var contract in new[] { typeof(IGitBranchWriter), typeof(IGitRepositoryReader), typeof(IJournal), typeof(IEditorLauncher), typeof(IStackStore), typeof(ISettingsStore), typeof(Stacker.Core.Framework.IClock), typeof(IHistoryStore), typeof(IHistoryGit),typeof(IChangeIdentityService),typeof(IReviewDraftRepository),typeof(IWorkspaceBackupService),typeof(IObjectStore),typeof(IDiagnosticSink) })
                 Assert.NotNull(services.GetRequiredService(contract));
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
@@ -112,7 +112,7 @@ public sealed partial class ArchitectureTests
             typeof(IGitRepositoryReader), typeof(IGitBranchWriter), typeof(IStackStore), typeof(ISettingsStore),
             typeof(IBlobReader), typeof(IGitHubReader), typeof(IGitHubWriter), typeof(IGitHubPullRequestWriter),
             typeof(IGitObjectCache), typeof(ISyntaxHighlighter), typeof(IJournal), typeof(IApplicationState),
-            typeof(IDemoRepository), typeof(IDemoSnapshotReader), typeof(IAtomicFile), typeof(IHistoryStore), typeof(IHistoryGit), typeof(IHistoryRemoteReader)];
+            typeof(IDemoRepository), typeof(IDemoSnapshotReader), typeof(IAtomicFile), typeof(IHistoryStore), typeof(IHistoryGit), typeof(IHistoryRemoteReader),typeof(IChangeIdentityService),typeof(IReviewDraftRepository),typeof(IWorkspaceBackupService),typeof(IObjectStore),typeof(IDiagnosticSink)];
         foreach (var port in ports)
             foreach (var method in port.GetMethods().Where(method => !method.IsSpecialName))
             {
@@ -130,6 +130,12 @@ public sealed partial class ArchitectureTests
             Assert.DoesNotContain("async void", source.Text);
             Assert.DoesNotMatch(@"\b(File|Directory)\.(Read|Write|Exists|Open|Create|Delete|Move|Enumerate)", source.Text);
         }
+    }
+
+    [Fact] public void Workspace_controllers_depend_on_typed_presentations()
+    {
+        foreach(var source in ProductSources("Desktop").Where(s=>s.Path.EndsWith("Controller.cs",StringComparison.Ordinal)&&!s.Path.Contains("Review")))
+            Assert.DoesNotContain("MainViewModel",source.Text);
     }
 
     [GeneratedRegex("Problem\\.Of\\(\"|Result<[^>]+>\\.Fail\\(\"")]

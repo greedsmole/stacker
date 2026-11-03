@@ -34,7 +34,11 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
         return (parts[0].ToLowerInvariant(), parts[1], name);
     }
     // JSON is parsed even after a successful exit: gh auth status can encode invalid credentials in its JSON payload.
-    private async Task<JsonElement> RunJsonAsync(string[] args, CancellationToken ct, string? body = null)
+    private readonly ReadScheduler _metadataReads = new();
+    private Task<JsonElement> RunJsonAsync(string[] args,CancellationToken ct,string? body=null) => body is null
+        ? _metadataReads.RunAsync(ReadWork.Metadata,token=>RunJsonCoreAsync(args,token,body),ct)
+        : RunJsonCoreAsync(args,ct,body);
+    private async Task<JsonElement> RunJsonCoreAsync(string[] args, CancellationToken ct, string? body = null)
     {
         var response = (await runner.RunAsync(new(gh.Resolve(), args, Timeout: TimeSpan.FromSeconds(60), MaxOutputBytes: 32 * 1024 * 1024,
             Environment: new Dictionary<string, string> { ["GH_PROMPT_DISABLED"] = "1", ["GH_PAGER"] = "cat", ["GH_DEBUG"] = "" }, StandardInput: body, UnsetEnvironment: gh.UnsetEnvironment), ct)).OrThrow();
@@ -42,9 +46,10 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
         var parsed = TryParse(response.StdOut);
         if (response.ExitCode != 0)
         {
-            if (response.StdErr.Contains("HTTP 401", StringComparison.OrdinalIgnoreCase)) throw new GitHubAuthenticationException(response.StdErr.Trim());
+            if (response.StdErr.Contains("HTTP 401", StringComparison.OrdinalIgnoreCase)) throw new GitHubAuthenticationException(Problem.Of(ProblemCodes.GitHubAuth,response.StdErr.Trim()) with{Certainty=EffectCertainty.Rejected});
             if (args[0] != "auth" || parsed is null)
-                throw new StackerException($"GitHub request failed ({response.ExitCode}): {response.StdErr.Trim()} {parsed?.ToString()}".Trim());
+                throw new StackerException(Problem.Of(ProblemCodes.GitHubRequest, $"GitHub request failed ({response.ExitCode}): {response.StdErr.Trim()} {parsed?.ToString()}".Trim())
+                    with { Certainty = System.Text.RegularExpressions.Regex.IsMatch(response.StdErr, @"HTTP (401|403|404|422)\b") ? EffectCertainty.Rejected : EffectCertainty.Unknown });
         }
         return parsed ?? throw new StackerException("gh returned invalid JSON. Check the GitHub host and CLI version.");
     }

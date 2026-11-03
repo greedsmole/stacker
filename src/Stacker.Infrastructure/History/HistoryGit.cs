@@ -3,10 +3,20 @@ using Stacker.Core.Framework;
 using Stacker.Infrastructure.Framework;
 namespace Stacker.Infrastructure;
 
-public sealed class HistoryGit(IProcessRunner runner, GitExecutable git, IApplicationState state) : IHistoryGit
+public sealed class HistoryGit(IProcessRunner runner, GitExecutable git, IApplicationState state, IObjectStore? objects = null, SqliteHistoryStore? database = null) : IHistoryGit
 {
+    private readonly IObjectStore _objects = objects ?? new ObjectStore(state);
+    private readonly SqliteHistoryStore _database=database??new SqliteHistoryStore(state.Root);
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private string Root(string scope) => Path.Combine(state.Root, "history-objects", ApplicationStore.Key(scope));
+    private string Scope(string scope)=>_database.ObjectScope(scope);
+    private string Root(string scope) => Path.Combine(state.Root, "history-objects", ApplicationStore.Key(Scope(scope)));
+    public Task<Result<ContentAvailability>> AvailabilityAsync(string scope,CancellationToken ct=default)=>Task.Run(()=>Boundary.Capture(()=>
+    {
+        ct.ThrowIfCancellationRequested();var canonical=Scope(scope);var known=_database.ContentStatus(canonical);
+        if(known==ContentAvailability.Removed)return ContentAvailability.Removed;
+        var root=Root(scope);if(File.Exists(Path.Combine(root,"HEAD")))return ContentAvailability.Available;
+        return Directory.Exists(root)||known==ContentAvailability.Available?ContentAvailability.Unavailable:ContentAvailability.NeedsDownload;
+    },ProblemCodes.StoreRead),ct);
     private static void Sha(string value)
     {
         if (value.Length is not (40 or 64) || !value.All(Uri.IsHexDigit)) throw new StackerException("Invalid history object ID.");
@@ -28,18 +38,26 @@ public sealed class HistoryGit(IProcessRunner runner, GitExecutable git, IApplic
             await _gate.WaitAsync(ct);
             try
             {
-                var root = Root(scope); Directory.CreateDirectory(root);
+                var root = Root(scope);
+                if(_database.ContentStatus(Scope(scope))==ContentAvailability.Removed && !(await _objects.RemoveAsync(root,ct)).OrThrow())
+                    throw new StackerException("Close active history views before downloading removed contents again.");
+                using var lease = (await _objects.AcquireAsync(root, true, ct)).OrThrow();
                 if (!File.Exists(Path.Combine(root, "HEAD"))) await Run(root, ["init", "--bare"], ct);
                 var missing = new List<string>();
                 foreach (var sha in commits.Distinct()) if ((await Run(root, ["cat-file", "-e", sha + "^{commit}"], ct, true)).ExitCode != 0) missing.Add(sha);
                 if (missing.Count > 0) await Run(root, ["fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--", source, .. missing], ct);
                 foreach (var sha in commits.Distinct()) await Run(root, ["update-ref", "refs/stacker/history/" + sha, sha], ct);
+                _database.RecordContents(Scope(scope),ContentAvailability.Available);
                 return root;
             }
             finally { _gate.Release(); }
         }, ProblemCodes.GitFailed);
-    public Task<Result<string>> RootAsync(string scope, CancellationToken ct = default) => Task.FromResult(
-        Directory.Exists(Root(scope)) ? Result<string>.Ok(Root(scope)) : Result<string>.Fail(ProblemCodes.GitRefMissing, "Historical objects have not been downloaded."));
+    public async Task<Result<string>> RootAsync(string scope, CancellationToken ct = default)
+    {
+        var status=await AvailabilityAsync(scope,ct);if(status.IsFailed)return Result<string>.Fail(status.Problem!);
+        return status.Value==ContentAvailability.Available?Result<string>.Ok(Root(scope)):Result<string>.Fail(ProblemCodes.GitRefMissing,status.Value switch
+        {ContentAvailability.Removed=>"Historical contents were explicitly removed. Metadata and drafts remain.",ContentAvailability.Unavailable=>"Historical contents are missing or damaged. Metadata was preserved.",_=>"Historical contents need to be downloaded."});
+    }
     public Task<Result<string?>> TransplantAsync(string root, string oldBase, string oldHead, string newBase, CancellationToken ct = default) =>
         Boundary.CaptureAsync(async () =>
         {
@@ -58,19 +76,12 @@ public sealed class HistoryGit(IProcessRunner runner, GitExecutable git, IApplic
             if (result.ExitCode != 1) throw new StackerException("Merge preview unavailable: " + result.StdErr.Trim());
             return result.StdOut.Split('\0').Skip(1).TakeWhile(s => s.Length > 0).ToArray();
         }, ProblemCodes.GitFailed);
-    public Task<Result<Unit>> ForgetContentsAsync(string scope, CancellationToken ct = default) => Boundary.CaptureAsync(async () =>
+    public async Task<Result<ObjectSnapshotLease>> AcquireAsync(string scope, CancellationToken ct = default)
     {
-        await _gate.WaitAsync(ct);
-        try
-        {
-            var root = Root(scope);
-            if (!Directory.Exists(root)) return;
-            foreach (var file in Directory.EnumerateFiles(root, "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint }))
-            { ct.ThrowIfCancellationRequested(); File.SetAttributes(file, FileAttributes.Normal); }
-            Directory.Delete(root, true);
-        }
-        finally { _gate.Release(); }
-    }, ProblemCodes.StoreWrite);
+        var root=await RootAsync(scope,ct);return root.IsFailed?Result<ObjectSnapshotLease>.Fail(root.Problem!):await _objects.AcquireAsync(root.Value!,false,ct);
+    }
+    public Task<Result<Unit>> ForgetContentsAsync(string scope, CancellationToken ct = default) => Boundary.CaptureAsync(async () =>
+    { (await _objects.RemoveAsync(Root(scope), ct)).OrThrow();_database.RecordContents(Scope(scope),ContentAvailability.Removed); }, ProblemCodes.StoreWrite);
     private void CheckRoot(string root)
     {
         var owner = Path.GetFullPath(Path.Combine(state.Root, "history-objects")) + Path.DirectorySeparatorChar;

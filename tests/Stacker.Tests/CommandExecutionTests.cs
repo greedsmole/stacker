@@ -58,7 +58,7 @@ public sealed class CommandExecutionTests
         var writer = new CommandGitHubWriter(cli, bus);
         await Assert.ThrowsAsync<StackerException>(() => writer.CommentAsync(FakeGitHub.Context, 42, "keep text"));
         var entry = (journal.Recent("github:" + FakeGitHub.Context.Identity)).OrThrow()[0];
-        Assert.Equal("github.comment", entry.Kind); Assert.Equal(JournalPhase.NeedsUser, entry.Phase);
+        Assert.Equal("github.comment", entry.Kind); Assert.Equal(JournalPhase.Dismissed, entry.Phase);
         Assert.NotEqual(StepState.Done, entry.Steps[0].State);
     }
 

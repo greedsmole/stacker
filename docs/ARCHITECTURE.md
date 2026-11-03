@@ -109,8 +109,9 @@ Patch and syntax caches have entry and estimated retained-memory budgets. Large 
 these budgets are estimates, not a whole-process heap limit. Search has a shared five-second deadline, bounded
 regex matches, cancellation and shared patch reuse. Changed-line matching runs off the UI thread.
 
-Shutdown stops foreground work with a deadline, attempts workspace/draft/settings persistence, collects failures
-and closes the window. UI async events use `AsyncHandler` to catch and report failures. Corrupt publication markers
+Shutdown pauses foreground work with a deadline and attempts workspace/draft/settings persistence. A failed
+save keeps the close decision with the user: retry, export unsent text, resume editing, or explicitly discard.
+Only committing the close permanently stops the bus and disposes the session. UI async events use `AsyncHandler` to catch and report failures. Corrupt publication markers
 keep sending blocked until the user explicitly resolves uncertainty; unreadable drafts do not permit a send.
 
 ## Fitness and evidence
@@ -131,8 +132,11 @@ used for analysis; a later metadata poll cannot silently change a running review
 active remote paths from this graph, while closed/merged nodes remain available in historical snapshots.
 
 `Infrastructure/History` implements `IHistoryStore` with Microsoft.Data.Sqlite and `IHistoryGit` with a private bare
-repository per scope. The indexed SQLite document tables use transactions for version identity and draft import,
-and compare revisions for draft writes. Unknown database schema versions and damaged legacy drafts fail closed.
+repository per scope. SQLite schema 2 uses separate indexed tables and foreign keys for nodes, immutable versions, materialization
+evidence, observations, graphs/members, checkpoints, concerns, identities, drafts and publication operations.
+A graph observation commits nodes, versions and graph together against an expected graph revision; draft
+writes carry an explicit expected revision. Schema-1 migration makes a SQLite backup before its transaction,
+retains the original document table and keeps the three latest migration backups. Unknown database schema versions and damaged legacy drafts fail closed.
 The existing JSON workspace/settings and v1 YAML definitions retain their formats. Legacy draft JSON is preserved.
 
 Observed PR metadata does not imply downloaded code. Opening a layer pins the available commits in a separate
@@ -146,3 +150,49 @@ An immutable operation payload is persisted before sending. The existing foregro
 actual GitHub effect and journal. View controllers manage presentation and clear only the acknowledged draft
 buffers. Historical anchor proposals require exact unique context, explicit confirmation and publication-time
 server validation; original anchors remain in the draft's history.
+
+
+## Workspace foundation
+
+`IWorkspaceSession` owns displayed/pending snapshots, selection and query tickets independently of Avalonia.
+A ticket includes session epoch, selection revision and displayed-snapshot revision. Background metadata is
+staged, including its graph, and **Update changes** applies it explicitly. Seven workspace controllers depend
+on purpose-specific presentation interfaces; `WorkspaceRuntime` owns their service references and session,
+while `MainViewModel` exposes bindings and delegates commands. Review controllers retain their existing
+review-view facade; this change does not claim every controller is a pure domain service.
+
+Repository and worktree identities are stored independently of root paths. Registration resolves the Git common
+directory and physical working-tree root. Worktrees share repository history, while workspace keys use worktree
+identity and import older path-based views on first load. Relocation explicitly preserves both identities.
+Local/PR bindings require matching head repository/ref and are established only after a verified, nonbackground
+refresh sees the same head SHA. Binding aliases expose checkpoints and versions to both views, and copy pinned
+historical commits. An account mismatch refuses that binding rather than merging remote histories.
+
+`QueryCoordinator` shares immutable patch reads and reference-counts subscribers. Canceling one subscription
+leaves the others alive; canceling the last cancels the underlying read. Metadata concurrency is capped at four,
+patch reads at two; TextMate and refresh each have a single gate. Retained patch/syntax budgets still apply.
+Large diff rows are prepared off the UI thread, transferred with one collection reset and rendered with the
+existing virtualized list. Autosave has a 300 ms coalescing interval, one in-flight write and one latest snapshot;
+Flush bypasses the interval.
+
+Publication uses one operation ID from prepared payload through the bus, journal and diagnostic record. Remote
+journal evidence and publication payloads live in the same SQLite database; local Git journals retain their JSON
+format. Final draft acknowledgement, publication phase and matching remote journal resolution commit together.
+The immutable payload is checked on every update and only one unfinished publication is allowed per draft.
+Prepared operations interrupted before dispatch are safe to reject; Sending becomes Uncertain on restart.
+NotStarted/Rejected outcomes preserve text and permit a later manual attempt; Unknown never triggers a retry.
+Legacy markers remain readable, including cases without enough evidence for automatic acknowledgement.
+
+`IObjectStore` leases protect both displayed views and underlying Git reads. Clear is deferred until all readers
+release; failed deferred deletes are retried by trimming and explicitly removed history is remembered across
+restart. Automatic LRU eviction is limited to disposable downloads, defaults to 2 GiB and is configurable. Active
+leases can temporarily keep storage above that budget. History has a 5 GiB warning and explicit removal only.
+Availability distinguishes downloaded, needs-download, explicitly removed and unavailable contents.
+
+Workspace backups use SQLite's backup API, object leases, streamed SHA-256 checksums and staged restore into a
+separate empty profile. Export cannot overwrite the active profile. Restore checks schema, integrity and foreign
+keys before moving the staging directory into place. This is a profile backup, not a backup of the user's checkout
+or GitHub credentials. Local diagnostics retain five approximately 4 MiB JSONL files; the allowlisted event shape
+contains no patches, paths, credentials or comment bodies.
+
+[Foundation delivery register](FOUNDATION.md) maps these boundaries to executable evidence.

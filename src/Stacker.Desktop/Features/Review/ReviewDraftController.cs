@@ -8,6 +8,7 @@ namespace Stacker.Desktop.ViewModels;
 
 internal sealed class ReviewDraftController(ReviewViewModel owner)
 {
+    private CoalescingWriter<ReviewDraft>? _buffer;
     public async Task InitializeAsync(IEnumerable<RenderedDiffLine>? selection = null, CancellationToken ct = default)
     {
         owner._loading = true;
@@ -15,7 +16,6 @@ internal sealed class ReviewDraftController(ReviewViewModel owner)
         {
             owner._draft = (await owner.Session.LoadAsync(owner.Key, ct)).OrThrow() ?? new() { ContextIdentity = owner.Context.Identity, PullRequest = owner.PullRequest.Number, BaseSha = owner.PullRequest.BaseSha, HeadSha = owner.PullRequest.HeadSha, EditorVersion = 1 };
             owner._draftLoaded = true;
-            if (owner._draft.Operation?.Phase == PublicationPhase.Sending) ReviewSessionService.Transition(owner._draft, PublicationPhase.Uncertain);
             if (owner._draft.EditorVersion == 0) { owner._draft.RecoveredText = owner._draft.Composer; owner._draft.Composer = ""; owner._draft.EditorVersion = 1; }
             owner.RecoverDetachedEditors();
             owner.Summary = owner._draft.Summary; owner.Decision = owner._draft.Decision; owner.Composer = owner._draft.ContextComposers.GetValueOrDefault("pr", owner._draft.Composer);
@@ -39,7 +39,8 @@ internal sealed class ReviewDraftController(ReviewViewModel owner)
     {
         if (owner._loading || !owner._draftLoaded) return;
         var copy = JsonSerializer.Deserialize<ReviewDraft>(JsonSerializer.Serialize(owner._draft))!;
-        owner._saveQueue = SaveOrderedAsync(owner._saveQueue, copy);
+        _buffer ??= new(copy => SaveOrderedAsync(Task.CompletedTask, copy));
+        owner._saveQueue = _buffer.Queue(copy);
     }
 
     public async Task SaveOrderedAsync(Task previous, ReviewDraft copy)
@@ -49,6 +50,6 @@ internal sealed class ReviewDraftController(ReviewViewModel owner)
         catch (Exception ex) { owner._saveError = "Cannot save draft: " + ex.Message; owner.Message = owner._saveError; }
     }
 
-    public async Task FlushAsync() { await owner._saveQueue; if (owner._saveError is not null) throw new StackerException(owner._saveError); }
+    public async Task FlushAsync() { if (_buffer is not null) await _buffer.FlushAsync(); await owner._saveQueue; if (owner._saveError is not null) throw new StackerException(owner._saveError); }
 
 }

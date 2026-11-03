@@ -5,8 +5,8 @@ public static class Boundary
 {
     public static Problem Problem(Exception error, string code) => error switch
     {
-        GitHubAuthenticationException => Framework.Problem.Of(ProblemCodes.GitHubAuth, error.Message),
         StackerException { Problem: { } problem } => problem,
+        GitHubAuthenticationException => Framework.Problem.Of(ProblemCodes.GitHubAuth, error.Message),
         _ => Framework.Problem.Of(code, error.Message)
     };
     public static async Task<Result<T>> CaptureAsync<T>(Func<Task<T>> action, string code)

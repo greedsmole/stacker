@@ -5,23 +5,23 @@ using CommunityToolkit.Mvvm.Input;
 using Stacker.Core;
 namespace Stacker.Desktop.ViewModels;
 
-internal sealed class SearchController(MainViewModel owner)
+internal sealed class SearchController(ISearchPresentation owner, WorkspaceRuntime runtime)
 {
     public void OpenSearch(string scope)
     { owner.IsGitLogOpen = false; owner.SearchScope = scope; owner.IsSearchOpen = true; }
 
-    public void CloseSearch() { owner._searchLoad?.Cancel(); owner.IsSearchOpen = false; }
+    public void CloseSearch() { runtime._searchLoad?.Cancel(); owner.IsSearchOpen = false; }
 
     public void ResetSearch()
-    { owner._searchLoad?.Cancel(); owner.SearchResults.Clear(); owner.SearchStatus = "Search files by name or added/removed code across this comparison."; }
+    { runtime._searchLoad?.Cancel(); owner.SearchResults.Clear(); owner.SearchStatus = "Search files by name or added/removed code across this comparison."; }
 
     public async Task SearchAsync()
     {
-        owner._searchLoad?.Cancel();
+        runtime._searchLoad?.Cancel();
         owner.SearchResults.Clear();
         var request = SearchRequest.Create(owner.SearchQuery, owner.SearchRegex);
         if (request.IsFailed) { owner.SearchStatus = request.Problem!.Message; return; }
-        using var load = new CancellationTokenSource(); owner._searchLoad = load;
+        using var load = new CancellationTokenSource(); runtime._searchLoad = load;
         using var deadline = new CancellationTokenSource(SearchRequest.Budget);
         using var work = CancellationTokenSource.CreateLinkedTokenSource(load.Token, deadline.Token);
         var sections = owner.Sections.ToArray(); var hits = new List<ChangeSearchHit>(); var skipped = 0; var truncated = false; var patternTimeouts = 0;
@@ -52,7 +52,7 @@ internal sealed class SearchController(MainViewModel owner)
                     {
                         try
                         {
-                            var patch = (await owner._git.PatchAsync(section.Root, section.Result.BaseSha, section.Result.HeadSha, file, work.Token)).OrThrow();
+                            var patch = (await runtime._git.PatchAsync(section.Root, section.Result.BaseSha, section.Result.HeadSha, file, work.Token)).OrThrow();
                             var found = await Task.Run(() =>
                             {
                                 var matches = new List<ChangeSearchHit>();
@@ -85,7 +85,7 @@ internal sealed class SearchController(MainViewModel owner)
         catch (OperationCanceledException) { }
         catch (RegexMatchTimeoutException) { owner.SearchStatus = "Regex took too long. Try a narrower pattern."; }
         catch (Exception ex) { owner.SearchStatus = "Search failed: " + ex.Message; }
-        finally { if (ReferenceEquals(owner._searchLoad, load)) { owner._searchLoad = null; owner.IsSearchBusy = false; } }
+        finally { if (ReferenceEquals(runtime._searchLoad, load)) { runtime._searchLoad = null; owner.IsSearchBusy = false; } }
     }
 
     public async Task OpenSearchHitAsync(ChangeSearchHit hit)

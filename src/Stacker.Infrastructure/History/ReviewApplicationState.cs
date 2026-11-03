@@ -2,36 +2,28 @@ using Stacker.Core;
 using Stacker.Core.Framework;
 namespace Stacker.Infrastructure;
 
-/// <summary>Routes drafts to transactional storage; each scope owns its expected revisions.</summary>
-public sealed class ReviewApplicationState(ApplicationStore legacy, SqliteHistoryStore history) : IApplicationState
+/// <summary>Compatibility application-state facade. Draft revisions travel with the draft, not an adapter-owned map.</summary>
+public sealed class ReviewApplicationState(ApplicationStore legacy, SqliteHistoryStore history) : IApplicationState, IReviewDraftRepository
 {
-    private readonly Dictionary<string, long> _revisions = [];
-    private readonly SemaphoreSlim _gate = new(1, 1);
     public string Root => legacy.Root;
-    private string? _lastProblem;
-    public string? LastProblem => _lastProblem ?? legacy.LastProblem;
-    public async Task<Result<T?>> ReadAsync<T>(string kind, string identity, CancellationToken ct = default) where T : class
+    public string? LastProblem => legacy.LastProblem;
+    public Task<Result<RevisionedDraft?>> ReadDraftAsync(string key,CancellationToken ct=default)=>history.ReadDraftAsync(key,ct);
+    public Task<Result<long>> SaveDraftAsync(string key,ReviewDraft draft,long expectedRevision,CancellationToken ct=default)=>history.SaveDraftAsync(key,draft,expectedRevision,ct);
+    public async Task<Result<T?>> ReadAsync<T>(string kind,string identity,CancellationToken ct=default) where T:class
     {
-        if (kind != "drafts") return await ((IApplicationState)legacy).ReadAsync<T>(kind, identity, ct);
-        await _gate.WaitAsync(ct);
-        try
-        {
-            var read = await history.ReadDraftAsync<T>(identity, Path.Combine(Root, kind, ApplicationStore.Key(identity) + ".json"), ct);
-            if (read.IsFailed) { _lastProblem = read.Problem!.Message; return Result<T?>.Fail(read.Problem); }
-            _revisions[identity] = read.Value.Revision; return Result<T?>.Ok(read.Value.Value);
-        }
-        finally { _gate.Release(); }
+        if(kind!="drafts")return await ((IApplicationState)legacy).ReadAsync<T>(kind,identity,ct);
+        var read=await ReadDraftAsync(identity,ct);
+        if(read.IsFailed)return Result<T?>.Fail(read.Problem!);
+        if(read.Value is null)return Result<T?>.Ok(null);
+        read.Value.Draft.PersistenceRevision=read.Value.Revision;
+        return Result<T?>.Ok(read.Value.Draft as T);
     }
-    public async Task<Result<Unit>> WriteAsync<T>(string kind, string identity, T value, CancellationToken ct = default) where T : class
+    public async Task<Result<Unit>> WriteAsync<T>(string kind,string identity,T value,CancellationToken ct=default) where T:class
     {
-        if (kind != "drafts") return await ((IApplicationState)legacy).WriteAsync(kind, identity, value, ct);
-        await _gate.WaitAsync(ct);
-        try
-        {
-            var saved = await history.SaveDraftAsync(identity, value, _revisions.GetValueOrDefault(identity), ct);
-            if (saved.IsFailed) { _lastProblem = saved.Problem!.Message; return Result<Unit>.Fail(saved.Problem); }
-            _revisions[identity] = saved.Value; return Result.Ok;
-        }
-        finally { _gate.Release(); }
+        if(kind!="drafts")return await ((IApplicationState)legacy).WriteAsync(kind,identity,value,ct);
+        if(value is not ReviewDraft draft)return Result<Unit>.Fail(ProblemCodes.StateInvalid,"Draft state requires a typed review draft.");
+        var saved=await SaveDraftAsync(identity,draft,draft.PersistenceRevision,ct);
+        if(saved.IsFailed)return Result<Unit>.Fail(saved.Problem!);
+        draft.PersistenceRevision=saved.Value;return Result.Ok;
     }
 }

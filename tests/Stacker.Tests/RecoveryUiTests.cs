@@ -29,7 +29,7 @@ public sealed class RecoveryUiTests
         var blocker = Path.Combine(Path.GetTempPath(), "stacker-blocker-" + Guid.NewGuid().ToString("N")[..8]);
         await File.WriteAllTextAsync(blocker, "not a directory");
         using var vm = CreateVm(f, Path.Combine(blocker, "stacker"));
-        var window = new MainWindow { DataContext = vm };
+        var window = new MainWindow { DataContext = vm, CloseFailureHandler = _ => Task.FromResult(UnsavedCloseChoice.Discard) };
         window.Show();
         await vm.OpenRepositoryAsync(f.Root);
         window.Close();

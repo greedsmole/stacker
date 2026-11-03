@@ -61,3 +61,30 @@ Use `GitFixture` for isolated histories, worktrees and local bare remotes. GitHu
 transport responses. Native Windows execution and live GitHub/GHES publication require their own validation;
 cross-publishing a Windows archive on macOS does not provide either. Record actual evidence and limitations in
 `VERIFICATION.md`, and maintain the finding register in `docs/MIGRATION.md`.
+
+
+## Foundation invariants
+
+Keep workspace/controller dependencies behind their typed presentation interface and `WorkspaceRuntime`.
+Displayed data changes explicitly; return asynchronous reads only while their session/selection/snapshot ticket
+remains current. Use the shared reader for patch deduplication and hold an object lease for every private Git
+read, including work continuing after a view is disposed.
+
+Use `IReviewDraftRepository` with an explicit revision. Observe a graph through `ApplyObservationBatchAsync`;
+do not save a partial set of nodes/versions and then separately replace the graph. Preserve immutable versions
+and operation payloads. Keep merge-base evidence/materialization and repeated observations separate from a
+version's identity. Repeated unchanged metadata must not grow the observation log on every poll.
+
+An operation ID is a correlation and recovery identity, not a remote idempotency guarantee. Carry it through
+publication and journal effects. Confirmed/rejected acknowledgement and draft cleanup share a SQLite transaction.
+Only classify an external failure as Rejected when the transport proves that the effect was refused; network
+errors and server failures remain Unknown. Do not clear comments edited after their submitted snapshot.
+
+Run foundation fault/workflow/load tests with:
+
+```sh
+dotnet test -c Release --filter 'FullyQualifiedName~Foundation'
+```
+
+Load profiles print timings; they assert correctness, bounded work and virtualization, rather than imposing
+machine-dependent latency thresholds on CI. Record native response measurements separately from headless data.

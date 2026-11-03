@@ -14,7 +14,8 @@ public sealed partial class RenderedDiffLine(DiffLine line) : ObservableObject
     public int? NewLineNumber => Source.NewLineNumber;
     public bool IsCode => Kind is DiffLineKind.Context or DiffLineKind.Added or DiffLineKind.Removed;
     public bool CanCommentLeft => Kind == DiffLineKind.Removed;
-    public bool IsLineCommentVisible => IsCode && !IsRangeSelected;
+    public bool IsLineCommentVisible => IsCode && AllowComment && !IsRangeSelected;
+    public bool AllowComment { get; init; } = true;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsLineCommentVisible))] private bool _isRangeSelected;
     public string Marker => Kind == DiffLineKind.Added ? "+" : Kind == DiffLineKind.Removed ? "−" : "";
     public string Text => IsCode && Source.Text.Length > 0 ? Source.Text[1..] : Source.Text;
@@ -35,10 +36,12 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     private bool _disposed;
     private bool _filtering;
     public string Theme { get; set; }
+    public IDisposable? ContentLease { get; set; }
     public string Root => _root;
     public DiffResult Result { get; }
     public PullRequest? AssociatedPr { get; set; }
     public GitHubRepositoryContext? GitHubContext { get; set; }
+    public bool IsReadOnlyComparison { get; init; }
     public bool IsPrSnapshot { get; set; }
     public bool IsDemo { get; set; }
     public bool HasPr => AssociatedPr is not null;
@@ -51,7 +54,7 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     public double ScrollX { get; set; }
     public double ScrollY { get; set; }
     public ObservableCollection<FileChange> Files { get; } = [];
-    public ObservableCollection<RenderedDiffLine> Lines { get; } = [];
+    public BatchCollection<RenderedDiffLine> Lines { get; } = [];
     public ObservableCollection<ReviewThread> Threads { get; } = [];
     [ObservableProperty] private FileChange? _selectedFile;
     [ObservableProperty] private string _filter = "";
@@ -71,9 +74,9 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     partial void OnWrapCodeChanged(bool value)
     { foreach (var line in Lines) line.TextWrapping = value ? TextWrapping.Wrap : TextWrapping.NoWrap; OnPropertyChanged(nameof(CodeHorizontalScroll)); }
     [ObservableProperty] private double _panelHeight = 560;
-    public DiffSectionViewModel(IGitRepositoryReader git, string root, DiffResult result, ISyntaxHighlighter? highlighter = null, string theme = "Dark")
+    public DiffSectionViewModel(IGitRepositoryReader git, string root, DiffResult result, ISyntaxHighlighter? highlighter = null, string theme = "Dark", bool readOnly = false)
     {
-        _git = git; _root = root; Result = result; _highlighter = highlighter; Theme = theme;
+        IsReadOnlyComparison = readOnly; _git = git; _root = root; Result = result; _highlighter = highlighter; Theme = theme;
         UpdateFilter();
         if (Files.Count == 0) Message = "No changes in this comparison."; else SelectedFile = Files[0];
     }
@@ -113,9 +116,17 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
             var diff = (await _git.PatchAsync(_root, Result.BaseSha, Result.HeadSha, file, load.Token)).OrThrow();
             if (load.IsCancellationRequested || _disposed) return;
             Patch = diff.Patch;
-            var view = DiffView.From(diff);
-            foreach (var line in view.Rows)
-                Lines.Add(new(line) { TextWrapping = WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap });
+            var wrapping=WrapCode?TextWrapping.Wrap:TextWrapping.NoWrap;
+            var prepared=await Task.Run(()=>
+            {
+                var presentation=DiffView.From(diff);var rows=new RenderedDiffLine[presentation.Rows.Count];
+                for(var i=0;i<rows.Length;i++){if(i%1024==0)load.Token.ThrowIfCancellationRequested();rows[i]=new(presentation.Rows[i]){AllowComment=!IsReadOnlyComparison,TextWrapping=wrapping};}
+                return(presentation,rows);
+            },load.Token);
+            if(load.IsCancellationRequested||_disposed)return;
+            var view=prepared.presentation;
+            if(wrapping!=(WrapCode?TextWrapping.Wrap:TextWrapping.NoWrap))foreach(var row in prepared.rows)row.TextWrapping=WrapCode?TextWrapping.Wrap:TextWrapping.NoWrap;
+            Lines.ReplaceAll(prepared.rows);
             Message = view.EmptyReason;
             IsBusy = false; ApplyThreads();
             if (!file.IsBinary && !file.IsSubmodule) await HighlightAsync(file, load.Token);
@@ -160,13 +171,13 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
         foreach (var line in Lines)
         {
             var left = ("LEFT", line.OldLineNumber ?? -1); var right = ("RIGHT", line.NewLineNumber ?? -1);
-            ReplaceIfChanged(line.InlineThreads, threads[left].Concat(threads[right]).DistinctBy(t => t.Id).ToArray());
-            ReplaceIfChanged(line.Drafts, drafts[left].Concat(drafts[right]).ToArray());
+            if(line.InlineThreads.Count>0||threads.Contains(left)||threads.Contains(right))ReplaceIfChanged(line.InlineThreads, threads[left].Concat(threads[right]).DistinctBy(t => t.Id).ToArray());
+            if(line.Drafts.Count>0||drafts.Contains(left)||drafts.Contains(right))ReplaceIfChanged(line.Drafts, drafts[left].Concat(drafts[right]).ToArray());
         }
     }
     public void Dispose()
     {
-        Review?.Detach(this); _disposed = true; _load?.Cancel();
+        Review?.Detach(this); _disposed = true; ContentLease?.Dispose();ContentLease=null; _load?.Cancel();
         // An evicted comparison must not keep a patch, its rows or their token tables alive.
         Lines.Clear(); Threads.Clear(); FileThreads.Clear(); Patch = "";
     }

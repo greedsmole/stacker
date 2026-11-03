@@ -16,7 +16,6 @@ public sealed record ChangeSearchHit(DiffSectionViewModel Section, FileChange Fi
 
 public sealed partial class MainViewModel
 {
-    internal CancellationTokenSource? _searchLoad;
     public IReadOnlyList<string> SearchScopes { get; } = ["Files", "Changed lines"];
     [ObservableProperty] internal bool _isSearchOpen;
     [ObservableProperty] internal string _searchScope = "Files";
@@ -28,7 +27,7 @@ public sealed partial class MainViewModel
     /// <summary>Opens search in the requested scope (file names or visible textual changes).</summary>
     public void OpenSearch(string scope) => _searchController.OpenSearch(scope);
     public void CloseSearch() => _searchController.CloseSearch();
-    internal void ResetSearch() => _searchController.ResetSearch();
+    public void ResetSearch() => _searchController.ResetSearch();
     [RelayCommand] public Task SearchAsync() => _searchController.SearchAsync();
     /// <summary>Navigates to a hit's comparison and file, then loads its patch before selecting a matching line.</summary>
     public Task OpenSearchHitAsync(ChangeSearchHit hit) => _searchController.OpenSearchHitAsync(hit);

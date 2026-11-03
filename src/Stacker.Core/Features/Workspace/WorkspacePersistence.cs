@@ -20,11 +20,14 @@ public sealed class WorkspacePersistence(IApplicationState store)
         return copy;
     }
     public Problem? LastProblem { get; private set; }
-    public async Task<Result<WorkspaceState>> LoadAsync(string root, CancellationToken ct = default)
+    public async Task<Result<WorkspaceState>> LoadAsync(string root, CancellationToken ct = default,string? legacyRoot=null)
     {
         _snapshots.Clear();
         foreach (var key in _saved.Keys.Where(key => key.Root == root).ToArray()) _saved.Remove(key);
         var result = await store.ReadAsync<WorkspaceState>("workspace", root, ct);
+        var source=root;
+        if(result.IsOk&&result.Value is null&&legacyRoot is not null&&legacyRoot!=root)
+        {source=legacyRoot;result=await store.ReadAsync<WorkspaceState>("workspace",source,ct);}
         if (result.IsFailed) return Result<WorkspaceState>.Fail(result.Problem!);
         var state = result.Value ?? new();
         if (state.SchemaVersion > 2) return Result<WorkspaceState>.Fail(ProblemCodes.StateInvalid, "This workspace was saved by a newer Stacker version.");
@@ -32,10 +35,10 @@ public sealed class WorkspacePersistence(IApplicationState store)
         if (state.SchemaVersion == 2)
             foreach (var key in state.StackKeys.Distinct())
             {
-                var stack = await store.ReadAsync<StackViewState>("workspace-stacks", root + "|" + key, ct);
+                var stack = await store.ReadAsync<StackViewState>("workspace-stacks", source + "|" + key, ct);
                 if (stack.IsFailed) return Result<WorkspaceState>.Fail(stack.Problem!);
                 state.Stacks[key] = stack.Value ?? new();
-                _saved[(root, key)] = 0;
+                if(source==root)_saved[(root, key)] = 0;
             }
         foreach (var key in state.Stacks.Keys.ToArray())
         {

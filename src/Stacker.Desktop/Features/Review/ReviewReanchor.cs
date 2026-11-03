@@ -5,6 +5,8 @@ namespace Stacker.Desktop.ViewModels;
 
 public partial class ReviewViewModel
 {
+    public string ExportRecoveryText() => System.Text.Json.JsonSerializer.Serialize(_draft, new System.Text.Json.JsonSerializerOptions{WriteIndented=true});
+    public async Task RetrySaveAsync(){QueueSave();await FlushAsync();}
     internal IGitRepositoryReader AnchorGit = null!;
     public IHistoryGit? HistoryObjects { get; set; }
     private DraftComment? _proposedComment;

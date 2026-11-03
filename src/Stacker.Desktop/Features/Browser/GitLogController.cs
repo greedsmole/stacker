@@ -5,11 +5,11 @@ using CommunityToolkit.Mvvm.Input;
 using Stacker.Core;
 namespace Stacker.Desktop.ViewModels;
 
-internal sealed class GitLogController(MainViewModel owner)
+internal sealed class GitLogController(IGitLogPresentation owner, WorkspaceRuntime runtime)
 {
     public void LogChanged(GitCommandEntry? entry) => Dispatcher.UIThread.Post(() =>
     {
-        if (owner._disposed) return;
+        if (runtime._disposed) return;
         if (entry is null) { owner.GitLogEntries.Clear(); return; }
         var index = owner.GitLogEntries.ToList().FindIndex(item => item.Id == entry.Id);
         if (index >= 0) owner.GitLogEntries[index] = entry;
@@ -17,6 +17,6 @@ internal sealed class GitLogController(MainViewModel owner)
         if (owner.GitLogEntries.Count > 500) owner.GitLogEntries.RemoveAt(0);
     });
 
-    public void ClearGitLog() => owner._commandLog?.Clear();
+    public void ClearGitLog() => runtime._commandLog?.Clear();
 
 }

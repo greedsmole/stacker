@@ -12,7 +12,8 @@ namespace Stacker.Desktop;
 public partial class App : Application
 {
     /// <summary>Everything Stacker owns lives here: drafts, snapshots, journals, locks.</summary>
-    public static string AppRoot { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Stacker", "v3");
+    public static string AppRoot { get; private set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Stacker", "v3");
+    public static void UseDataRoot(string root) => AppRoot = Path.GetFullPath(root);
     private ServiceProvider? _services;
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
     public override void OnFrameworkInitializationCompleted()

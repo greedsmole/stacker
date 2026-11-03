@@ -47,10 +47,12 @@ public sealed record ReviewThread(string Id, bool IsResolved, bool IsOutdated, b
 }
 /// <summary>Distinct collections of PR conversation, reviewer submissions, and code threads.</summary>
 public sealed record ReviewDiscussion(IReadOnlyList<DiscussionComment> Comments, IReadOnlyList<ReviewSummary> Reviews, IReadOnlyList<ReviewThread> Threads);
-public sealed record DraftComment(ReviewAnchor Anchor, string Body);
+public sealed record DraftComment(ReviewAnchor Anchor, string Body)
+{ public string Id { get; init; } = Guid.NewGuid().ToString("N"); }
 /// <summary>Persisted local review work, including unsent text retained across navigation and transient failures.</summary>
 public sealed class ReviewDraft
 {
+    [System.Text.Json.Serialization.JsonIgnore] public long PersistenceRevision { get; set; }
     public string ContextIdentity { get; set; } = "";
     public long PullRequest { get; set; }
     public string HeadSha { get; set; } = "";

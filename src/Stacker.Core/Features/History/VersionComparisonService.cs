@@ -9,7 +9,8 @@ public sealed class VersionComparisonService(IGitRepositoryReader git, IHistoryG
         try
         {
             if (previous.MergeBase is null || current.MergeBase is null) throw new StackerException("Version contents or merge-base are unavailable. Open both versions first.");
-            var root = (await objects.RootAsync(scope, ct)).OrThrow();
+            using var lease = (await objects.AcquireAsync(scope, ct)).OrThrow();
+            var root = lease.Root;
             var basis = (await git.FilesAsync(root, previous.MergeBase, current.MergeBase, ct)).OrThrow();
             var expected = previous.MergeBase == current.MergeBase ? previous.HeadSha
                 : (await objects.TransplantAsync(root, previous.MergeBase, previous.HeadSha, current.MergeBase, ct)).OrThrow();
