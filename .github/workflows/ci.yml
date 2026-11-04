@@ -17,6 +17,7 @@ jobs:
           - os: windows-2022
             rid: win-x64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -26,12 +27,12 @@ jobs:
         with:
           python-version: '3.x'
       - name: Test
-        run: dotnet test -c Release --logger "trx;LogFileName=results.trx"
+        run: dotnet test -c Release --logger "trx;LogFileName=results.trx" --logger "console;verbosity=normal" --blame-hang-timeout 2m --blame-hang-dump-type mini
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: tests-${{ matrix.rid }}
-          path: '**/TestResults/*.trx'
+          path: '**/TestResults/**'
       - name: Package self-contained application
         run: python scripts/package.py ${{ matrix.rid }}
       - uses: actions/upload-artifact@v4
