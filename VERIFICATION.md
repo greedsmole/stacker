@@ -1,3 +1,28 @@
+# Verification — v0.6.1 startup guard
+
+Recorded on 2026-11-04. The user confirmed the macOS notification was for the old 0.5.0 smoke process
+(PID 51303), not a new 0.6.0 crash. Its log shows an unhandled Avalonia RenderTimer initialization exception
+with CoreVideo status -6661 before workspace initialization.
+
+The release adds a bounded display-link readiness probe before initializing Avalonia, controlled failure with
+local diagnostics when no display is available, and recording of startup/unhandled managed exceptions.
+A successful probe does not eliminate a display-disconnection race; any subsequent managed startup exception
+is recorded and returns a failure exit code, without retrying partially initialized Avalonia.
+
+Full local Release verification: **296 passed, 0 failed, 0 skipped**, duration **2 min 57 s**.
+Evidence: `artifacts/test-results/v0.6.1.trx`. The three new tests cover waking display, permanent unavailability
+without workspace initialization, and exceptions after a successful probe.
+
+Both self-contained Windows x64 and macOS ARM64 packages built with runtime 10.0.14. The native macOS package
+started with an isolated `--data-root` profile and `--demo`, stayed active for 12 seconds, created 19 history nodes,
+and wrote no stderr or crash log. Its database returned `integrity_check = ok`. The test process was stopped.
+The unavailable-display path is covered through injected probe results; the physical display was not put to sleep.
+
+GitHub Actions was queued at the time of this record. Native Windows execution and a full manual GUI walkthrough
+are not claimed. The macOS package remains unsigned/not notarized. Package checksums are attached to the release.
+
+## Earlier verification records
+
 # Verification — v0.6.0 release
 
 Recorded on **2026-11-04**. Product version is **0.6.0**. The workspace-foundation and opened-repository
