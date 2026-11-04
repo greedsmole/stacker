@@ -72,7 +72,7 @@ public sealed class HistorySafetyTests
             await history.LoadLayerCommand.ExecuteAsync(null); Assert.NotEmpty(history.Versions);
             Assert.Equal(FileReviewState.CodeChanged, Assert.Single(history.Files).State);
             await history.SinceReviewedCommand.ExecuteAsync(null); Assert.Contains("Own changes after replay", history.Preview);
-            Assert.Contains("member", history.Preview); Assert.Contains("user", history.Preview);
+            Assert.Contains(history.DocumentSections, section => section.Patch.Contains("member") && section.Patch.Contains("user"));
             history.ConcernText = "Check authorization invariant"; await history.FlagBlockerCommand.ExecuteAsync(null);
             await history.AttentionCommand.ExecuteAsync(null); Assert.Contains(history.Attention, item => item.Label.Contains("BLOCKER"));
             var store = services.GetRequiredService<IHistoryStore>();

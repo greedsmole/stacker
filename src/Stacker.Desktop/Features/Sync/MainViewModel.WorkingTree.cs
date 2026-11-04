@@ -6,10 +6,7 @@ namespace Stacker.Desktop.ViewModels;
 
 public sealed partial class MainViewModel
 {
-    internal IEditorLauncher? _editorLauncher;
-    internal string? _pendingStash;
-    public IReadOnlyList<SavedStash> SavedStashes { get; internal set; } = [];
-    internal JournalEntry? _activeEntry;
+    public IReadOnlyList<SavedStash> SavedStashes { get; set; } = [];
     [ObservableProperty] internal WorkingTreeState? _workingTree;
 
     /// <summary>Shown in the main window whenever an operation or a conflict needs the user.</summary>
@@ -18,12 +15,12 @@ public sealed partial class MainViewModel
     public bool CanContinueOperation => WorkingTree is { CanContinue: true };
     public bool CanAbortOperation => WorkingTree is { CanAbort: true };
     public bool HasConflicts => WorkingTree is { HasConflicts: true };
-    public bool CanRestoreStash => _pendingStash is not null;
+    public bool CanRestoreStash => _runtime._pendingStash is not null;
     /// <summary>An interrupted run from an earlier session that the user still has to finish or undo.</summary>
-    public bool HasRecovery => _activeEntry is { NeedsAttention: true } && !HasOperation;
-    public bool CanRestoreRecovery => _activeEntry is { Kind: "restack", NeedsAttention: true } && _activeEntry.Restorable.Count > 0;
-    public string RecoverySummary => _activeEntry is null ? "" : string.Join(" · ", _activeEntry.Kind, _activeEntry.Phase.ToString(),
-        _activeEntry.Moved.Count + (_activeEntry.Kind == "restack" ? " branch(es)" : " effect(s)"), _activeEntry.Message);
+    public bool HasRecovery => _runtime._activeEntry is { NeedsAttention: true } && !HasOperation;
+    public bool CanRestoreRecovery => _runtime._activeEntry is { Kind: "restack", NeedsAttention: true } && _runtime._activeEntry.Restorable.Count > 0;
+    public string RecoverySummary => _runtime._activeEntry is null ? "" : string.Join(" · ", _runtime._activeEntry.Kind, _runtime._activeEntry.Phase.ToString(),
+        _runtime._activeEntry.Moved.Count + (_runtime._activeEntry.Kind == "restack" ? " branch(es)" : " effect(s)"), _runtime._activeEntry.Message);
     internal void SetActiveEntry(JournalEntry? entry) => _workingTreeController.SetActiveEntry(entry);
     partial void OnWorkingTreeChanged(WorkingTreeState? value)
     {

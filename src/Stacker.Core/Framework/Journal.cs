@@ -90,14 +90,17 @@ public enum CommandStatus { Applied, Refused, Failed, Cancelled, NeedsUser, Part
 /// <summary>A single, non-contradictory status with the known effects and optional warnings.</summary>
 public sealed record CommandOutcome(CommandStatus Status, string Message, Problem? Problem)
 {
+    public string? OperationId { get; init; }
+    public string? Scope { get; init; }
+    public EffectCertainty Certainty { get; init; } = EffectCertainty.Unknown;
     public bool Ok => Status == CommandStatus.Applied;
     public bool NeedsUser => Status is CommandStatus.NeedsUser or CommandStatus.PartiallyApplied;
     public bool RolledBack => Status == CommandStatus.RolledBack;
     public IReadOnlyList<string> Effects { get; init; } = [];
-    public static CommandOutcome Done(string message) => new(CommandStatus.Applied, message, null);
+    public static CommandOutcome Done(string message) => new(CommandStatus.Applied, message, null) { Certainty = EffectCertainty.Confirmed };
     public static CommandOutcome Attention(string message) => new(CommandStatus.NeedsUser, message, null);
-    public static CommandOutcome Refused(string message) => new(CommandStatus.Refused, message, null);
-    public static CommandOutcome Failed(Problem problem) => new(CommandStatus.Failed, problem.Message, problem);
+    public static CommandOutcome Refused(string message) => new(CommandStatus.Refused, message, null) { Certainty = EffectCertainty.NotStarted };
+    public static CommandOutcome Failed(Problem problem) => new(CommandStatus.Failed, problem.Message, problem) { Certainty = problem.Certainty };
     public static CommandOutcome Restored(string message, Problem? problem = null) => new(CommandStatus.RolledBack, message, problem);
 }
 

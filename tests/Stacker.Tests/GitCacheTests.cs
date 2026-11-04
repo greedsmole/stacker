@@ -1,93 +1,77 @@
-// Purpose: Scenarios ensuring remote objects are cached separately and downloaded refs are checked against the PR snapshot.
 using Stacker.Core;
+using Stacker.Core.Framework;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
+
 public sealed class GitCacheTests
 {
-    // Scenario: Missing PR refs are batched into one fetch.
-    [Fact] public async Task Missing_PR_refs_are_batched_into_one_fetch()
+    [Fact] public async Task PR_objects_are_fetched_into_the_opened_repository_and_preserve_dirty_work()
     {
-        await using var folder=new GitFixture();
-        var runner=new ScriptedRunner(request=>request.Arguments.Contains("cat-file") ? new(1,"","")
-            : request.Arguments.Contains("rev-parse") ? new(0,(request.Arguments.Last().Contains("/base/") ? new string('a',40) : new string('b',40))+"\n","")
-            : new(0,"",""));
-        var prs=new[]{DiscoveryTests.Pr(1,"main","A"),DiscoveryTests.Pr(2,"A","B")};
-        await new GitObjectCache(runner,new(),new(),new ApplicationStore(folder.Root)).PrepareAsync(FakeGitHub.Context,prs);
-        var fetch=Assert.Single(runner.Calls,request=>request.Arguments.Contains("fetch"));
-        Assert.Contains("+refs/pull/1/head:refs/stacker/pr/1",fetch.Arguments);
-        Assert.Contains("+refs/pull/2/head:refs/stacker/pr/2",fetch.Arguments);
-        Assert.DoesNotContain(runner.Calls,request=>request.Arguments.Contains("clone"));
+        await using var f=new GitFixture();await f.Init();await f.AddOrigin();await f.Git("push","origin","main");
+        await using var author=new GitFixture();await author.Init();await author.Git("remote","add","origin",f.RemoteRoot!);await author.Git("fetch","origin");await author.Git("checkout","-B","main","origin/main");
+        var basis=await f.Git("rev-parse","main");await author.Git("checkout","-b","feature");await author.Write("feature.txt","remote changes\n");await author.Commit("feature");var head=await author.Git("rev-parse","HEAD");
+        await author.Git("push","origin","HEAD:refs/pull/42/head");
+        await f.Write("base.txt","staged\n");await f.Git("add","base.txt");await f.Write("base.txt","unstaged\n");await f.Write("unsent.txt","keep me\n");
+        await File.WriteAllTextAsync(Path.Combine(f.Root,".git","FETCH_HEAD"),"preserved fetch head\n");
+        var before=await UserState(f);var trace=new RepositoryRecordingRunner(f.Runner);var git=new RepositoryGit(trace,new());IPullRequestObjects objects=new LocalPullRequestObjects(git);
+        var pr=DiscoveryTests.Pr(42,"main","feature",headRepo:2) with{BaseSha=basis,HeadSha=head};
+        Assert.True((await objects.EnsureAsync(f.Identity,FakeGitHub.Context,[pr])).IsOk);
+        Assert.Equal("feature.txt",Assert.Single(await f.Reader.FilesAsync(f.Root,basis,head)).NewPath);Assert.Equal(before,await UserState(f));
+        var fetch=Assert.Single(trace.Calls,c=>c.Arguments.Contains("fetch"));Assert.Contains("origin",fetch.Arguments);Assert.Contains("--atomic",fetch.Arguments);Assert.Contains("--no-write-fetch-head",fetch.Arguments);
+        Assert.All(trace.Calls,c=>Assert.Equal(f.Root,c.WorkingDirectory));Assert.DoesNotContain(trace.Calls,c=>c.Arguments.Contains("clone")||c.Arguments.Contains("init")||c.Arguments.Contains("checkout"));
+        trace.Calls.Clear();(await objects.EnsureAsync(f.Identity,FakeGitHub.Context,[pr])).OrThrow();Assert.DoesNotContain(trace.Calls,c=>c.Arguments.Contains("fetch"));
+        (await objects.ClearAsync(f.Identity,FakeGitHub.Context)).OrThrow();Assert.Equal(before,await UserState(f));Assert.True(Directory.Exists(Path.Combine(f.Root,".git")));
+        Assert.DoesNotContain("refs/stacker/pr/",await f.Git("show-ref"));Assert.Equal(head,await f.Git("rev-parse",head));
     }
-    // Scenario: Existing objects support offline comparison without touching source repository.
-    [Fact] public async Task Existing_objects_support_offline_comparison_without_touching_source_repository()
+    [Fact] public async Task Fetch_uses_native_credentials_and_batches_missing_PRs()
     {
-        await using var repo=new GitFixture();await repo.Linear();await using var cacheFolder=new GitFixture();
-        var store=new ApplicationStore(cacheFolder.Root);var context=FakeGitHub.Context;
-        var cachePath=Path.Combine(store.Root,"objects",ApplicationStore.Key(context.Identity));Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
-        Directory.CreateDirectory(cachePath);
-        var init=await repo.Runner.RunAsync(new(new GitExecutable().Resolve(),["init","--bare"],cachePath));Assert.Equal(0,init.ExitCode);
-        var fetch=await repo.Runner.RunAsync(new(new GitExecutable().Resolve(),["fetch","--no-tags",repo.Root,"+refs/heads/*:refs/heads/*"],cachePath));Assert.Equal(0,fetch.ExitCode);
-        var head=await repo.Git("rev-parse","B");var parent=await repo.Git("rev-parse","A");
-        var pr=new PullRequest(42,"Test",1,"A",parent,1,"B",head,false,"");
-        var beforeRefs=await repo.Git("show-ref");var beforeIndex=await File.ReadAllBytesAsync(Path.Combine(repo.Root,".git","index"));var beforeConfig=await File.ReadAllTextAsync(Path.Combine(repo.Root,".git","config"));
-        var cache=new GitObjectCache(repo.Runner,new(),new(),store);
-        var snapshot=await cache.PrepareAsync(context,[pr]);Assert.Equal(cachePath,snapshot.Root);
-        var files=await repo.Reader.FilesAsync(snapshot.Root,parent,head);Assert.Equal("B.txt",Assert.Single(files).NewPath);
-        Assert.Equal(beforeRefs,await repo.Git("show-ref"));Assert.Equal(beforeIndex,await File.ReadAllBytesAsync(Path.Combine(repo.Root,".git","index")));Assert.Equal(beforeConfig,await File.ReadAllTextAsync(Path.Combine(repo.Root,".git","config")));
-        await cache.ClearAsync(context);Assert.False(Directory.Exists(cachePath));Assert.True(Directory.Exists(Path.Combine(repo.Root,".git")));
+        await using var f=new GitFixture();var downloaded=false;
+        var runner=new ScriptedRunner(request=>
+        {
+            if(request.Arguments.Contains("cat-file"))return new(0,string.Join('\n',request.StandardInput!.Split('\n',StringSplitOptions.RemoveEmptyEntries).Select(sha=>sha+(downloaded?" commit":" missing")))+"\n","");
+            if(request.Arguments.Contains("get-url"))return new(0,"git@company-alias:team/repo.git\n","");
+            if(request.Arguments.Contains("fetch")){downloaded=true;return new(0,"","");}
+            if(request.Arguments.Contains("rev-parse"))return new(0,new string(request.Arguments.Last().EndsWith("/base",StringComparison.Ordinal)?'a':'b',40)+"\n","");
+            return new(0,"","");
+        });
+        var objects=new LocalPullRequestObjects(new(runner,new()));
+        (await objects.EnsureAsync(f.Identity,FakeGitHub.Context,[DiscoveryTests.Pr(1,"main","A"),DiscoveryTests.Pr(2,"main","B")])).OrThrow();
+        var fetch=Assert.Single(runner.Calls,c=>c.Arguments.Contains("fetch"));Assert.Contains("origin",fetch.Arguments);Assert.Equal(2,fetch.StandardInput!.Split('\n').Count(a=>a.StartsWith("+refs/pull/",StringComparison.Ordinal)));
+        Assert.DoesNotContain(fetch.Arguments,a=>a.Contains("credential.helper")||a.Contains("http.sslBackend")||a.Contains("sslVerify=false"));
+        Assert.DoesNotContain(fetch.UnsetEnvironment!,name=>name.Contains("TOKEN"));Assert.All(runner.Calls,c=>Assert.Equal(f.Root,c.WorkingDirectory));
     }
-    // Scenario: Download uses private refs scoped helper and rejects moving snapshot.
-    [Fact] public async Task Download_uses_private_refs_scoped_helper_and_rejects_moving_snapshot()
+    [Fact] public async Task A_moving_PR_snapshot_is_rejected_without_switching_working_directory()
     {
-        await using var f=new GitFixture();var store=new ApplicationStore(f.Root);
-        var runner=new ScriptedRunner(r=>r.Arguments.Contains("cat-file")?new(1,"",""):r.Arguments.Contains("rev-parse")?new(0,new string('c',40)+"\n",""):new(0,"",""));
-        var error=await Assert.ThrowsAsync<StackerException>(()=>new GitObjectCache(runner,new(),new(),store).PrepareAsync(FakeGitHub.Context,[DiscoveryTests.Pr(42,"main","feature")]));
-        Assert.Contains("changed while downloading",error.Message);
-        var fetch=Assert.Single(runner.Calls,c=>c.Arguments.Contains("fetch"));Assert.Contains("--no-write-fetch-head",fetch.Arguments);Assert.Contains("+refs/pull/42/head:refs/stacker/pr/42",fetch.Arguments);Assert.Contains("credential.helper=",fetch.Arguments);Assert.StartsWith(Path.Combine(store.Root,"objects"),fetch.WorkingDirectory);
-        Assert.DoesNotContain(runner.Calls,c=>c.Arguments.Contains("setup-git"));Assert.DoesNotContain(fetch.Environment!.Keys,k=>k.Contains("TOKEN"));
-        Assert.Equal(OperatingSystem.IsWindows(), fetch.Arguments.Contains("http.sslBackend=schannel"));
-        Assert.DoesNotContain(runner.Calls.Where(c => !c.Arguments.Contains("fetch")), c => c.Arguments.Contains("http.sslBackend=schannel"));
-        Assert.DoesNotContain(fetch.Arguments, a => a.Contains("sslVerify=false") || a.Contains("schannelCheckRevoke=false"));
-        Assert.DoesNotContain("GIT_SSL_NO_VERIFY", fetch.Environment.Keys);
-        Assert.DoesNotContain(runner.Calls, c => c.Arguments.Contains("config"));
+        await using var f=new GitFixture();
+        var runner=new ScriptedRunner(r=>r.Arguments.Contains("cat-file")?new(0,new string('a',40)+" missing\n"+new string('b',40)+" missing\n",""):
+            r.Arguments.Contains("get-url")?new(0,"https://github.example/team/repo.git",""):r.Arguments.Contains("rev-parse")?new(0,new string('c',40)+"\n",""):new(0,"",""));
+        var result=await new LocalPullRequestObjects(new(runner,new())).EnsureAsync(f.Identity,FakeGitHub.Context,[DiscoveryTests.Pr(42,"main","feature")]);
+        Assert.True(result.IsFailed);Assert.Contains("changed while downloading",result.Problem!.Message);Assert.Single(runner.Calls,c=>c.Arguments.Contains("fetch"));Assert.All(runner.Calls,c=>Assert.Equal(f.Root,c.WorkingDirectory));
     }
-
-    // Scenario: Untrusted certificate explains remediation preserves details and does not retry.
     [Theory]
     [InlineData("SSL certificate problem: unable to get local issuer certificate")]
-    [InlineData("SSL certificate problem: self-signed certificate in certificate chain")]
-    [InlineData("schannel: SEC_E_UNTRUSTED_ROOT (0x80090325)")]
-    [InlineData("schannel: CertGetCertificateChain trust error CERT_TRUST_IS_PARTIAL_CHAIN")]
-    public async Task Untrusted_certificate_explains_remediation_preserves_details_and_does_not_retry(string stderr)
+    [InlineData("fatal: Authentication failed")]
+    public async Task Native_fetch_failures_retain_diagnostics_and_do_not_retry(string error)
     {
-        await using var folder = new GitFixture();
-        var runner = new ScriptedRunner(request => request.Arguments.Contains("cat-file") ? new(1, "", "")
-            : request.Arguments.Contains("fetch") ? new(128, "", stderr) : new(0, "", ""));
-        var cache = new GitObjectCache(runner, new(), new() { UseSavedCredentials = true }, new ApplicationStore(folder.Root));
-
-        var error = await Assert.ThrowsAsync<StackerException>(() => cache.PrepareAsync(FakeGitHub.Context, [DiscoveryTests.Pr(42, "main", "feature")]));
-
-        Assert.Contains("certificate chain is not trusted", error.Message);
-        Assert.Contains(OperatingSystem.IsWindows() ? "Windows certificate store" : "Git certificate trust store", error.Message);
-        Assert.Contains(stderr, error.Message);
-        var fetch = Assert.Single(runner.Calls, request => request.Arguments.Contains("fetch"));
-        Assert.Contains("GITHUB_TOKEN", fetch.UnsetEnvironment!);
-        Assert.DoesNotContain(runner.Calls, request => request.Arguments.Contains("rev-parse"));
+        await using var f=new GitFixture();
+        var runner=new ScriptedRunner(r=>r.Arguments.Contains("cat-file")?new(0,"missing\n",""):r.Arguments.Contains("get-url")?new(0,"https://github.example/team/repo.git",""):r.Arguments.Contains("fetch")?new(128,"",error):new(0,"",""));
+        var result=await new LocalPullRequestObjects(new(runner,new())).EnsureAsync(f.Identity,FakeGitHub.Context,[DiscoveryTests.Pr(42,"main","feature")]);
+        Assert.True(result.IsFailed);Assert.Contains(error,result.Problem!.Message);Assert.Single(runner.Calls,c=>c.Arguments.Contains("fetch"));
     }
-
-    // Scenario: Other fetch failures keep the original error.
-    [Fact]
-    public async Task Other_fetch_failures_keep_the_original_error()
+    [Fact] public async Task A_different_origin_is_not_used_for_the_selected_GitHub_repository()
     {
-        await using var folder = new GitFixture();
-        const string stderr = "fatal: Authentication failed";
-        var runner = new ScriptedRunner(request => request.Arguments.Contains("cat-file") ? new(1, "", "")
-            : request.Arguments.Contains("fetch") ? new(128, "", stderr) : new(0, "", ""));
-
-        var error = await Assert.ThrowsAsync<StackerException>(() => new GitObjectCache(runner, new(), new(), new ApplicationStore(folder.Root))
-            .PrepareAsync(FakeGitHub.Context, [DiscoveryTests.Pr(42, "main", "feature")]));
-
-        Assert.Equal("Git cache: " + stderr, error.Message);
-        Assert.Single(runner.Calls, request => request.Arguments.Contains("fetch"));
+        await using var f=new GitFixture();var runner=new ScriptedRunner(r=>r.Arguments.Contains("cat-file")?new(0,"missing\n",""):new(0,"https://other.example/other/repo.git","") );
+        var result=await new LocalPullRequestObjects(new(runner,new())).EnsureAsync(f.Identity,FakeGitHub.Context,[DiscoveryTests.Pr(42,"main","feature")]);
+        Assert.True(result.IsFailed);Assert.DoesNotContain(runner.Calls,c=>c.Arguments.Contains("fetch"));
     }
+    internal static async Task<string> UserState(GitFixture f)=>string.Join("\n---\n",await f.Git("symbolic-ref","HEAD"),await f.Git("for-each-ref","--format=%(refname) %(objectname)","refs/heads","refs/remotes"),
+        Convert.ToBase64String(await File.ReadAllBytesAsync(Path.Combine(f.Root,".git","index"))),await f.Git("status","--porcelain=v1","-z"),
+        await File.ReadAllTextAsync(Path.Combine(f.Root,".git","config")),File.Exists(Path.Combine(f.Root,".git","FETCH_HEAD"))?await File.ReadAllTextAsync(Path.Combine(f.Root,".git","FETCH_HEAD")):"absent");
+}
+
+internal sealed class RepositoryRecordingRunner(IProcessRunner inner):IProcessRunner
+{
+    public List<ProcessRequest> Calls { get; }=[];
+    public Task<Result<ProcessResult>> RunAsync(ProcessRequest request,CancellationToken ct=default)
+    {lock(Calls)Calls.Add(request);return inner.RunAsync(request,ct);}
 }

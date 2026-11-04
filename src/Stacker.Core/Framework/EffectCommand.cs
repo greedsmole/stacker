@@ -16,7 +16,12 @@ public abstract class EffectCommand<T>(string kind, string target,
         if (!AdapterJournalsSteps)
             (await context.Journal.StepAsync(context.Entry, context.Entry.Steps[0] with { State = StepState.Started }, ct)).OrThrow();
         Value = await effect(context, ct);
-        if (Value.IsFailed) return CommandOutcome.Failed(Value.Problem!);
+        if (Value.IsFailed)
+        {
+            if(!AdapterJournalsSteps)(await context.Journal.StepAsync(context.Entry,context.Entry.Steps[0] with
+                {State=Value.Problem!.Certainty==EffectCertainty.Unknown?StepState.Unknown:StepState.Failed},ct)).OrThrow();
+            return CommandOutcome.Failed(Value.Problem!);
+        }
         if (!AdapterJournalsSteps)
             (await context.Journal.StepAsync(context.Entry, context.Entry.Steps[0].Finished(null,
                 Value.Value is string sha && CommitSha.Parse(sha).IsOk ? sha : null, StepState.Done), ct)).OrThrow();

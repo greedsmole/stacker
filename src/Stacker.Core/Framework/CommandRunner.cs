@@ -3,6 +3,7 @@ namespace Stacker.Core.Framework;
 /// <summary>Owns execution and the durable outcome; compensates only commands that support it.</summary>
 public sealed class CommandRunner(IJournal journal)
 {
+    public Result<IReadOnlyList<JournalEntry>> Recent(string scope)=>journal.Recent(scope);
     public async Task<CommandOutcome> RunAsync(string repository, IStackCommand command, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         JournalEntry? entry = null;
@@ -14,6 +15,8 @@ public sealed class CommandRunner(IJournal journal)
             var outcome = await command.ExecuteAsync(new(entry, journal, progress), ct);
             var known = (await journal.ByIdAsync(repository, entry.Id, ct)).OrThrow() ?? entry;
             outcome = outcome with { Effects = known.Steps.Where(step => step.State == StepState.Done).Select(step => step.Kind + ": " + step.Target).ToArray() };
+            if (outcome.Status == CommandStatus.Failed && outcome.Certainty is EffectCertainty.Rejected or EffectCertainty.NotStarted)
+            { (await journal.CloseAsync(known, JournalPhase.Dismissed, message: outcome.Message, ct: ct)).OrThrow(); return outcome; }
             if (outcome.Status == CommandStatus.Failed)
                 return await ReverseAsync(command, known, outcome.Message, outcome.Problem);
             var phase = outcome.NeedsUser ? JournalPhase.NeedsUser : outcome.RolledBack ? JournalPhase.RolledBack
@@ -23,14 +26,14 @@ public sealed class CommandRunner(IJournal journal)
         }
         catch (OperationCanceledException)
         {
-            if (entry is null) return new(CommandStatus.Cancelled, "The action was cancelled before execution.", null);
+            if (entry is null) return new(CommandStatus.Cancelled, "The action was cancelled before execution.", null){Certainty=EffectCertainty.NotStarted};
             var recovered = await ReverseAsync(command, entry, "The action was cancelled", null);
             return recovered.RolledBack ? recovered with { Status = CommandStatus.Cancelled, Message = "The action was cancelled. " + recovered.Message } : recovered;
         }
         catch (Exception ex)
         {
             var problem = Boundary.Problem(ex, ProblemCodes.Unknown);
-            return entry is null ? CommandOutcome.Failed(problem) : await ReverseAsync(command, entry, ex.Message, problem);
+            return entry is null ? CommandOutcome.Failed(problem with{Certainty=EffectCertainty.NotStarted}) : await ReverseAsync(command, entry, ex.Message, problem);
         }
     }
 

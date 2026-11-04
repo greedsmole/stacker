@@ -18,12 +18,15 @@ public sealed class GitCommandLog : IGitDiagnosticLog
     public IReadOnlyList<GitCommandEntry> Snapshot()
     { lock (_sync) return _entries.ToArray(); }
     public void Clear() { lock (_sync) _entries.Clear(); Changed?.Invoke(null); }
+    internal bool IsGit(ProcessRequest request)
+    {
+        var name=Path.GetFileName(request.Executable);
+        var configured=GitExecutablePath is {Length:>0} path&&string.Equals(SafeFullPath(path),SafeFullPath(request.Executable),StringComparison.OrdinalIgnoreCase);
+        return configured||name.Equals("git",StringComparison.OrdinalIgnoreCase)||name.Equals("git.exe",StringComparison.OrdinalIgnoreCase);
+    }
     internal Guid? Begin(ProcessRequest request, DateTimeOffset started)
     {
-        var name = Path.GetFileName(request.Executable);
-        // A configured git is recognised by its path, so a renamed or wrapped binary is still logged.
-        var configured = GitExecutablePath is { Length: > 0 } path && string.Equals(SafeFullPath(path), SafeFullPath(request.Executable), StringComparison.OrdinalIgnoreCase);
-        if (!configured && !name.Equals("git", StringComparison.OrdinalIgnoreCase) && !name.Equals("git.exe", StringComparison.OrdinalIgnoreCase)) return null;
+        if(!IsGit(request))return null;
         var command = "git " + string.Join(' ', request.Arguments.Select(Quote));
         var entry = new GitCommandEntry(Guid.NewGuid(), started, request.WorkingDirectory ?? "", Redact(command), TimeSpan.Zero, null, "", true);
         lock (_sync) { _entries.Add(entry); if (_entries.Count > 500) _entries.RemoveAt(0); }

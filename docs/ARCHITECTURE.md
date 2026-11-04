@@ -109,8 +109,9 @@ Patch and syntax caches have entry and estimated retained-memory budgets. Large 
 these budgets are estimates, not a whole-process heap limit. Search has a shared five-second deadline, bounded
 regex matches, cancellation and shared patch reuse. Changed-line matching runs off the UI thread.
 
-Shutdown stops foreground work with a deadline, attempts workspace/draft/settings persistence, collects failures
-and closes the window. UI async events use `AsyncHandler` to catch and report failures. Corrupt publication markers
+Shutdown pauses foreground work with a deadline and attempts workspace/draft/settings persistence. A failed
+save keeps the close decision with the user: retry, export unsent text, resume editing, or explicitly discard.
+Only committing the close permanently stops the bus and disposes the session. UI async events use `AsyncHandler` to catch and report failures. Corrupt publication markers
 keep sending blocked until the user explicitly resolves uncertainty; unreadable drafts do not permit a send.
 
 ## Fitness and evidence
@@ -130,19 +131,76 @@ review checkpoints, blocking questions, stack analysis and file evolution. The g
 used for analysis; a later metadata poll cannot silently change a running review's inputs. Navigation projects
 active remote paths from this graph, while closed/merged nodes remain available in historical snapshots.
 
-`Infrastructure/History` implements `IHistoryStore` with Microsoft.Data.Sqlite and `IHistoryGit` with a private bare
-repository per scope. The indexed SQLite document tables use transactions for version identity and draft import,
-and compare revisions for draft writes. Unknown database schema versions and damaged legacy drafts fail closed.
-The existing JSON workspace/settings and v1 YAML definitions retain their formats. Legacy draft JSON is preserved.
+`Infrastructure/History` implements `IHistoryStore` with Microsoft.Data.Sqlite and `IHistoryGit` against an explicit
+`RepositoryIdentity`. SQLite schema 3 retains immutable versions, observations, graph revisions, checkpoints,
+concerns, drafts and publication evidence. It adds repository-specific content availability and resumable import
+markers. Schema-1/2 upgrades back up the database first; legacy JSON drafts and old object directories remain.
 
-Observed PR metadata does not imply downloaded code. Opening a layer pins the available commits in a separate
-history cache; opening History captures its selected stack path. Base-change comparison uses `merge-tree` with an
-explicit old merge-base to obtain an expected tree and compares it with the new head. Missing objects, conflicts
-and unsupported Git capabilities remain explicit unavailable results. No repository code, merge driver configured
-by the user's global configuration, hook, checkout or index operation is invoked by this analysis adapter.
+PR preparation, historical pins, replay comparisons, trial merges and reanchoring use the opened worktree as
+working directory and its actual Git object database. `RepositoryGit` serializes object/ref writes by common Git
+directory and owns shared read leases. `IPullRequestObjects.EnsureAsync` ensures objects exist and returns Unit;
+it cannot return a substitute comparison directory. The synthetic PR ref list is projected over the original
+repository snapshot, preserving its identity/root. Repository-switch cancellation and tickets guard publication
+of asynchronous results; view cache keys include the GitHub context.
+
+Fetch uses native origin/credential/proxy/TLS configuration, atomic application refs, no tags, no FETCH_HEAD
+write and no automatic maintenance. Explicit SHA validation detects a moving PR snapshot. Object reads disable
+lazy fetch, external diff and textconv. Analysis disables renormalization and overrides external merge drivers;
+a conflicting result with configured external drivers is unavailable instead of executing user code. Commit,
+restack and other explicit editing actions retain their normal local Git behavior.
 
 `ReviewSessionService` owns persistence/validation policy and explicit publication phases independently of Avalonia.
 An immutable operation payload is persisted before sending. The existing foreground command bus still owns the
 actual GitHub effect and journal. View controllers manage presentation and clear only the acknowledged draft
 buffers. Historical anchor proposals require exact unique context, explicit confirmation and publication-time
 server validation; original anchors remain in the draft's history.
+
+
+## Workspace foundation
+
+`IWorkspaceSession` owns displayed/pending snapshots, selection and query tickets independently of Avalonia.
+A ticket includes session epoch, selection revision and displayed-snapshot revision. Background metadata is
+staged, including its graph, and **Update changes** applies it explicitly. Seven workspace controllers depend
+on purpose-specific presentation interfaces; `WorkspaceRuntime` owns their service references and session,
+while `MainViewModel` exposes bindings and delegates commands. Review controllers retain their existing
+review-view facade; this change does not claim every controller is a pure domain service.
+
+Repository and worktree identities are stored independently of root paths. Registration resolves the Git common
+directory and physical working-tree root. Worktrees share repository history, while workspace keys use worktree
+identity and import older path-based views on first load. Relocation explicitly preserves both identities.
+Local/PR bindings require matching head repository/ref and are established only after a verified, nonbackground
+refresh sees the same head SHA. Binding aliases expose checkpoints and versions to both views, and migrate application-owned pin references within the selected repository. An account mismatch refuses that binding rather than merging remote histories.
+
+`QueryCoordinator` shares immutable patch reads and reference-counts subscribers. Canceling one subscription
+leaves the others alive; canceling the last cancels the underlying read. Metadata concurrency is capped at four,
+patch reads at two; TextMate and refresh each have a single gate. Retained patch/syntax budgets still apply.
+Large diff rows are prepared off the UI thread, transferred with one collection reset and rendered with the
+existing virtualized list. Autosave has a 300 ms coalescing interval, one in-flight write and one latest snapshot;
+Flush bypasses the interval.
+
+Publication uses one operation ID from prepared payload through the bus, journal and diagnostic record. Remote
+journal evidence and publication payloads live in the same SQLite database; local Git journals retain their JSON
+format. Final draft acknowledgement, publication phase and matching remote journal resolution commit together.
+The immutable payload is checked on every update and only one unfinished publication is allowed per draft.
+Prepared operations interrupted before dispatch are safe to reject; Sending becomes Uncertain on restart.
+NotStarted/Rejected outcomes preserve text and permit a later manual attempt; Unknown never triggers a retry.
+Legacy markers remain readable, including cases without enough evidence for automatic acknowledgement.
+
+Repository leases protect both displayed comparisons and underlying Git reads. Clear waits for readers and
+deletes only expected application refs through `update-ref --stdin`. It never deletes `.git`, object files, user
+branches, remote-tracking branches or restack backup refs, and never forces garbage collection. Disk management
+belongs to Git; the old disk-cache budget is a readable legacy settings field. Patch and syntax memory bounds
+remain. The old directory-based `IObjectStore` is retained as a compatibility utility and is not wired to active
+repository reads or cleanup.
+
+Legacy imports execute from the selected worktree with the old cache/bundle supplied as a fetch source. Import
+completion is recorded per repository/source only after objects are verified, so interruption is retryable and a
+second clone gets its own import. Original directories remain untouched. Explicitly removed history stays removed.
+
+Backup format 2 exports metadata plus a Git bundle of the active repository's history refs; no active repository
+means a metadata-only backup. Restore validates schema, checksums, integrity and foreign keys into a separate
+profile. Bundle import occurs on repository connection. Format-1 archives containing old bare-history folders
+remain readable and use the same local import path. This is not a backup of the working tree or credentials.
+Diagnostics retain their bounded allowlisted metadata format.
+
+[Foundation delivery register](FOUNDATION.md) maps these boundaries to executable evidence.

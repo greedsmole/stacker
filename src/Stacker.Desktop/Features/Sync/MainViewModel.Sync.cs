@@ -5,13 +5,11 @@ namespace Stacker.Desktop.ViewModels;
 
 public sealed partial class MainViewModel
 {
-    internal IGitBranchWriter? _branchWriter;
-    internal IGitHubPullRequestWriter? _pullRequestWriter;
     [ObservableProperty] internal bool _isSyncing;
     [ObservableProperty] internal string _syncProgress = "";
     /// <summary>The restack entry point is offered only for a local stack that can be rewritten.</summary>
-    public bool? UndoAvailable => _activeGroup?.UndoAvailable ?? false;
-    public bool CanRestackActiveStack => _repository is not null && _activeGroup is { IsRemote: false } && !IsSyncing;
+    public bool? UndoAvailable => _runtime._activeGroup?.UndoAvailable ?? false;
+    public bool CanRestackActiveStack => _runtime._repository is not null && _runtime._activeGroup is { IsRemote: false } && !IsSyncing;
     partial void OnIsSyncingChanged(bool value) => OnPropertyChanged(nameof(CanRestackActiveStack));
 
     /// <summary>Builds the preview for the active local stack without touching a single ref.</summary>
@@ -44,5 +42,5 @@ public sealed partial class MainViewModel
     public Task RefreshSyncAvailabilityAsync(CancellationToken ct = default) => _syncController.RefreshSyncAvailabilityAsync(ct);
 
     /// <summary>Applies a rewritten snapshot immediately instead of behind the pending-changes prompt.</summary>
-    internal Task ReloadAsync() => _syncController.ReloadAsync();
+    public Task ReloadAsync() => _syncController.ReloadAsync();
 }

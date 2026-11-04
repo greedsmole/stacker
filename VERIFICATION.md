@@ -1,3 +1,112 @@
+# Verification — opened local repository execution
+
+Recorded on **2026-11-04**, macOS ARM64 / Apple M1 Pro, .NET SDK 10.0.201. This is the current record;
+older sections below describe previous source revisions.
+
+## Automated checks
+
+`dotnet test -c Release --no-restore --logger 'trx;LogFileName=local-repository.trx' --results-directory artifacts/test-results`
+completed: **292 passed, 0 failed, 0 skipped**, duration **2 min 21 s**. All projects compiled without warnings
+or errors. `git diff --check` is clean. Evidence: `artifacts/test-results/local-repository.trx`.
+
+Tests cover real PR fetch into the selected repository, dirty/staged/untracked files, unchanged HEAD/user refs/
+index/config/FETCH_HEAD, native credentials/TLS configuration, batched refspec input, exact snapshot checks,
+offline reuse, diagnostic preservation and no automatic fetch retries. Real-workspace headless auditing verifies
+all Git command working directories and absence of newly created private object repositories. Further coverage
+includes linked worktrees, repository redirect variables, per-clone import, local/PR pin aliasing, underlying read
+leases, preserved restack backup refs, disabled external merge drivers, and recovery of unreachable historical
+commits from both format-1/schema-2 archives and format-2 Git bundles, including multiple scopes. Prior local Git,
+publication, cancellation, draft, lifecycle, history and architecture checks remain in the full suite.
+
+Object/history ports require explicit `RepositoryIdentity`. Normal PR/history operations cannot return another
+comparison directory, create a clone/bare repository, or delete the local object database. Ref updates and bundles
+use stdin to avoid platform command-length limits when many versions are retained. SQLite schema 3 migration
+preserves IDs, review metadata and drafts; legacy object directories are import sources and remain on disk.
+
+## Packages
+
+Both self-contained package builds succeeded without warnings/errors. TAR contents were read completely; Windows
+ZIP CRC validation passed. The application and SQLite native library match each target architecture.
+
+| Target | Archive | Bytes | Entries | Native architecture |
+| --- | --- | --- | --- | --- |
+| osx-arm64 | `artifacts/Stacker-0.5.0-osx-arm64.tar.gz` | 47,320,225 | 242 | Mach-O arm64 |
+| win-x64 | `artifacts/Stacker-0.5.0-win-x64.zip` | 49,553,343 | 240 | PE32+ x86-64 |
+
+Checksums and executable identification: `artifacts/package-manifest.json`.
+
+## Native and external limits
+
+The macOS package was launched against an explicitly created local fixture with staged, unstaged and untracked
+files in an isolated profile. The process exited before opening the workspace: Avalonia.Native could not start
+RenderTimer, native error `-6661`. Computer use independently reported that the Mac was locked and automatic
+unlock failed. Native visual/startup acceptance is therefore **not confirmed**. The observed failure precedes
+workspace initialization; no claim is made that this session establishes its cause. Startup log:
+`artifacts/test-results/local-native-startup.log`.
+
+Windows x64 was cross-published on this Mac; native Windows execution and GitHub Actions were not run here.
+No live GitHub/GHES comments, reviews, account changes, user-repository restacks or remote stack publications were
+performed for validation. Local tests use isolated repositories and file remotes. Packages remain unsigned/not
+notarized local artifacts; no release assets were published.
+
+Behavior and migration details: [local repository execution](docs/LOCAL_REPOSITORY.md).
+
+## Earlier verification records
+
+# Verification — workspace foundation
+
+Recorded on **2026-11-03**, Apple M1 Pro / macOS ARM64, macOS 26.6.2, .NET SDK 10.0.201.
+This is the current verification record. Earlier records below describe previous source revisions.
+
+## Final automated checks
+
+`dotnet test -c Release --no-restore --logger 'trx;LogFileName=foundation.trx' --results-directory artifacts/test-results`
+passed: **284 passed, 0 failed, 0 skipped**, duration **2 min 33 s**. Release compilation and both package builds
+reported no warnings or errors. `git diff --check` passed. Machine-readable result:
+`artifacts/test-results/foundation.trx`.
+
+The foundation adds fault, concurrency, recovery, workflow and load profiles. Evidence includes rollback of a
+failed schema migration with the original and backup retained; foreign-key and graph revision protection;
+worktree identity and physical folder relocation; path-based workspace import; account-separated local/PR
+binding; draft CAS and bounded autosave; independent query cancellation and read concurrency; leases surviving
+view removal; archive verification and refusal to overwrite existing state; prepared-operation restart handling;
+immutable publication payloads; explicit 401/422 rejection versus unknown 503 outcomes; immediate repeated
+attempts after a known rejection; atomic draft acknowledgement and journal resolution; close/cancel/retry;
+embedded History selection and Back/Forward; and recovery of a reappearing ref under its existing identity.
+Existing Git, publish, process, synchronization, cache, search and UI scenarios remain in the full suite.
+
+A dedicated Release load profile measured 1000 PR discovery p95 **13.32 ms**, latest-graph lookup with 10,000
+versions p95 **0.31 ms**, and approximately 50,000-row cached diff loading plus headless layout p95 **114.10 ms**.
+The 1200 × 800 headless viewport realized **27** diff controls. Importing 10,000 versions and their graph in one
+transaction took **445.38 ms**. These are local component/headless measurements, not native input-to-paint or
+network latency guarantees. Fixture details and sample counts: [foundation delivery register](docs/FOUNDATION.md).
+
+## Package validation and startup
+
+| Target | Archive | Bytes | Integrity and native dependencies |
+| --- | --- | --- | --- |
+| macOS ARM64 | `artifacts/Stacker-0.5.0-osx-arm64.tar.gz` | 47,303,245 | All TAR members read; 242 entries; app and SQLite are Mach-O arm64 |
+| Windows x64 | `artifacts/Stacker-0.5.0-win-x64.zip` | 49,542,924 | ZIP CRC check passed; 240 entries; app and SQLite are PE32+ x86-64 |
+
+Checksums and executable identification are in `artifacts/package-manifest.json`. Both archives include the
+runtime. The macOS package started with `--data-root <isolated temporary profile> --demo`, stayed running,
+created one demo repository and 19 history nodes, and its database returned `integrity_check = ok`.
+Its startup log contained no error output. The test process was then stopped; the user's profile was untouched.
+
+## External validation limits
+
+- Native visual walkthrough was blocked: computer use reported that the Mac was locked and automatic unlock
+  failed. Process startup and headless controls are verified; native visual acceptance is not claimed.
+- Windows x64 was cross-published on this Mac. Native Windows execution/tests and GitHub Actions were not run here.
+- No live GitHub/GHES comments or reviews, account changes, or remote stack publications were performed for validation.
+- Backups restore a separate application profile, excluding credentials and the user's Git checkout/YAML definition.
+  Unfetched or explicitly forgotten unreachable historical objects cannot be recovered from metadata alone.
+- Active readers can temporarily keep disposable storage above its configured budget. Historical code is never
+  automatically evicted. Trial merges and normalized diffs remain textual analysis.
+- macOS bundles remain unsigned/not notarized. These are local packages; no release assets were published.
+
+## Earlier verification records
+
 # Verification — architecture migration A–G
 
 Recorded on **2026-10-16**, on macOS ARM64 with .NET SDK 10.0.201. This is the current record; sections below
@@ -6,7 +115,7 @@ are historical observations of earlier source revisions, not a statement of curr
 ## Local checks
 
 `dotnet test -c Release --no-restore --logger 'trx;LogFileName=migration.trx' --results-directory artifacts/test-results`
-completed successfully: **234 passed, 0 failed, 0 skipped**, duration **2 min 36 s**. All four projects compiled in
+completed successfully: **234 passed, 0 failed, 0 skipped**, duration **2 min 33 s**. All four projects compiled in
 Release without reported warnings. Machine-readable evidence: `artifacts/test-results/migration.trx`.
 
 New coverage includes all eight independent safety findings (11 cases including API status variants), the real

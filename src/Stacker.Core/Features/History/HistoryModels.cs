@@ -14,6 +14,7 @@ public sealed record DependencyEdge(string Parent, string Child, string Source);
 public sealed record GraphSnapshot(string Scope, DateTimeOffset ObservedAt, IReadOnlyList<ChangeNode> Nodes,
     IReadOnlyList<DependencyEdge> Edges, IReadOnlyList<string> Warnings)
 {
+    public long Revision { get; init; }
     public IReadOnlyDictionary<string, string> Versions { get; init; } = new Dictionary<string, string>();
     public override string ToString() => ObservedAt.LocalDateTime.ToString("g");
 }
@@ -42,6 +43,9 @@ public interface IHistoryRemoteReader
 }
 public interface IHistoryStore
 {
+    Task<Result<ChangeNode?>> FindNodeAsync(string scope, string reference, long? pr = null, CancellationToken ct = default);
+    Task<Result<GraphSnapshot?>> LatestGraphAsync(string scope, CancellationToken ct = default);
+    Task<Result<GraphSnapshot>> ApplyObservationBatchAsync(HistoryObservationBatch batch, CancellationToken ct = default);
     Task<Result<ChangeNode>> ResolveNodeAsync(string scope, string reference, string title, long? pr = null, CancellationToken ct = default);
     Task<Result<Unit>> SaveNodeAsync(ChangeNode node, CancellationToken ct = default);
     Task<Result<Unit>> RebindLocalNodeAsync(ChangeNode node, string reference, CancellationToken ct = default);
@@ -54,12 +58,13 @@ public interface IHistoryStore
     Task<Result<Unit>> SetConcernAsync(ReviewConcern concern, bool remove, CancellationToken ct = default);
     Task<Result<Unit>> SetCheckpointAsync(ReviewCheckpoint checkpoint, bool remove, CancellationToken ct = default);
 }
-/// <summary>All writes, including object import and merge simulation, occur in an application-owned bare repository.</summary>
+/// <summary>History pins and analysis use the explicitly selected local repository without checkout or index writes.</summary>
 public interface IHistoryGit
 {
-    Task<Result<string>> CaptureAsync(string scope, string source, IReadOnlyList<string> commits, CancellationToken ct = default);
-    Task<Result<Unit>> ForgetContentsAsync(string scope, CancellationToken ct = default);
-    Task<Result<string>> RootAsync(string scope, CancellationToken ct = default);
-    Task<Result<string?>> TransplantAsync(string root, string oldBase, string oldHead, string newBase, CancellationToken ct = default);
-    Task<Result<IReadOnlyList<string>>> MergeAsync(string root, string parent, string head, CancellationToken ct = default);
+    Task<Result<ContentAvailability>> AvailabilityAsync(RepositoryIdentity repository, string scope, CancellationToken ct = default);
+    Task<Result<Unit>> CaptureAsync(RepositoryIdentity repository, string scope, IReadOnlyList<string> commits, CancellationToken ct = default);
+    Task<Result<ObjectSnapshotLease>> AcquireAsync(RepositoryIdentity repository, string scope, CancellationToken ct = default);
+    Task<Result<Unit>> ForgetContentsAsync(RepositoryIdentity repository, string scope, CancellationToken ct = default);
+    Task<Result<string?>> TransplantAsync(RepositoryIdentity repository, string oldBase, string oldHead, string newBase, CancellationToken ct = default);
+    Task<Result<IReadOnlyList<string>>> MergeAsync(RepositoryIdentity repository, string parent, string head, CancellationToken ct = default);
 }

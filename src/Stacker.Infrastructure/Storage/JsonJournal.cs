@@ -1,4 +1,5 @@
 // Purpose: Persists the write-ahead journal so any interrupted effect can be resumed, undone or dismissed.
+using Stacker.Core;
 using Stacker.Core.Framework;
 namespace Stacker.Infrastructure.Framework;
 
@@ -21,7 +22,7 @@ public sealed class JsonJournal(IStateStore<JournalLog> store, IClock clock) : I
         await _gate.WaitAsync(ct);
         try
         {
-            var entry = new JournalEntry(JournalEntry.CurrentSchema, Guid.NewGuid().ToString("N"), repository, kind,
+            var entry = new JournalEntry(JournalEntry.CurrentSchema, OperationCorrelation.Current ?? Guid.NewGuid().ToString("N"), repository, kind,
                 clock.Now, clock.Now, JournalPhase.Running, planned, null, null, null)
                 { RestackPlan = planned.FirstOrDefault(step => step.RestackPlan is not null)?.RestackPlan };
             await MutateAsync(repository, log =>

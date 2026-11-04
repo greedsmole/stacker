@@ -2,9 +2,9 @@ namespace Stacker.Core;
 
 public sealed class StackAnalysisService(IHistoryStore store, IHistoryGit objects, IGitRepositoryReader git)
 {
-    public async Task<StackAnalysisResult> AnalyzeAsync(GraphSnapshot graph, CancellationToken ct = default)
+    public async Task<StackAnalysisResult> AnalyzeAsync(RepositoryIdentity repository, GraphSnapshot graph, CancellationToken ct = default)
     {
-        var root = (await objects.RootAsync(graph.Scope, ct)).OrThrow(); var issues = new List<StackAnalysisIssue>();
+        using var lease = (await objects.AcquireAsync(repository, graph.Scope, ct)).OrThrow(); var root = lease.Root; var issues = new List<StackAnalysisIssue>();
         var versions = new Dictionary<string, ChangeVersion?>();
         foreach (var node in graph.Nodes) versions[node.Id] = (await store.VersionsAsync(node.Id, ct)).OrThrow().FirstOrDefault(v => graph.Versions.GetValueOrDefault(node.Id) == v.Id);
         foreach (var edge in graph.Edges)
@@ -23,7 +23,7 @@ public sealed class StackAnalysisService(IHistoryStore store, IHistoryGit object
                 var b = (await git.FilesAsync(root, child.MergeBase, child.HeadSha, ct)).OrThrow();
                 var overlap = a.SelectMany(f => new[] { f.OldPath, f.NewPath }).Intersect(b.SelectMany(f => new[] { f.OldPath, f.NewPath })).ToArray();
                 if (overlap.Length > 0) issues.Add(new(edge.Child, "Overlap", "Layers touch common files; this alone is not a conflict.", overlap));
-                var conflicts = (await objects.MergeAsync(root, parent.HeadSha, child.HeadSha, ct)).OrThrow();
+                var conflicts = (await objects.MergeAsync(repository, parent.HeadSha, child.HeadSha, ct)).OrThrow();
                 if (conflicts.Count > 0) issues.Add(new(edge.Child, "Conflict", "Trial merge has textual conflicts (not a restack prediction).", conflicts));
             }
             catch (StackerException ex) { issues.Add(new(edge.Child, "Unavailable", ex.Message, [])); }

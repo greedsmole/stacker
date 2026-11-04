@@ -7,7 +7,9 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        // One writer per machine: a second launch would otherwise race the same application-data files.
+        var dataRootIndex = Array.IndexOf(args, "--data-root");
+        if(dataRootIndex >= 0 && dataRootIndex + 1 < args.Length) App.UseDataRoot(args[dataRootIndex + 1]);
+        // One writer per application-data profile: a second launch would otherwise race the same application-data files.
         using var single = new SingleInstanceLock(App.AppRoot);
         if (!single.TryAcquire())
         {

@@ -83,24 +83,24 @@ public sealed class HistoryTests
             var basis = await f.Git("rev-parse", "HEAD");
             await f.Git("checkout", "-b", "A"); await f.Write("own.txt", "own\n"); await f.Commit("own"); var oldHead = await f.Git("rev-parse", "HEAD");
             var objects = new HistoryGit(f.Runner, new(), new ApplicationStore(root));
-            await objects.CaptureAsync("scope", f.Root, [basis, oldHead]);
+            await objects.CaptureAsync(f.Identity,"scope", [basis, oldHead]);
             await f.Git("checkout", "main"); await f.Write("upstream.txt", "upstream\n"); await f.Commit("upstream"); var nextBase = await f.Git("rev-parse", "HEAD");
             await f.Git("checkout", "A"); await f.Git("rebase", "main"); var nextHead = await f.Git("rev-parse", "HEAD");
-            var privateRoot = (await objects.CaptureAsync("scope", f.Root, [nextBase, nextHead])).OrThrow();
+            (await objects.CaptureAsync(f.Identity,"scope", [nextBase, nextHead])).OrThrow(); var privateRoot=f.Root;
             var service = new VersionComparisonService(f.Reader, objects);
             var old = new ChangeVersion("old", "A", basis, oldHead, basis, DateTimeOffset.UtcNow);
             var current = new ChangeVersion("current", "A", nextBase, nextHead, nextBase, DateTimeOffset.UtcNow);
             var refs = await f.Git("show-ref"); var index = await f.Git("write-tree");
-            var comparison = await service.CompareAsync("scope", old, current);
+            var comparison = await service.CompareAsync(f.Identity,"scope", old, current);
             Assert.Null(comparison.Unavailable); Assert.Empty(comparison.CodeChanges); Assert.Single(comparison.BaseChanges);
             Assert.Equal(refs, await f.Git("show-ref")); Assert.Equal(index, await f.Git("write-tree")); Assert.Equal("", await f.Git("status", "--porcelain"));
             await f.Write("own.txt", "own\nfix\n"); await f.Commit("fix"); var fixedHead = await f.Git("rev-parse", "HEAD");
-            (await objects.CaptureAsync("scope", f.Root, [fixedHead])).OrThrow();
-            var fixedComparison = await service.CompareAsync("scope", old, current with { HeadSha = fixedHead });
+            (await objects.CaptureAsync(f.Identity,"scope", [fixedHead])).OrThrow();
+            var fixedComparison = await service.CompareAsync(f.Identity,"scope", old, current with { HeadSha = fixedHead });
             Assert.Equal("own.txt", Assert.Single(fixedComparison.CodeChanges).NewPath);
             // A force-updated local ref cannot destroy captured historical objects.
             await f.Git("update-ref", "refs/heads/A", nextBase);
-            Assert.Contains("refs/stacker/history/" + oldHead, await f.GitAt(privateRoot, "show-ref"));
+            Assert.Contains("/"+oldHead, await f.GitAt(privateRoot,"show-ref"));
         }
         finally { Directory.Delete(root, true); }
     }
@@ -113,12 +113,12 @@ public sealed class HistoryTests
             await f.Git("checkout", "-b", "A"); await f.Write("base.txt", "left\n"); await f.Commit("left"); var head = await f.Git("rev-parse", "HEAD");
             await f.Git("checkout", "main"); await f.Write("base.txt", "right\n"); await f.Commit("right"); var next = await f.Git("rev-parse", "HEAD");
             var objects = new HistoryGit(f.Runner, new(), new ApplicationStore(root));
-            var cache = (await objects.CaptureAsync("scope", f.Root, [basis, head, next])).OrThrow();
-            var comparison = await new VersionComparisonService(f.Reader, objects).CompareAsync("scope",
+            (await objects.CaptureAsync(f.Identity,"scope", [basis, head, next])).OrThrow(); var cache=f.Root;
+            var comparison = await new VersionComparisonService(f.Reader, objects).CompareAsync(f.Identity,"scope",
                 new("old", "A", basis, head, basis, DateTimeOffset.UtcNow), new("new", "A", next, next, next, DateTimeOffset.UtcNow));
             Assert.False(comparison.IsReliable); Assert.Contains("conflicts", comparison.Unavailable);
-            Assert.Contains("base.txt", (await objects.MergeAsync(cache, head, next)).OrThrow());
-            Assert.True((await objects.TransplantAsync(f.Root, basis, head, next)).IsFailed);
+            Assert.Contains("base.txt", (await objects.MergeAsync(f.Identity, head, next)).OrThrow());
+            Assert.Null((await objects.TransplantAsync(f.Identity,basis,head,next)).OrThrow());
         }
         finally { Directory.Delete(root, true); }
     }

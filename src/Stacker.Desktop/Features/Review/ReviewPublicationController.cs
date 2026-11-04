@@ -75,6 +75,7 @@ internal sealed class ReviewPublicationController(ReviewViewModel owner)
             owner.QueueSave(); await owner.FlushAsync();
             ReviewSessionService.Transition(owner._draft, PublicationPhase.Sending);
             owner.QueueSave(); await owner.FlushAsync();
+            using var dispatch = OperationCorrelation.Enter(marker);
             await send(marker);
             ReviewSessionService.Transition(owner._draft, PublicationPhase.Confirmed);
             owner._draft.PendingOperation = null; owner._draft.PendingFilePath = null;
@@ -82,7 +83,7 @@ internal sealed class ReviewPublicationController(ReviewViewModel owner)
             owner.QueueSave(); await owner.FlushAsync(); owner.Message = "Published.";
             await owner.ReloadAsync();
         }
-        catch (Exception ex) { if (owner._draft.Operation?.Phase == PublicationPhase.Sending) { ReviewSessionService.Transition(owner._draft, PublicationPhase.Uncertain); owner.QueueSave(); } owner.Message = ex.Message + (owner._draft.PendingOperation is null ? "" : " Publication may have reached GitHub. Reload to reconcile before retrying."); }
+        catch (Exception ex) { HandleCertainFailure(ex); if (owner._draft.Operation?.Phase == PublicationPhase.Sending) { ReviewSessionService.Transition(owner._draft, PublicationPhase.Uncertain); owner.QueueSave(); } owner.Message = ex.Message + (owner._draft.PendingOperation is null ? "" : " Publication may have reached GitHub. Reload to reconcile before retrying."); }
         finally { owner.IsBusy = false; owner.NotifyPublicationState(); }
     }
 
@@ -95,11 +96,12 @@ internal sealed class ReviewPublicationController(ReviewViewModel owner)
             await VerifyAsync([]); owner._draft.PendingOperation = PendingOperation.ForResolve(thread.Id, !thread.IsResolved).Encode(); ReviewSessionService.Prepare(owner._draft, Guid.NewGuid().ToString("N"), "resolve", owner.Context, owner.PullRequest);
             owner.QueueSave(); await owner.FlushAsync();
             ReviewSessionService.Transition(owner._draft, PublicationPhase.Sending); owner.QueueSave(); await owner.FlushAsync();
+            using var dispatch = OperationCorrelation.Enter(owner._draft.Operation!.Id);
             (await owner._writer.ResolveAsync(owner.Context, thread.Id, !thread.IsResolved)).OrThrow();
             ReviewSessionService.Transition(owner._draft, PublicationPhase.Confirmed);
             owner._draft.PendingOperation = null; owner.QueueSave(); await owner.FlushAsync(); await owner.ReloadAsync();
         }
-        catch (Exception ex) { if (owner._draft.Operation?.Phase == PublicationPhase.Sending) { ReviewSessionService.Transition(owner._draft, PublicationPhase.Uncertain); owner.QueueSave(); } owner.Message = ex.Message; }
+        catch (Exception ex) { HandleCertainFailure(ex); if (owner._draft.Operation?.Phase == PublicationPhase.Sending) { ReviewSessionService.Transition(owner._draft, PublicationPhase.Uncertain); owner.QueueSave(); } owner.Message = ex.Message; }
         finally { owner.IsBusy = false; }
     }
 
@@ -116,8 +118,15 @@ internal sealed class ReviewPublicationController(ReviewViewModel owner)
     {
         if (owner._draft.PendingReviewComments is null) return; // Older uncertain operations have no safe snapshot to remove.
         if (owner.Summary == owner._draft.PendingSummary) { owner._loading = true; owner.Summary = ""; owner._loading = false; owner._draft.Summary = ""; }
-        foreach (var sent in owner._draft.PendingReviewComments) { owner._draft.Comments.Remove(sent); owner.DraftComments.Remove(sent); }
+        foreach (var sent in owner._draft.PendingReviewComments)
+            foreach (var match in owner._draft.Comments.Where(c => c.Id == sent.Id && c == sent).ToArray()) { owner._draft.Comments.Remove(match); owner.DraftComments.Remove(match); }
         owner._draft.PendingReviewComments = null; owner._draft.PendingSummary = null;
     }
 
+    private void HandleCertainFailure(Exception error)
+    {
+        if(owner._draft.Operation?.Phase!=PublicationPhase.Prepared && error is not StackerException { Problem.Certainty: EffectCertainty.NotStarted or EffectCertainty.Rejected }) return;
+        ReviewSessionService.Transition(owner._draft, PublicationPhase.Rejected);
+        owner._draft.PendingOperation=null;owner._draft.PendingFilePath=null;owner.QueueSave();
+    }
 }

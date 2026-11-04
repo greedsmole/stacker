@@ -10,7 +10,11 @@ public sealed record BranchRef(string Name, string Sha)
 }
 /// <summary>Immutable view of the repository refs and working-tree summary used by a comparison.</summary>
 public sealed record RepositorySnapshot(string Root, IReadOnlyList<BranchRef> Refs, int ChangedFiles)
-{ public bool IsDemo { get; init; } }
+{ public bool IsDemo { get; init; }
+    public RepositoryIdentity? Identity { get; init; }
+    public string Scope => Identity?.Scope ?? "local:" + Root;
+    public string WorkspaceKey=>Identity is { } identity?"worktree:"+identity.Worktree.Value:Root;
+}
 /// <summary>Resolved state for one ordered layer, including parent relationship and divergence warning.</summary>
 public sealed record StackLayerSnapshot(int Position, string Branch, string Parent, string? HeadSha,
     string? ParentSha, int Ahead, int Behind, string? Warning);
@@ -58,7 +62,11 @@ public class StackerException : Exception
     public StackerException(string message) : base(message) { }
     public StackerException(Framework.Problem problem) : base(problem.Message) => Problem = problem;
 }
-public sealed class GitHubAuthenticationException(string message) : StackerException(message);
+public sealed class GitHubAuthenticationException : StackerException
+{
+    public GitHubAuthenticationException(string message):base(message){ }
+    public GitHubAuthenticationException(Framework.Problem problem):base(problem){ }
+}
 public sealed class OutputLimitException() : StackerException("Output exceeds the display limit. Select a smaller file or comparison.");
 
 public sealed class AppSettings
@@ -69,6 +77,8 @@ public sealed class AppSettings
     /// <summary>Most recently opened local repository paths, ordered newest first by the UI.</summary>
     public List<string> RecentRepositories { get; set; } = [];
     public bool BackgroundRefresh { get; set; } = true;
+    /// <summary>Legacy profile field; repository objects are now managed by the selected Git repository.</summary>
+    public int CacheBudgetMiB { get; set; } = 2048;
     public bool WrapCode { get; set; }
     public string? LastRepository { get; set; }
     public string? GitPath { get; set; }

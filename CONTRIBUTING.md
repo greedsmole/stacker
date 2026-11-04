@@ -61,3 +61,46 @@ Use `GitFixture` for isolated histories, worktrees and local bare remotes. GitHu
 transport responses. Native Windows execution and live GitHub/GHES publication require their own validation;
 cross-publishing a Windows archive on macOS does not provide either. Record actual evidence and limitations in
 `VERIFICATION.md`, and maintain the finding register in `docs/MIGRATION.md`.
+
+
+## Foundation invariants
+
+Keep workspace/controller dependencies behind their typed presentation interface and `WorkspaceRuntime`.
+Displayed data changes explicitly; return asynchronous reads only while their session/selection/snapshot ticket
+remains current. Use the shared reader for patch deduplication and hold an object lease for every private Git
+read, including work continuing after a view is disposed.
+
+Use `IReviewDraftRepository` with an explicit revision. Observe a graph through `ApplyObservationBatchAsync`;
+do not save a partial set of nodes/versions and then separately replace the graph. Preserve immutable versions
+and operation payloads. Keep merge-base evidence/materialization and repeated observations separate from a
+version's identity. Repeated unchanged metadata must not grow the observation log on every poll.
+
+An operation ID is a correlation and recovery identity, not a remote idempotency guarantee. Carry it through
+publication and journal effects. Confirmed/rejected acknowledgement and draft cleanup share a SQLite transaction.
+Only classify an external failure as Rejected when the transport proves that the effect was refused; network
+errors and server failures remain Unknown. Do not clear comments edited after their submitted snapshot.
+
+Run foundation fault/workflow/load tests with:
+
+```sh
+dotnet test -c Release --filter 'FullyQualifiedName~Foundation'
+```
+
+Load profiles print timings; they assert correctness, bounded work and virtualization, rather than imposing
+machine-dependent latency thresholds on CI. Record native response measurements separately from headless data.
+
+
+## Local repository object operations
+
+Pass an explicit `RepositoryIdentity` to PR/history object ports. Every workspace Git process uses that worktree's
+root as its working directory; do not return an application-data repository from an object-preparation adapter.
+Use `RepositoryGit` for object pins, imports, bundle export and merge analysis. Its leases cover underlying reads
+as well as views; cleanup only removes expected application refs and cannot delete repository directories.
+Keep object writes separate from foreground branch-editing commands so preparing a comparison does not cancel
+its own caller through CommandBus.Starting.
+
+Use the configured origin and native Git credentials/TLS/proxy configuration for downloads. `gh` remains an API
+adapter. Preserve user HEAD, branches, index, files, config and FETCH_HEAD; background metadata polling never
+fetches. Keep read-only diff/analysis restrictions even though the repository now has the user's configuration.
+Migration and bundle-source Git commands also run from the opened worktree. Legacy caches are input data,
+never a working directory or a fallback execution target. See `LocalRepositoryHistoryTests` and `GitCacheTests`.

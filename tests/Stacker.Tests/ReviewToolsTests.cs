@@ -18,20 +18,14 @@ namespace Stacker.Tests;
 
 public sealed class ReviewToolsTests
 {
-    private sealed class RecordingCache(string root) : IGitObjectCache
+    private sealed class RecordingCache(string root):IPullRequestObjects
     {
-        public List<long[]> Requests { get; } = [];
-        public Task ClearAsync(GitHubRepositoryContext context, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<RepositorySnapshot> PrepareAsync(GitHubRepositoryContext context, IReadOnlyList<PullRequest> prs, CancellationToken ct = default)
-        {
-            Requests.Add(prs.Select(pr => pr.Number).ToArray());
-            return Task.FromResult(new RepositorySnapshot(root,
-                prs.SelectMany(pr => new[] { new BranchRef(GitObjectCache.HeadRef(pr), pr.HeadSha), new BranchRef(GitObjectCache.BaseRef(pr), pr.BaseSha) }).ToArray(), 0));
-        }
-
-    Task<Result<RepositorySnapshot>> IGitObjectCache.PrepareAsync(GitHubRepositoryContext context,IReadOnlyList<PullRequest> prs,CancellationToken ct) => Boundary.CaptureAsync(() => PrepareAsync(context, prs, ct), ProblemCodes.GitFailed);
-
-    Task<Result<Unit>> IGitObjectCache.ClearAsync(GitHubRepositoryContext context,CancellationToken ct) => Boundary.CaptureAsync(() => ClearAsync(context, ct), ProblemCodes.GitFailed);
+        public List<long[]> Requests { get; }=[];
+        public Task<Result<RepositoryObjectStorage>> InspectAsync(RepositoryIdentity repository,CancellationToken ct=default)=>Task.FromResult(Result<RepositoryObjectStorage>.Ok(new(repository.CommonDirectory,0)));
+        public Task<Result<Unit>> EnsureAsync(RepositoryIdentity repository,GitHubRepositoryContext context,IReadOnlyList<PullRequest> prs,CancellationToken ct=default)
+        {Assert.True(Directory.Exists(root));Requests.Add(prs.Select(pr=>pr.Number).ToArray());return Task.FromResult(Result.Ok);}
+        public Task<Result<ObjectSnapshotLease>> AcquireAsync(RepositoryIdentity repository,CancellationToken ct=default)=>Task.FromResult(Result<ObjectSnapshotLease>.Ok(new(repository.Root,()=>{})));
+        public Task<Result<Unit>> ClearAsync(RepositoryIdentity repository,GitHubRepositoryContext context,CancellationToken ct=default)=>Task.FromResult(Result.Ok);
     }
     private static MainViewModel Create(GitFixture f, FakeGitHub hub, RecordingCache cache) =>
         new(f.Reader, new YamlStackStore(), new JsonSettingsStore(Path.Combine(f.Root,"settings")), new GitExecutable(), new(f.Reader), new(f.Reader),

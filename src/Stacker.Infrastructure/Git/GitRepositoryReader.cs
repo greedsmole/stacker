@@ -6,7 +6,7 @@ using Stacker.Core;
 
 namespace Stacker.Infrastructure;
 
-public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable executable) : IGitRepositoryReader, IBlobReader, IDemoSnapshotReader
+public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable executable, IChangeIdentityService? identities = null) : IGitRepositoryReader, IBlobReader, IDemoSnapshotReader
 {
     public async Task<GitHubSnapshot?> ReadDemoSnapshotAsync(string root, CancellationToken ct = default) =>
         System.Text.Json.JsonSerializer.Deserialize<GitHubSnapshot>(await File.ReadAllTextAsync(Path.Combine(root, ".stacker-demo.json"), ct));
@@ -47,7 +47,14 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
             changed++;
             if (status[i][0] is 'R' or 'C' || status[i][1] is 'R' or 'C') i++;
         }
-        return new(root, refs, changed) { IsDemo = File.Exists(Path.Combine(root, ".stacker-demo.json")) };
+        RepositoryIdentity identity;
+        if(identities is not null)identity=(await identities.RegisterAsync(root,ct)).OrThrow();
+        else
+        {
+            var common=(await Run(root,["rev-parse","--path-format=absolute","--git-common-dir"],ct)).StdOut.TrimEnd('\r','\n');
+            identity=new(new(StableIdentity.For(common)[..32]),new(StableIdentity.For(root)[..32]),root,common);
+        }
+        return new RepositorySnapshot(root, refs, changed) { Identity=identity, IsDemo = File.Exists(Path.Combine(root, ".stacker-demo.json")) };
     }
     /// <summary>Returns all merge bases because more than one best ancestor makes the comparison ambiguous.</summary>
     public async Task<IReadOnlyList<string>> MergeBasesAsync(string root, string left, string right, CancellationToken ct = default)
