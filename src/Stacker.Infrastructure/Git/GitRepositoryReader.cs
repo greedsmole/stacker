@@ -47,7 +47,14 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
             changed++;
             if (status[i][0] is 'R' or 'C' || status[i][1] is 'R' or 'C') i++;
         }
-        return new RepositorySnapshot(root, refs, changed) { Identity = identities is null ? null : (await identities.RegisterAsync(root, ct)).OrThrow(), IsDemo = File.Exists(Path.Combine(root, ".stacker-demo.json")) };
+        RepositoryIdentity identity;
+        if(identities is not null)identity=(await identities.RegisterAsync(root,ct)).OrThrow();
+        else
+        {
+            var common=(await Run(root,["rev-parse","--path-format=absolute","--git-common-dir"],ct)).StdOut.TrimEnd('\r','\n');
+            identity=new(new(StableIdentity.For(common)[..32]),new(StableIdentity.For(root)[..32]),root,common);
+        }
+        return new RepositorySnapshot(root, refs, changed) { Identity=identity, IsDemo = File.Exists(Path.Combine(root, ".stacker-demo.json")) };
     }
     /// <summary>Returns all merge bases because more than one best ancestor makes the comparison ambiguous.</summary>
     public async Task<IReadOnlyList<string>> MergeBasesAsync(string root, string left, string right, CancellationToken ct = default)

@@ -107,11 +107,14 @@ public interface IGitHubPullRequestWriter
     /// <summary>Points an existing pull request at a different base branch after a layer's parent changed.</summary>
     Task<Result<PullRequest>> UpdatePullRequestBaseAsync(GitHubRepositoryContext context, long number, string baseBranch, CancellationToken ct = default);
 }
-/// <summary>Fetches remote PR objects into an application-owned repository cache without touching the user's checkout.</summary>
-public interface IGitObjectCache
+public sealed record RepositoryObjectStorage(string CommonDirectory,long SizeBytes);
+/// <summary>Ensures selected PR objects exist in the opened repository using its configured Git transport.</summary>
+public interface IPullRequestObjects
 {
-    Task<Result<RepositorySnapshot>> PrepareAsync(GitHubRepositoryContext context, IReadOnlyList<PullRequest> prs, CancellationToken ct = default);
-    Task<Result<Unit>> ClearAsync(GitHubRepositoryContext context, CancellationToken ct = default);
+    Task<Result<Unit>> EnsureAsync(RepositoryIdentity repository, GitHubRepositoryContext context, IReadOnlyList<PullRequest> prs, CancellationToken ct = default);
+    Task<Result<ObjectSnapshotLease>> AcquireAsync(RepositoryIdentity repository, CancellationToken ct = default);
+    Task<Result<Unit>> ClearAsync(RepositoryIdentity repository, GitHubRepositoryContext context, CancellationToken ct = default);
+    Task<Result<RepositoryObjectStorage>> InspectAsync(RepositoryIdentity repository,CancellationToken ct=default);
 }
 /// <summary>One syntax-colored character range in a source line.</summary>
 public sealed record SyntaxSpan(int Start, int Length, string Color, bool Italic = false);

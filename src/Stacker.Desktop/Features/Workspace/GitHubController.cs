@@ -131,7 +131,7 @@ internal sealed class GitHubController(IGitHubPresentation owner, WorkspaceRunti
         return matches?.Length == 1 ? matches[0] : null;
     }
 
-    public Task<RepositorySnapshot> PrepareRemoteAsync(StackGroupViewModel group, DiffMode mode, int[] positions, CancellationToken ct)
+    public async Task<RepositorySnapshot> PrepareRemoteAsync(StackGroupViewModel group, DiffMode mode, int[] positions, CancellationToken ct)
     {
         var required = mode switch
         {
@@ -144,9 +144,13 @@ internal sealed class GitHubController(IGitHubPresentation owner, WorkspaceRunti
         if (owner.IsDemo)
         {
             IReadOnlyList<BranchRef> refs = prs.SelectMany(p => new[] { new BranchRef(RemoteRefs.HeadRef(p), p.HeadSha), new BranchRef(RemoteRefs.BaseRef(p), p.BaseSha) }).ToArray();
-            return Task.FromResult(new RepositorySnapshot(runtime._repository!.Root, refs, 0));
+            return runtime._repository! with{Refs=refs};
         }
-        return runtime._objectCache is { } cache ? Boundary.UnwrapAsync(cache.PrepareAsync(runtime._remoteSnapshot!.Context, prs, ct)) : throw new StackerException("GitHub cache is unavailable.");
+        var repository=runtime._repository??throw new StackerException("Open a local repository first.");
+        if(repository.Identity is not { } identity)throw new StackerException("Repository identity is unavailable.");
+        if(runtime._prObjects is not { } objects)throw new StackerException("PR object preparation is unavailable.");
+        (await objects.EnsureAsync(identity,runtime._remoteSnapshot!.Context,prs,ct)).OrThrow();
+        return repository with{Refs=prs.SelectMany(pr=>new[]{new BranchRef(RemoteRefs.HeadRef(pr),pr.HeadSha),new BranchRef(RemoteRefs.BaseRef(pr),pr.BaseSha)}).DistinctBy(r=>r.Name).ToArray()};
     }
 
     public async Task SaveGitHubPreferencesAsync(RepositoryPreferences preferences)
@@ -164,8 +168,8 @@ internal sealed class GitHubController(IGitHubPresentation owner, WorkspaceRunti
 
     public async Task ClearGitHubCacheAsync()
     {
-        if (runtime._remoteSnapshot is null || runtime._objectCache is null || owner.IsDemo) return;
-        try { runtime._comparison?.Cancel(); (await runtime._objectCache.ClearAsync(runtime._remoteSnapshot.Context)).OrThrow(); owner.DisposeViews(); owner.Sections.Clear(); owner.GitHubStatus = "Git object cache cleared. Select a PR to download it again."; }
+        if (runtime._remoteSnapshot is null || runtime._prObjects is null || owner.IsDemo) return;
+        try { runtime._comparison?.Cancel(); (await runtime._prObjects.ClearAsync(runtime._repository!.Identity!,runtime._remoteSnapshot.Context)).OrThrow(); owner.DisposeViews(); owner.Sections.Clear(); owner.GitHubStatus = "PR retention references cleared. Objects remain managed by the local Git repository."; }
         catch (Exception ex) { owner.Error = ex.Message; }
     }
 

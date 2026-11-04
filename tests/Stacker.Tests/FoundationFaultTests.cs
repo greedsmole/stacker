@@ -33,7 +33,7 @@ public sealed class FoundationFaultTests
                 using(var writer=new StreamWriter(zip.CreateEntry("manifest.json").Open()))await writer.WriteAsync(JsonSerializer.Serialize(new{Schema=1,CreatedAt=DateTimeOffset.UtcNow,Files=new Dictionary<string,string>{{"review-history.db","wrong-checksum"}}}));
                 using var file=new StreamWriter(zip.CreateEntry("review-history.db").Open());await file.WriteAsync("damaged");
             }
-            var app=new ApplicationStore(Path.Combine(root,"app"));var backup=new WorkspaceBackupService(app,new(app.Root),new ObjectStore(app),new ProcessRunner());var destination=Path.Combine(root,"restored");
+            var app=new ApplicationStore(Path.Combine(root,"app"));var backup=new WorkspaceBackupService(app,new(app.Root),new ProcessRunner());var destination=Path.Combine(root,"restored");
             Assert.True((await backup.RestoreAsync(archive,destination)).IsFailed);Assert.False(Directory.Exists(destination));Assert.Empty(Directory.GetDirectories(root,"*.restore-*"));
         }finally{Directory.Delete(root,true);}
     }
@@ -43,10 +43,10 @@ public sealed class FoundationFaultTests
         try
         {
             var app=new ApplicationStore(root);var objects=new HistoryGit(f.Runner,new(),app);
-            Assert.Equal(ContentAvailability.NeedsDownload,(await objects.AvailabilityAsync("s")).OrThrow());
-            var sha=await f.Git("rev-parse","HEAD");(await objects.CaptureAsync("s",f.Root,[sha])).OrThrow();Assert.Equal(ContentAvailability.Available,(await objects.AvailabilityAsync("s")).OrThrow());
-            (await objects.ForgetContentsAsync("s")).OrThrow();objects=new(f.Runner,new(),app);
-            Assert.Equal(ContentAvailability.Removed,(await objects.AvailabilityAsync("s")).OrThrow());
+            Assert.Equal(ContentAvailability.NeedsDownload,(await objects.AvailabilityAsync(f.Identity,"s")).OrThrow());
+            var sha=await f.Git("rev-parse","HEAD");(await objects.CaptureAsync(f.Identity,"s",[sha])).OrThrow();Assert.Equal(ContentAvailability.Available,(await objects.AvailabilityAsync(f.Identity,"s")).OrThrow());
+            (await objects.ForgetContentsAsync(f.Identity,"s")).OrThrow();objects=new(f.Runner,new(),app);
+            Assert.Equal(ContentAvailability.Removed,(await objects.AvailabilityAsync(f.Identity,"s")).OrThrow());
         }finally{Directory.Delete(root,true);}
     }
     [Fact] public async Task Renaming_a_change_preserves_versions_and_checkpoints()

@@ -88,3 +88,19 @@ dotnet test -c Release --filter 'FullyQualifiedName~Foundation'
 
 Load profiles print timings; they assert correctness, bounded work and virtualization, rather than imposing
 machine-dependent latency thresholds on CI. Record native response measurements separately from headless data.
+
+
+## Local repository object operations
+
+Pass an explicit `RepositoryIdentity` to PR/history object ports. Every workspace Git process uses that worktree's
+root as its working directory; do not return an application-data repository from an object-preparation adapter.
+Use `RepositoryGit` for object pins, imports, bundle export and merge analysis. Its leases cover underlying reads
+as well as views; cleanup only removes expected application refs and cannot delete repository directories.
+Keep object writes separate from foreground branch-editing commands so preparing a comparison does not cancel
+its own caller through CommandBus.Starting.
+
+Use the configured origin and native Git credentials/TLS/proxy configuration for downloads. `gh` remains an API
+adapter. Preserve user HEAD, branches, index, files, config and FETCH_HEAD; background metadata polling never
+fetches. Keep read-only diff/analysis restrictions even though the repository now has the user's configuration.
+Migration and bundle-source Git commands also run from the opened worktree. Legacy caches are input data,
+never a working directory or a fallback execution target. See `LocalRepositoryHistoryTests` and `GitCacheTests`.

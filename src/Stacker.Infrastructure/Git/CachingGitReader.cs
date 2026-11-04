@@ -5,7 +5,7 @@ namespace Stacker.Infrastructure;
 
 /// <summary>A bounded, byte-limited cache in front of the reader; every other call is passed straight through.</summary>
 /// <remarks>Bounded by both entry count and total patch size, so a large comparison cannot grow without limit.</remarks>
-public sealed class CachingGitReader(IGitRepositoryReader inner, int capacity = 32, long maxBytes = 48L * 1024 * 1024, IDiagnosticSink? diagnostics = null, IObjectStore? objects = null, IApplicationState? state = null) : IGitRepositoryReader, IBlobReader, IDemoSnapshotReader, IDisposable
+public sealed class CachingGitReader(IGitRepositoryReader inner, int capacity = 32, long maxBytes = 48L * 1024 * 1024, IDiagnosticSink? diagnostics = null, IObjectStore? objects = null, IApplicationState? state = null, RepositoryGit? repositoryGit = null) : IGitRepositoryReader, IBlobReader, IDemoSnapshotReader, IDisposable
 {
     public Task<GitHubSnapshot?> ReadDemoSnapshotAsync(string root, CancellationToken ct = default) =>
         inner is IDemoSnapshotReader demo ? Boundary.UnwrapAsync(demo.ReadDemoSnapshotAsync(root, ct)) : Task.FromResult<GitHubSnapshot?>(null);
@@ -24,6 +24,7 @@ public sealed class CachingGitReader(IGitRepositoryReader inner, int capacity = 
         inner is IBlobReader reader ? Boundary.UnwrapAsync(WithLeaseAsync(root,t=>reader.ReadBlobAsync(root,commit,path,t),ct)) : Task.FromResult<BlobContent?>(null);
     private async Task<Result<T>> WithLeaseAsync<T>(string root,Func<CancellationToken,Task<Result<T>>> read,CancellationToken ct)
     {
+        using var localLease=repositoryGit?.TryAcquireRead(root);
         var comparison=OperatingSystem.IsWindows()?StringComparison.OrdinalIgnoreCase:StringComparison.Ordinal;
         var privateRoot=state is not null&&new[]{"objects","history-objects"}.Any(folder=>Path.GetFullPath(root).StartsWith(Path.GetFullPath(Path.Combine(state.Root,folder))+Path.DirectorySeparatorChar,comparison));
         if(objects is null||!privateRoot)return await read(ct);

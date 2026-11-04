@@ -77,6 +77,7 @@ public sealed class AppSettings
     /// <summary>Most recently opened local repository paths, ordered newest first by the UI.</summary>
     public List<string> RecentRepositories { get; set; } = [];
     public bool BackgroundRefresh { get; set; } = true;
+    /// <summary>Legacy profile field; repository objects are now managed by the selected Git repository.</summary>
     public int CacheBudgetMiB { get; set; } = 2048;
     public bool WrapCode { get; set; }
     public string? LastRepository { get; set; }

@@ -14,15 +14,14 @@ public sealed class WorkspaceV3Tests
 {
     private static MainViewModel Create(GitFixture f, ApplicationStore store, FakeGitHub? hub = null) =>
         new(f.Reader, new YamlStackStore(), new JsonSettingsStore(Path.Combine(f.Root, "settings")), new GitExecutable(), new(f.Reader), new(f.Reader), hub, hub, new SeededCache(f.Root), store);
-    private sealed class SeededCache(string root) : IGitObjectCache
+    private sealed class SeededCache(string root):IPullRequestObjects
     {
-        public Task<RepositorySnapshot> PrepareAsync(GitHubRepositoryContext context, IReadOnlyList<PullRequest> prs, CancellationToken ct = default) =>
-            Task.FromResult(new RepositorySnapshot(root, prs.SelectMany(p => new[] { new BranchRef(GitObjectCache.HeadRef(p), p.HeadSha), new BranchRef(GitObjectCache.BaseRef(p), p.BaseSha) }).ToArray(), 0));
-        public Task ClearAsync(GitHubRepositoryContext context, CancellationToken ct = default) => Task.CompletedTask;
-
-    Task<Result<RepositorySnapshot>> IGitObjectCache.PrepareAsync(GitHubRepositoryContext context,IReadOnlyList<PullRequest> prs,CancellationToken ct) => Boundary.CaptureAsync(() => PrepareAsync(context, prs, ct), ProblemCodes.GitFailed);
-
-    Task<Result<Unit>> IGitObjectCache.ClearAsync(GitHubRepositoryContext context,CancellationToken ct) => Boundary.CaptureAsync(() => ClearAsync(context, ct), ProblemCodes.GitFailed);
+        public List<long[]> Requests { get; }=[];
+        public Task<Result<RepositoryObjectStorage>> InspectAsync(RepositoryIdentity repository,CancellationToken ct=default)=>Task.FromResult(Result<RepositoryObjectStorage>.Ok(new(repository.CommonDirectory,0)));
+        public Task<Result<Unit>> EnsureAsync(RepositoryIdentity repository,GitHubRepositoryContext context,IReadOnlyList<PullRequest> prs,CancellationToken ct=default)
+        {Assert.True(Directory.Exists(root));Requests.Add(prs.Select(pr=>pr.Number).ToArray());return Task.FromResult(Result.Ok);}
+        public Task<Result<ObjectSnapshotLease>> AcquireAsync(RepositoryIdentity repository,CancellationToken ct=default)=>Task.FromResult(Result<ObjectSnapshotLease>.Ok(new(repository.Root,()=>{})));
+        public Task<Result<Unit>> ClearAsync(RepositoryIdentity repository,GitHubRepositoryContext context,CancellationToken ct=default)=>Task.FromResult(Result.Ok);
     }
     [AvaloniaFact] public async Task Clean_diff_preserves_patch_numbers_and_newline_annotation()
     {

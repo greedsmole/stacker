@@ -131,19 +131,23 @@ review checkpoints, blocking questions, stack analysis and file evolution. The g
 used for analysis; a later metadata poll cannot silently change a running review's inputs. Navigation projects
 active remote paths from this graph, while closed/merged nodes remain available in historical snapshots.
 
-`Infrastructure/History` implements `IHistoryStore` with Microsoft.Data.Sqlite and `IHistoryGit` with a private bare
-repository per scope. SQLite schema 2 uses separate indexed tables and foreign keys for nodes, immutable versions, materialization
-evidence, observations, graphs/members, checkpoints, concerns, identities, drafts and publication operations.
-A graph observation commits nodes, versions and graph together against an expected graph revision; draft
-writes carry an explicit expected revision. Schema-1 migration makes a SQLite backup before its transaction,
-retains the original document table and keeps the three latest migration backups. Unknown database schema versions and damaged legacy drafts fail closed.
-The existing JSON workspace/settings and v1 YAML definitions retain their formats. Legacy draft JSON is preserved.
+`Infrastructure/History` implements `IHistoryStore` with Microsoft.Data.Sqlite and `IHistoryGit` against an explicit
+`RepositoryIdentity`. SQLite schema 3 retains immutable versions, observations, graph revisions, checkpoints,
+concerns, drafts and publication evidence. It adds repository-specific content availability and resumable import
+markers. Schema-1/2 upgrades back up the database first; legacy JSON drafts and old object directories remain.
 
-Observed PR metadata does not imply downloaded code. Opening a layer pins the available commits in a separate
-history cache; opening History captures its selected stack path. Base-change comparison uses `merge-tree` with an
-explicit old merge-base to obtain an expected tree and compares it with the new head. Missing objects, conflicts
-and unsupported Git capabilities remain explicit unavailable results. No repository code, merge driver configured
-by the user's global configuration, hook, checkout or index operation is invoked by this analysis adapter.
+PR preparation, historical pins, replay comparisons, trial merges and reanchoring use the opened worktree as
+working directory and its actual Git object database. `RepositoryGit` serializes object/ref writes by common Git
+directory and owns shared read leases. `IPullRequestObjects.EnsureAsync` ensures objects exist and returns Unit;
+it cannot return a substitute comparison directory. The synthetic PR ref list is projected over the original
+repository snapshot, preserving its identity/root. Repository-switch cancellation and tickets guard publication
+of asynchronous results; view cache keys include the GitHub context.
+
+Fetch uses native origin/credential/proxy/TLS configuration, atomic application refs, no tags, no FETCH_HEAD
+write and no automatic maintenance. Explicit SHA validation detects a moving PR snapshot. Object reads disable
+lazy fetch, external diff and textconv. Analysis disables renormalization and overrides external merge drivers;
+a conflicting result with configured external drivers is unavailable instead of executing user code. Commit,
+restack and other explicit editing actions retain their normal local Git behavior.
 
 `ReviewSessionService` owns persistence/validation policy and explicit publication phases independently of Avalonia.
 An immutable operation payload is persisted before sending. The existing foreground command bus still owns the
@@ -165,8 +169,7 @@ Repository and worktree identities are stored independently of root paths. Regis
 directory and physical working-tree root. Worktrees share repository history, while workspace keys use worktree
 identity and import older path-based views on first load. Relocation explicitly preserves both identities.
 Local/PR bindings require matching head repository/ref and are established only after a verified, nonbackground
-refresh sees the same head SHA. Binding aliases expose checkpoints and versions to both views, and copy pinned
-historical commits. An account mismatch refuses that binding rather than merging remote histories.
+refresh sees the same head SHA. Binding aliases expose checkpoints and versions to both views, and migrate application-owned pin references within the selected repository. An account mismatch refuses that binding rather than merging remote histories.
 
 `QueryCoordinator` shares immutable patch reads and reference-counts subscribers. Canceling one subscription
 leaves the others alive; canceling the last cancels the underlying read. Metadata concurrency is capped at four,
@@ -183,16 +186,21 @@ Prepared operations interrupted before dispatch are safe to reject; Sending beco
 NotStarted/Rejected outcomes preserve text and permit a later manual attempt; Unknown never triggers a retry.
 Legacy markers remain readable, including cases without enough evidence for automatic acknowledgement.
 
-`IObjectStore` leases protect both displayed views and underlying Git reads. Clear is deferred until all readers
-release; failed deferred deletes are retried by trimming and explicitly removed history is remembered across
-restart. Automatic LRU eviction is limited to disposable downloads, defaults to 2 GiB and is configurable. Active
-leases can temporarily keep storage above that budget. History has a 5 GiB warning and explicit removal only.
-Availability distinguishes downloaded, needs-download, explicitly removed and unavailable contents.
+Repository leases protect both displayed comparisons and underlying Git reads. Clear waits for readers and
+deletes only expected application refs through `update-ref --stdin`. It never deletes `.git`, object files, user
+branches, remote-tracking branches or restack backup refs, and never forces garbage collection. Disk management
+belongs to Git; the old disk-cache budget is a readable legacy settings field. Patch and syntax memory bounds
+remain. The old directory-based `IObjectStore` is retained as a compatibility utility and is not wired to active
+repository reads or cleanup.
 
-Workspace backups use SQLite's backup API, object leases, streamed SHA-256 checksums and staged restore into a
-separate empty profile. Export cannot overwrite the active profile. Restore checks schema, integrity and foreign
-keys before moving the staging directory into place. This is a profile backup, not a backup of the user's checkout
-or GitHub credentials. Local diagnostics retain five approximately 4 MiB JSONL files; the allowlisted event shape
-contains no patches, paths, credentials or comment bodies.
+Legacy imports execute from the selected worktree with the old cache/bundle supplied as a fetch source. Import
+completion is recorded per repository/source only after objects are verified, so interruption is retryable and a
+second clone gets its own import. Original directories remain untouched. Explicitly removed history stays removed.
+
+Backup format 2 exports metadata plus a Git bundle of the active repository's history refs; no active repository
+means a metadata-only backup. Restore validates schema, checksums, integrity and foreign keys into a separate
+profile. Bundle import occurs on repository connection. Format-1 archives containing old bare-history folders
+remain readable and use the same local import path. This is not a backup of the working tree or credentials.
+Diagnostics retain their bounded allowlisted metadata format.
 
 [Foundation delivery register](FOUNDATION.md) maps these boundaries to executable evidence.

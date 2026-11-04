@@ -15,7 +15,7 @@ public sealed partial class MainViewModel
         await SaveWorkspaceAsync();await FlushReviewsAsync();
         if(_runtime._workspacePersistence.LastProblem is { } problem)throw new StackerException(problem);
         if(_backupService is null){Error="Workspace backup is unavailable.";return;}
-        (await _backupService.ExportAsync(path)).OrThrow();Status="Workspace backup saved.";
+        (await _backupService.ExportAsync(path,_runtime._repository?.Identity)).OrThrow();Status="Workspace backup saved.";
     }
     public async Task RestoreWorkspaceAsync(string path,string folder)
     {

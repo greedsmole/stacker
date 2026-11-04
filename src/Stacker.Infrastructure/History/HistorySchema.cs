@@ -5,7 +5,7 @@ namespace Stacker.Infrastructure;
 
 public sealed partial class SqliteHistoryStore
 {
-    internal const int Schema = 2;
+    internal const int Schema = 3;
     private readonly object _initialization = new();
     private bool _initialized;
     private void Initialize(SqliteConnection connection)
@@ -25,6 +25,8 @@ public sealed partial class SqliteHistoryStore
                 CREATE TABLE IF NOT EXISTS versions(id TEXT PRIMARY KEY,json TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,owner TEXT NOT NULL REFERENCES nodes(entity_id),base_sha TEXT NOT NULL,head_sha TEXT NOT NULL,first_seen TEXT NOT NULL,UNIQUE(owner,base_sha,head_sha));
                 CREATE TABLE IF NOT EXISTS materializations(version_id TEXT PRIMARY KEY REFERENCES versions(id),merge_base TEXT);
                 CREATE TABLE IF NOT EXISTS object_catalog(scope TEXT PRIMARY KEY,availability INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS repository_contents(repository_id TEXT NOT NULL,scope TEXT NOT NULL,availability INTEGER NOT NULL,PRIMARY KEY(repository_id,scope));
+                CREATE TABLE IF NOT EXISTS object_imports(repository_id TEXT NOT NULL,source TEXT NOT NULL,PRIMARY KEY(repository_id,source));
                 CREATE TABLE IF NOT EXISTS observations(sequence INTEGER PRIMARY KEY AUTOINCREMENT,version_id TEXT NOT NULL REFERENCES versions(id),owner TEXT NOT NULL REFERENCES nodes(entity_id),seen_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS graphs(sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,json TEXT NOT NULL,revision INTEGER NOT NULL,scope TEXT NOT NULL,UNIQUE(scope,revision));
                 CREATE TABLE IF NOT EXISTS graph_members(graph_id TEXT NOT NULL REFERENCES graphs(id),node_id TEXT NOT NULL REFERENCES nodes(entity_id),version_id TEXT REFERENCES versions(id),PRIMARY KEY(graph_id,node_id));
@@ -49,7 +51,7 @@ public sealed partial class SqliteHistoryStore
                 """;
             command.ExecuteNonQuery();
             if (old == 1) ImportDocuments(connection, tx);
-            command.CommandText = "PRAGMA user_version=2"; command.ExecuteNonQuery(); tx.Commit(); _initialized = true;
+            command.CommandText = "PRAGMA user_version=3"; command.ExecuteNonQuery(); tx.Commit(); _initialized = true;
         }
     }
     private void ImportDocuments(SqliteConnection c, SqliteTransaction tx)

@@ -5,19 +5,28 @@ using Stacker.Core;
 using Stacker.Core.Framework;
 namespace Stacker.Infrastructure;
 
-public sealed class WorkspaceBackupService(IApplicationState state,SqliteHistoryStore database,IObjectStore objects,IProcessLauncher launcher):IWorkspaceBackupService
+public sealed class WorkspaceBackupService(IApplicationState state,SqliteHistoryStore database,IProcessLauncher launcher,RepositoryGit? git=null):IWorkspaceBackupService
 {
     private sealed record Manifest(int Schema,DateTimeOffset CreatedAt,Dictionary<string,string> Files);
-    private static readonly string[] Folders=["history-objects","settings","journal","workspace","workspace-index","workspace-stack","workspace-stacks","snapshots","repositories","drafts"];
-    public Task<Result<string>> ExportAsync(string destination,CancellationToken ct=default)=>Boundary.CaptureAsync(async()=>
+    private static readonly string[] Folders=["settings","journal","workspace","workspace-index","workspace-stack","workspace-stacks","snapshots","repositories","drafts"];
+    public Task<Result<string>> ExportAsync(string destination,RepositoryIdentity? repository=null,CancellationToken ct=default)=>Boundary.CaptureAsync(async()=>
     {
         ProtectProfile(destination);
-        var staging=Directory.CreateTempSubdirectory("stacker-backup-").FullName;var leases=new List<ObjectSnapshotLease>();var temporary=destination+".tmp-"+Guid.NewGuid().ToString("N");
+        var staging=Directory.CreateTempSubdirectory("stacker-backup-").FullName;var temporary=destination+".tmp-"+Guid.NewGuid().ToString("N");
         try
         {
-            var history=Path.Combine(state.Root,"history-objects");
-            foreach(var root in Directory.Exists(history)?Directory.GetDirectories(history):[])
-                leases.Add((await objects.AcquireAsync(root,false,ct)).OrThrow());
+            if(repository is not null&&git is null)throw new StackerException("Repository history backup is unavailable.");
+            if(repository is not null&&git is not null)
+            {
+                using var gate=await git.LockAsync(repository,ct);using var lease=git.AcquireRead(repository);
+                var refs=await git.RefsAsync(repository,$"refs/stacker/history/{repository.Repository.Value}/",ct);
+                var removed=database.RemovedScopeKeys(repository);refs=refs.Where(item=>!removed.Contains(item.Key.Split('/')[4])).ToDictionary();
+                if(refs.Count>0)
+                {
+                    var bundles=Path.Combine(staging,"repository-bundles");Directory.CreateDirectory(bundles);
+                    await git.RunAsync(repository,["bundle","create",Path.Combine(bundles,repository.Repository.Value+".bundle"),"--stdin"],ct,input:string.Join('\n',refs.Keys)+"\n");
+                }
+            }
             using(var source=database.Open())using(var backup=new Microsoft.Data.Sqlite.SqliteConnection("Data Source="+Path.Combine(staging,"review-history.db")))
             {backup.Open();source.BackupDatabase(backup);}
             foreach(var folder in Folders)
@@ -31,11 +40,11 @@ public sealed class WorkspaceBackupService(IApplicationState state,SqliteHistory
             var hashes=new Dictionary<string,string>();
             foreach(var file in Directory.EnumerateFiles(staging,"*",SearchOption.AllDirectories))
                 hashes[Path.GetRelativePath(staging,file).Replace('\\','/')]=await HashAsync(file,ct);
-            await File.WriteAllTextAsync(Path.Combine(staging,"manifest.json"),JsonSerializer.Serialize(new Manifest(1,DateTimeOffset.UtcNow,hashes)),ct);
+            await File.WriteAllTextAsync(Path.Combine(staging,"manifest.json"),JsonSerializer.Serialize(new Manifest(2,DateTimeOffset.UtcNow,hashes)),ct);
             await Task.Run(()=>ZipFile.CreateFromDirectory(staging,temporary,CompressionLevel.Fastest,false),ct);
             File.Move(temporary,destination,true);return destination;
         }
-        finally{foreach(var lease in leases)lease.Dispose();Directory.Delete(staging,true);if(File.Exists(temporary))File.Delete(temporary);}
+        finally{Directory.Delete(staging,true);if(File.Exists(temporary))File.Delete(temporary);}
     },ProblemCodes.StoreWrite);
     public Task<Result<string>> RestoreAsync(string archive,string emptyDestination,CancellationToken ct=default)=>Boundary.CaptureAsync(async()=>
     {
@@ -46,7 +55,7 @@ public sealed class WorkspaceBackupService(IApplicationState state,SqliteHistory
             using var zip=ZipFile.OpenRead(archive);
             var manifestEntry=zip.GetEntry("manifest.json")??throw new StackerException("Backup manifest is missing.");
             using var manifestStream=manifestEntry.Open();var manifest=await JsonSerializer.DeserializeAsync<Manifest>(manifestStream,cancellationToken:ct)??throw new StackerException("Backup manifest is unreadable.");
-            if(manifest.Schema!=1)throw new StackerException("Unsupported backup schema.");
+            if(manifest.Schema is not(1 or 2))throw new StackerException("Unsupported backup schema.");
             if(!manifest.Files.ContainsKey("review-history.db"))throw new StackerException("Backup database is missing from the manifest.");
             foreach(var(path,hash)in manifest.Files)
             {

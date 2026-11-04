@@ -14,12 +14,12 @@ public sealed partial class HistoryWorkspaceViewModel
     public IReadOnlyList<ChangeNode> GraphNodes => Graph.Nodes;
     [RelayCommand] private async Task ForgetHistoricalCodeAsync()
     {
-        if (!_confirmForget) { _confirmForget = true; Message = "Click Remove historical code again to confirm. Versions and draft text stay; unreachable old code may be impossible to download again."; return; }
+        if (!_confirmForget) { _confirmForget = true; Message = "Click Remove history pins again to confirm. Versions and draft text stay. Git may later collect unreachable historical commits."; return; }
         await ExecuteAsync(async () =>
         {
-            (await _objects.ForgetContentsAsync(Graph.Scope, _lifetime.Token)).OrThrow();
+            (await _objects.ForgetContentsAsync(_repository,Graph.Scope, _lifetime.Token)).OrThrow();
             _confirmForget = false; _current = null; Files.Clear(); Versions.Clear(); Preview = "";ClearDocument();
-            Message = "Historical code is scheduled for removal after its active views close. Metadata and drafts are retained.";
+            Message = "History pins are scheduled for removal after active views close. The repository and its objects remain managed by Git.";
         });
     }
     [RelayCommand] private async Task SetDependencyAsync()

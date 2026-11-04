@@ -58,14 +58,13 @@ public interface IHistoryStore
     Task<Result<Unit>> SetConcernAsync(ReviewConcern concern, bool remove, CancellationToken ct = default);
     Task<Result<Unit>> SetCheckpointAsync(ReviewCheckpoint checkpoint, bool remove, CancellationToken ct = default);
 }
-/// <summary>All writes, including object import and merge simulation, occur in an application-owned bare repository.</summary>
+/// <summary>History pins and analysis use the explicitly selected local repository without checkout or index writes.</summary>
 public interface IHistoryGit
 {
-    Task<Result<ContentAvailability>> AvailabilityAsync(string scope, CancellationToken ct = default);
-    Task<Result<string>> CaptureAsync(string scope, string source, IReadOnlyList<string> commits, CancellationToken ct = default);
-    Task<Result<ObjectSnapshotLease>> AcquireAsync(string scope, CancellationToken ct = default);
-    Task<Result<Unit>> ForgetContentsAsync(string scope, CancellationToken ct = default);
-    Task<Result<string>> RootAsync(string scope, CancellationToken ct = default);
-    Task<Result<string?>> TransplantAsync(string root, string oldBase, string oldHead, string newBase, CancellationToken ct = default);
-    Task<Result<IReadOnlyList<string>>> MergeAsync(string root, string parent, string head, CancellationToken ct = default);
+    Task<Result<ContentAvailability>> AvailabilityAsync(RepositoryIdentity repository, string scope, CancellationToken ct = default);
+    Task<Result<Unit>> CaptureAsync(RepositoryIdentity repository, string scope, IReadOnlyList<string> commits, CancellationToken ct = default);
+    Task<Result<ObjectSnapshotLease>> AcquireAsync(RepositoryIdentity repository, string scope, CancellationToken ct = default);
+    Task<Result<Unit>> ForgetContentsAsync(RepositoryIdentity repository, string scope, CancellationToken ct = default);
+    Task<Result<string?>> TransplantAsync(RepositoryIdentity repository, string oldBase, string oldHead, string newBase, CancellationToken ct = default);
+    Task<Result<IReadOnlyList<string>>> MergeAsync(RepositoryIdentity repository, string parent, string head, CancellationToken ct = default);
 }

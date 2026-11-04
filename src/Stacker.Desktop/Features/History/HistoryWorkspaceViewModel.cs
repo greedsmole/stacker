@@ -15,6 +15,7 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
     private readonly CancellationTokenSource _lifetime = new();
     private readonly IReadOnlyList<(ChangeNode Node, ChangeVersion Version)> _path;
     private readonly string _root;
+    private readonly RepositoryIdentity _repository;
     public IDisposable? ContentLease { get; set; }
     public Func<ChangeNode,FileChange?,Task>? SelectionChanged { get; set; }
     private Task _selectionSync=Task.CompletedTask;
@@ -41,11 +42,11 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
     private int _generation;
     private bool _disposed;
     public HistoryWorkspaceViewModel(IHistoryStore store, IHistoryGit objects, IGitRepositoryReader git,
-        VersionComparisonService comparisons, ReviewProgressService progress, GraphSnapshot graph, string root,
+        VersionComparisonService comparisons, ReviewProgressService progress, GraphSnapshot graph, RepositoryIdentity repository,
         IReadOnlyList<(ChangeNode Node, ChangeVersion Version)> path, Func<ChangeNode, ChangeVersion, CancellationToken, Task<ReviewDiscussion?>>? discussion = null)
     {
         _store = store; _objects = objects; _git = git; _comparisons = comparisons; _progress = progress;
-        Graph = graph; _root = root; _path = path; _discussion = discussion;
+        Graph = graph; _repository=repository;_root = repository.Root; _path = path; _discussion = discussion;
         foreach (var item in path.DistinctBy(p => p.Node.Id)) Nodes.Add(item.Node);
     }
     public async Task InitializeAsync()
@@ -66,7 +67,7 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
             var versions = (await _store.VersionsAsync(node.Id, _lifetime.Token)).OrThrow();
             var current = _path.First(p => p.Node.Id == node.Id).Version;
             var files = (await _git.FilesAsync(_root, current.MergeBase!, current.HeadSha, _lifetime.Token)).OrThrow();
-            var status = await _progress.StatusAsync(Graph.Scope, current, files, _lifetime.Token);
+            var status = await _progress.StatusAsync(_repository,Graph.Scope, current, files, _lifetime.Token);
             if (generation != _generation) return;
             _current = current; Versions.Clear();
             foreach (var version in versions.Where(v => v.Id != current.Id).Reverse()) Versions.Add(version);
@@ -115,7 +116,7 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
         var current = _current; var previous = PreviousVersion; var file = SelectedFile;
         await ExecuteAsync(async () =>
         {
-            var comparison = await _comparisons.CompareAsync(Graph.Scope, previous, current, _lifetime.Token);
+            var comparison = await _comparisons.CompareAsync(_repository,Graph.Scope, previous, current, _lifetime.Token);
             Message = comparison.Unavailable ?? $"Textual comparison: {comparison.CodeChanges.Count} files changed beyond replay; {comparison.BaseChanges.Count} base files changed. This is not semantic equivalence.";
             Preview = "Base changes:\n" + string.Join("\n", comparison.BaseChanges.Select(f => f.DisplayPath)) + "\n\nOwn changes after replay:\n" + string.Join("\n", comparison.CodeChanges.Select(f => f.DisplayPath));
             var changed = comparison.CodeChanges.FirstOrDefault(f => f.NewPath == file?.Change.NewPath);
@@ -136,7 +137,7 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
     [RelayCommand] private async Task AnalyzeAsync() => await ExecuteAsync(async () =>
     {
         ClearDocument();
-        var result = await new StackAnalysisService(_store, _objects, _git).AnalyzeAsync(Graph, _lifetime.Token);
+        var result = await new StackAnalysisService(_store, _objects, _git).AnalyzeAsync(_repository,Graph, _lifetime.Token);
         Preview = string.Join("\n\n", result.Issues.Select(i => $"{Graph.Nodes.First(n => n.Id == i.ChangeId).Title} · {i.Kind}\n{i.Message}\n{string.Join("\n", i.Paths)}"));
         Message = result.Issues.Count == 0 ? "No issues found in the captured edges. This does not prove semantic correctness." : $"{result.Issues.Count} observations for this graph snapshot.";
     });
@@ -147,7 +148,7 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
         foreach (var (node, version) in _path.DistinctBy(p => p.Node.Id))
         {
             var files = (await _git.FilesAsync(_root, version.MergeBase!, version.HeadSha, _lifetime.Token)).OrThrow();
-            var statuses = await _progress.StatusAsync(Graph.Scope, version, files, _lifetime.Token);
+            var statuses = await _progress.StatusAsync(_repository,Graph.Scope, version, files, _lifetime.Token);
             foreach (var status in statuses.Where(f => f.State != FileReviewState.Reviewed || f.Concern is not null)) Attention.Add(new(node.Id, status.Change.NewPath, node.Title + " · " + status.Label, status.Concern is not null));
             foreach (var concern in (await _store.ConcernsAsync(node.Id, _lifetime.Token)).OrThrow().Where(c => !statuses.Any(s => s.Change.NewPath == c.Path)))
                 Attention.Add(new(node.Id, concern.Path, node.Title + " · " + concern.Path + " · BLOCKER on former file: " + concern.Text, true));

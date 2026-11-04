@@ -36,7 +36,7 @@ public sealed class FoundationRecoveryTests
         {
             var state=new ApplicationStore(root);var store=new SqliteHistoryStore(root);
             (await store.SaveDraftAsync("key",new ReviewDraft{Summary="unsent"},0)).OrThrow();
-            var backup=new WorkspaceBackupService(state,store,new ObjectStore(state),new ProcessRunner());
+            var backup=new WorkspaceBackupService(state,store,new ProcessRunner());
             Assert.True((await backup.ExportAsync(archive)).IsOk);Assert.True((await backup.RestoreAsync(archive,restored)).IsOk);
             Assert.Equal("unsent",(await new SqliteHistoryStore(restored).ReadDraftAsync("key")).OrThrow()!.Draft.Summary);
             Assert.True((await backup.RestoreAsync(archive,restored)).IsFailed);

@@ -145,7 +145,7 @@ internal sealed class WorkspaceController(IWorkspaceActionsPresentation owner, W
                     stale.PropertyChanged -= ReviewChanged; stale.Dispose();
                     runtime._reviews.Remove(staleKey); runtime._reviewOrder.Remove(staleKey);
                 }
-                session = new(runtime._github, runtime._writer, runtime._applicationStore, runtime._git, context, pr, section, owner.IsDemo) { HistoryObjects = runtime.HistoryObjects };
+                session = new(runtime._github, runtime._writer, runtime._applicationStore, runtime._git, context, pr, section, owner.IsDemo) { HistoryObjects = runtime.HistoryObjects, HistoryRepository=runtime._repository?.Identity };
                 try
                 {
                     await session.InitializeAsync(ct: ct); ct.ThrowIfCancellationRequested();

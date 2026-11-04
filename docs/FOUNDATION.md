@@ -1,5 +1,7 @@
 # Workspace foundation delivery
 
+Updated on 2026-11-04: Git execution now uses the opened local repository. See [local repository migration](LOCAL_REPOSITORY.md) for the current object-storage and backup model. The table below records the original foundation delivery.
+
 Implemented on `codex/workspace-foundation`, following the checkpoint pushed as
 `becb830ae37e36a27d2d2af44b21a537fde19970` before foundation work started.
 

@@ -49,13 +49,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "dev");
     public string BaseLabel => _runtime._activeGroup?.BaseLabel ?? "No stack selected";
     public MainViewModel(IGitRepositoryReader git, IStackStore store, ISettingsStore settingsStore, IGitToolSettings executable, StackService stacks, DiffService diff,
-        IGitHubReader? github = null, IGitHubWriter? writer = null, IGitObjectCache? cache = null, IApplicationState? applicationStore = null,
+        IGitHubReader? github = null, IGitHubWriter? writer = null, IPullRequestObjects? cache = null, IApplicationState? applicationStore = null,
         ISyntaxHighlighter? highlighter = null, IDemoRepository? demo = null, IGhToolSettings? ghExecutable = null, IGitDiagnosticLog? commandLog = null,
         IGitBranchWriter? branchWriter = null, IGitHubPullRequestWriter? pullRequestWriter = null, IEditorLauncher? editorLauncher = null,
         CommandBus? commands = null, IHistoryStore? historyStore = null, IHistoryGit? historyObjects = null,
-        ChangeGraphService? historyGraph = null, VersionComparisonService? historyComparisons = null, ReviewProgressService? historyProgress = null, IWorkspaceBackupService? backupService = null, IChangeIdentityService? identities = null, IObjectStore? objects = null, IDiagnosticSink? diagnostics = null)
+        ChangeGraphService? historyGraph = null, VersionComparisonService? historyComparisons = null, ReviewProgressService? historyProgress = null, IWorkspaceBackupService? backupService = null, IChangeIdentityService? identities = null, IDiagnosticSink? diagnostics = null)
     {
-        _backupService = backupService; _runtime.Identities=identities; _runtime.Objects=objects; _runtime.Diagnostics=diagnostics;
+        _backupService = backupService; _runtime.Identities=identities; _runtime.Diagnostics=diagnostics;
         _runtime.HistoryStore = historyStore; _runtime.HistoryObjects = historyObjects; _runtime.HistoryGraph = historyGraph; _runtime.HistoryComparisons = historyComparisons; _runtime.HistoryProgress = historyProgress;
         _syncController = new(this, _runtime);
         _workspaceController = new(this, _runtime);
@@ -67,7 +67,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
 
         _runtime._git = git; _runtime._store = store; _runtime._settingsStore = settingsStore; _runtime._executable = executable; _runtime._stacks = stacks; _runtime._diff = diff; _runtime._highlighter = highlighter;
         _runtime._branchWriter = branchWriter; _runtime._pullRequestWriter = pullRequestWriter; _runtime._editorLauncher = editorLauncher;
-        _runtime._github = github; _runtime._writer = writer; _runtime._objectCache = cache; _runtime._applicationStore = applicationStore ?? new MemoryApplicationState(); _runtime._workspacePersistence = new(_runtime._applicationStore); _runtime._demo = demo; _runtime._ghExecutable = ghExecutable;
+        _runtime._github = github; _runtime._writer = writer; _runtime._prObjects = cache; _runtime._applicationStore = applicationStore ?? new MemoryApplicationState(); _runtime._workspacePersistence = new(_runtime._applicationStore); _runtime._demo = demo; _runtime._ghExecutable = ghExecutable;
         _runtime._commandLog = commandLog;
         _runtime._commands = commands;
         if (_runtime._commands is not null) { _runtime._commands.Reported += ReportCommand; _runtime._commands.Starting += CommandStarting; }
@@ -86,7 +86,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     }
     partial void OnModeChanged(DiffMode value) { OnPropertyChanged(nameof(IsSingleLayer)); OnPropertyChanged(nameof(IsThroughLayer)); if (!_runtime._suppress) { CaptureWorkspace(); _ = CompareAsync(); } }
     /// <summary>Restores preferences and the last workspace once when the application starts.</summary>
-    public async Task InitializeAsync() { await _navigationController.InitializeAsync(); await ApplyCacheBudgetAsync(); }
+    public Task InitializeAsync()=>_navigationController.InitializeAsync();
     [RelayCommand] public Task OpenAsync() => _navigationController.OpenAsync();
     [RelayCommand] public Task RefreshAsync() => _navigationController.RefreshAsync();
     /// <summary>Starts a new repository workspace; unlike refresh, this intentionally replaces the active repository.</summary>
@@ -113,7 +113,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     /// <summary>Removes only the selected description; refs and commits remain untouched.</summary>
     public Task DeleteSelectedStackAsync() => _navigationController.DeleteSelectedStackAsync();
     internal Task<bool> SaveStacksAsync(IReadOnlyList<StackDefinition> stacks) => _navigationController.SaveStacksAsync(stacks);
-    public async Task SaveSettingsAsync() { await _navigationController.SaveSettingsAsync(); await ApplyCacheBudgetAsync(); }
+    public Task SaveSettingsAsync()=>_navigationController.SaveSettingsAsync();
     public Task SetWrapCodeAsync(bool enabled) => _navigationController.SetWrapCodeAsync(enabled);
     public void DisposeViews() => _navigationController.DisposeViews();
     public void Dispose() { ActiveHistory?.Dispose(); ActiveHistory=null; _runtime.Session.Suspend(); _navigationController.Dispose(); }

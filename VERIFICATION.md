@@ -1,3 +1,58 @@
+# Verification — opened local repository execution
+
+Recorded on **2026-11-04**, macOS ARM64 / Apple M1 Pro, .NET SDK 10.0.201. This is the current record;
+older sections below describe previous source revisions.
+
+## Automated checks
+
+`dotnet test -c Release --no-restore --logger 'trx;LogFileName=local-repository.trx' --results-directory artifacts/test-results`
+completed: **292 passed, 0 failed, 0 skipped**, duration **2 min 21 s**. All projects compiled without warnings
+or errors. `git diff --check` is clean. Evidence: `artifacts/test-results/local-repository.trx`.
+
+Tests cover real PR fetch into the selected repository, dirty/staged/untracked files, unchanged HEAD/user refs/
+index/config/FETCH_HEAD, native credentials/TLS configuration, batched refspec input, exact snapshot checks,
+offline reuse, diagnostic preservation and no automatic fetch retries. Real-workspace headless auditing verifies
+all Git command working directories and absence of newly created private object repositories. Further coverage
+includes linked worktrees, repository redirect variables, per-clone import, local/PR pin aliasing, underlying read
+leases, preserved restack backup refs, disabled external merge drivers, and recovery of unreachable historical
+commits from both format-1/schema-2 archives and format-2 Git bundles, including multiple scopes. Prior local Git,
+publication, cancellation, draft, lifecycle, history and architecture checks remain in the full suite.
+
+Object/history ports require explicit `RepositoryIdentity`. Normal PR/history operations cannot return another
+comparison directory, create a clone/bare repository, or delete the local object database. Ref updates and bundles
+use stdin to avoid platform command-length limits when many versions are retained. SQLite schema 3 migration
+preserves IDs, review metadata and drafts; legacy object directories are import sources and remain on disk.
+
+## Packages
+
+Both self-contained package builds succeeded without warnings/errors. TAR contents were read completely; Windows
+ZIP CRC validation passed. The application and SQLite native library match each target architecture.
+
+| Target | Archive | Bytes | Entries | Native architecture |
+| --- | --- | --- | --- | --- |
+| osx-arm64 | `artifacts/Stacker-0.5.0-osx-arm64.tar.gz` | 47,320,225 | 242 | Mach-O arm64 |
+| win-x64 | `artifacts/Stacker-0.5.0-win-x64.zip` | 49,553,343 | 240 | PE32+ x86-64 |
+
+Checksums and executable identification: `artifacts/package-manifest.json`.
+
+## Native and external limits
+
+The macOS package was launched against an explicitly created local fixture with staged, unstaged and untracked
+files in an isolated profile. The process exited before opening the workspace: Avalonia.Native could not start
+RenderTimer, native error `-6661`. Computer use independently reported that the Mac was locked and automatic
+unlock failed. Native visual/startup acceptance is therefore **not confirmed**. The observed failure precedes
+workspace initialization; no claim is made that this session establishes its cause. Startup log:
+`artifacts/test-results/local-native-startup.log`.
+
+Windows x64 was cross-published on this Mac; native Windows execution and GitHub Actions were not run here.
+No live GitHub/GHES comments, reviews, account changes, user-repository restacks or remote stack publications were
+performed for validation. Local tests use isolated repositories and file remotes. Packages remain unsigned/not
+notarized local artifacts; no release assets were published.
+
+Behavior and migration details: [local repository execution](docs/LOCAL_REPOSITORY.md).
+
+## Earlier verification records
+
 # Verification — workspace foundation
 
 Recorded on **2026-11-03**, Apple M1 Pro / macOS ARM64, macOS 26.6.2, .NET SDK 10.0.201.

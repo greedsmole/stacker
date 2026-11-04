@@ -146,7 +146,7 @@ AsyncHandler.Run(async () => {             await Vm.InitializeAsync();
         var origin = new TextBox { Text = Vm.GitHubPreferences.GitHubOverride, Watermark = "Auto-detect origin, or host/owner/repo" };
         var boundaries = new TextBox { Text = string.Join("\n", Vm.GitHubPreferences.BoundaryBranches ?? []), AcceptsReturn = true, MinHeight = 130 };
         var save = new Button { Content = "Save and refresh", HorizontalAlignment = HorizontalAlignment.Right };
-        var clear = new Button { Content = "Clear downloaded Git objects" };
+        var clear = new Button { Content = "Clear PR retention references" };
         var window = new Window { Title = "GitHub settings", Width = 570, Height = 440, WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Content = new StackPanel { Margin = new Thickness(24), Spacing = 12, Children = {
                 new TextBlock { Text = "GitHub repository override" }, origin,

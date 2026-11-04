@@ -37,7 +37,7 @@ The repository switcher contains recent folders, Open folder and Open demo. Stac
 
 **Search:** choose **Find**, or press Cmd/Ctrl+P for file names and Cmd/Ctrl+Shift+F for changed text. File search checks paths across all visible comparison sections. Changed text search checks added and removed lines in their pinned diff snapshots; optional Regex uses a bounded match time. Select a result to open its file and scroll to the line. Search runs on demand, can be cancelled and reports files whose patches exceed the display limit.
 
-**Git logs:** the **Git logs** tab shows each Git command while it runs, then its duration, exit status and up to 2 KiB of error output. Copy or clear the log there. Credentials embedded in HTTPS URLs are redacted. The tab includes reads and cache downloads so a slow GHES fetch is visible.
+**Git logs:** the **Git logs** tab shows each Git command while it runs, then its duration, exit status and up to 2 KiB of error output. Copy or clear the log there. Credentials embedded in HTTPS URLs are redacted. The tab includes reads and local-repository fetches so a slow GHES fetch is visible.
 
 **Refresh and background updates:** one Refresh checks local refs and GitHub. GitHub PR metadata and the selected PR's discussion are also read every 60 seconds while the window is active. Losing focus pauses the timer; regaining focus only restarts the delay. Background reads never download Git objects. Comments update in place; changed code or stack structure waits behind **New changes available → Update changes**. Temporary failures back off to 2/4/8 minutes, authentication failures suspend the loop, and previous data remains visible. Settings can disable background refresh.
 
@@ -65,7 +65,7 @@ Stacker uses the **fetch URL of origin**, not gh's default repository or some ot
 
 Authenticate in a terminal with `gh auth login --hostname HOST`; switch accounts with `gh auth switch --hostname HOST`. Stacker does not change your global gh account or run `gh auth setup-git`. Tokens remain owned by gh.
 
-If an invalid `GH_TOKEN` / `GITHUB_TOKEN` (or Enterprise equivalent) overrides a valid saved account, enable **Settings → Use saved gh credentials**, save, then **Refresh**. This removes the four token environment variables only from Stacker child processes, including the Git cache credential helper. It does not change shell variables or switch the global gh account. The setting is off by default so explicit environment credentials retain their normal precedence.
+If an invalid `GH_TOKEN` / `GITHUB_TOKEN` (or Enterprise equivalent) overrides a valid saved account, enable **Settings → Use saved gh credentials**, save, then **Refresh**. This removes the four token environment variables from Stacker’s gh API processes. Git downloads use the opened repository’s normal Git credentials and environment. It does not change shell variables or switch the global gh account. The setting is off by default so explicit environment credentials retain their normal precedence.
 
 Open PRs (including drafts) are fetched with pagination. A stack edge exists only when the child's base repository/branch matches another PR's head repository/branch. Names and commit history are not used as guesses. Fork repository identity matters. Ambiguous parents and cycles produce warnings.
 
@@ -73,15 +73,17 @@ Open PRs (including drafts) are fetched with pagination. A stack edge exists onl
 
 Discovery does not rewrite `.stackpr.yml`. Save as local stack is an explicit action and requires matching local refs. Local stack definitions keep v1 YAML compatibility.
 
-## Isolated Git cache
+## Opened local repository
 
-Selecting a remote PR or stack fetches objects into an application-owned bare repository, partitioned by host, repository ID and account. Stacker does not clone the user repository or run pull on it. A single PR fetches only its own base/head refs; stack comparisons request just the PRs needed for that mode, and missing refs are combined into one fetch. Existing objects are reused. The fetch uses gh's credential helper only for that child Git invocation. Reading, reviewing and downloading never touch user branches, refs, index, configuration or the working tree. The explicit actions described below do: **Restack**, **Push**, **Publish**, **Add layer**, **Commit**, **Stash and restack**, **Switch** and the conflict actions each change exactly what they say, and restack rewrites keep backup refs and refuse automatic restoration when newer work cannot be distinguished safely.
+All workspace Git commands run from the root of the repository or worktree you opened. PR diffs, version comparisons, History and reanchoring read that repository’s object database. Opening a PR does not create another clone, bare repository or worktree.
 
-On Windows, cache downloads use Git's **Schannel** backend, which uses the Windows certificate store by default. This supports corporate GHES certificates already trusted by Windows. The backend is selected only for the download process; Stacker does not disable certificate/revocation checks or change global Git configuration. Existing explicit Schannel CA-bundle settings remain effective. Use Git for Windows with Schannel support.
+Existing objects are reused offline. Missing PR base/head commits are fetched into the opened repository through its configured **origin**. Git uses that origin’s SSH/HTTPS URL, credentials, proxy and certificate configuration. `gh` provides GitHub API access; Stacker does not inject a gh credential helper or override Git’s SSL backend. For corporate certificates, configure Git exactly as you would for a successful fetch in the same repository from a terminal.
 
-If a download still reports an untrusted certificate chain, ask your administrator to check that GHES serves its intermediate certificates and that the corporate root/intermediate CA is installed in the appropriate Windows certificate stores. Successful `gh` authentication does not establish trust for Git downloads. The cache also does not inherit repository-local Git configuration from your working repository. Do not work around trust errors by disabling `sslVerify`.
+Downloads use namespaced `refs/stacker/pr/...` references and verify the exact PR snapshot after fetching. Historical commits are retained under `refs/stacker/history/...` so ordinary Git maintenance preserves observed versions. User branches, HEAD, staged/unstaged files, index, Git configuration and `FETCH_HEAD` are preserved during viewing. A changing server snapshot or failed download retains the previous view and reports the original Git error. Background metadata refresh does not fetch objects.
 
-The cache verifies downloaded head/base SHA against the PR snapshot and rejects a moving snapshot. Existing objects work offline; cached metadata is labeled with its timestamp. Configure → Clear downloaded Git objects removes only the selected connection's object cache. PR metadata and drafts are kept separately. Downloads can take longer than local diff commands and are cancelled when the selected comparison is superseded.
+**GitHub settings → Clear PR retention references** releases only Stacker’s PR references. **Remove history pins** releases history references after active readers close. Git manages object storage and collection; these actions do not delete the repository or run forced garbage collection. Settings show the selected repository’s Git directory and object size. Memory caches remain bounded.
+
+Earlier application-owned object directories are imported into each opened repository once and retained as migration sources. Drafts, graph/checkpoint metadata, navigation and diagnostics remain in Stacker’s application-data profile. Explicit **Restack**, **Push**, **Publish**, **Add layer**, **Commit**, **Stash and restack**, **Switch** and conflict actions continue to operate on the selected local repository.
 
 ## Review workflow
 
@@ -152,7 +154,7 @@ File patches retain the v0.1 limit of 5 MiB / 50,000 lines. Binary, submodule, r
 
 `.stackpr.yml` retains the v1 schema: stable IDs, full base ref and ordered branch refs. Saves use atomic replacement, content revision checks and a writer lock. A revision mismatch refuses saving. If an external editor races with replacement, its version is preserved in a unique `.conflict` backup and the error identifies both versions. Formatting/comments are rewritten on save.
 
-Preferences, PR snapshots, repository boundaries, drafts, Git objects, the recovery journal and generated demos are under the platform ApplicationData/Stacker folder (`v3`; data from the older `v2` layout is imported once and the original is kept). No credentials are written there. Workspace state imports the old monolithic format and saves changed stack documents separately. Journal schema 3 reads schema 2; unreadable or unsupported critical journals preserve the file and block mutations. Syntax caches are memory-only and bounded. Lock files live there too, never in your repository. Only one instance runs at a time: starting a second one exits with a message so no two windows can write the same files.
+Preferences, PR snapshots, repository boundaries, drafts, the recovery journal and generated demos are under the platform ApplicationData/Stacker folder (`v3`; data from the older `v2` layout is imported once and the original is kept). No credentials are written there. Workspace state imports the old monolithic format and saves changed stack documents separately. Journal schema 3 reads schema 2; unreadable or unsupported critical journals preserve the file and block mutations. Syntax caches are memory-only and bounded. Lock files live there too, never in your repository. Only one instance runs at a time: starting a second one exits with a message so no two windows can write the same files.
 
 The layering, the three contract rules and the recipe for adding a feature are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -162,13 +164,13 @@ dotnet test -c Release
 python3 scripts/package.py osx-arm64
 ```
 
-The solution has four projects: Core, Infrastructure, Desktop and Tests. GitHub Actions builds, tests and packages on macOS ARM64 and Windows x64 runners. Tests exercise real temporary Git repositories, the demo manifest, headless Avalonia windows, recorded/fake gh JSON responses, review failure/reconciliation scenarios and isolated object caches. A successful contract test is not a claim of live GitHub publishing verification.
+The solution has four projects: Core, Infrastructure, Desktop and Tests. GitHub Actions builds, tests and packages on macOS ARM64 and Windows x64 runners. Tests exercise real temporary Git repositories, the demo manifest, headless Avalonia windows, recorded/fake gh JSON responses, review failure/reconciliation scenarios and local object retention. A successful contract test is not a claim of live GitHub publishing verification.
 
 See VERIFICATION.md for the actual local verification record and THIRD_PARTY_NOTICES.md for dependency notices.
 
 ## Review history and stack analysis
 
-Choose **History** beside the comparison toolbar after selecting a stack or PR. History opens inside the main window, shares its layer/file selection, and captures the selected path into a private bare object cache. Back/Forward restores the selected version, mode and file. Historical patches use the same diff viewer as current code, with commenting disabled. Open a layer to preserve its version automatically; metadata refresh records versions without downloading objects. History begins when Stacker observes a version—it cannot reconstruct a force-pushed version that was never downloaded.
+Choose **History** beside the comparison toolbar after selecting a stack or PR. History opens inside the main window, shares its layer/file selection, and pins the selected path in the opened repository’s Git object database. Back/Forward restores the selected version, mode and file. Historical patches use the same diff viewer as current code, with commenting disabled. Open a layer to preserve its version automatically; metadata refresh records versions without downloading objects. History begins when Stacker observes a version—it cannot reconstruct a force-pushed version that was never downloaded.
 
 Select a layer and **Load layer**, then select a file. **Mark reviewed** records an explicit, personal checkpoint; merely reading a file does not mark it. **Since my review** and **Compare versions** show what changed. When the base moved, Stacker replays the old patch onto the new merge-base and compares that expected tree with the current head. Conflicting replay, missing objects or unsupported Git capabilities produce an unavailable result, never a false “unchanged” result. This is textual analysis, not proof of semantic equivalence.
 
@@ -178,7 +180,7 @@ The **Graph and history** section shows earlier dependency snapshots. Explicit p
 
 In the Review panel, **Reattach…** on an old draft comment proposes a unique exact text/context match. Inspect the old and new locations, then **Confirm new anchor**. Published comments are never moved. Ambiguous matches require manual selection.
 
-History, review checkpoints and revision-checked drafts live in `review-history.db` under the existing application-data directory. Existing draft JSON files are imported on first read and preserved. SQLite transactions refuse competing stale draft writes. Prepared publication payloads are kept independently of later edits, and uncertain writes are reconciled without automatic resend. Downloaded historical objects live in `history-objects`, separately from the replaceable GitHub download cache; clearing that download cache retains history. **Remove historical code** requires a second click; removal waits for active readers to release the objects and retains metadata and drafts; unreachable old commits may then be unavailable permanently.
+History, review checkpoints and revision-checked drafts live in `review-history.db` under the existing application-data directory. Existing draft JSON files are imported on first read and preserved. SQLite transactions refuse competing stale draft writes. Prepared publication payloads are kept independently of later edits, and uncertain writes are reconciled without automatic resend. Historical commits are pinned inside the opened repository. **Remove history pins** requires a second click and waits for active readers; versions, checkpoints and draft text remain. Objects may later be collected by normal Git maintenance if nothing else references them.
 
 The offline demo seeds a previously reviewed Session API version. Open Authorization → History → Session API → Load layer → Auth.cs → Since my review to inspect the subsequent change. Demo publication remains disabled.
 
@@ -189,9 +191,8 @@ Matching local branches and PRs share review checkpoints after the active GitHub
 accounts retain separate remote histories and drafts. To reconnect a moved repository, use **Settings and help
 → Locate moved repository…**, select its previous location, and choose the new folder.
 
-**Export workspace…** saves a ZIP containing the SQLite history/drafts, navigation, settings, journals and pinned
-historical objects. Disposable downloads and credentials are excluded. **Restore workspace copy…** verifies the
-checksums and database into a separate empty folder. **Open restored workspace** opens that profile; the original
+**Export workspace…** saves a ZIP containing SQLite history/drafts, navigation, settings and journals, plus a Git bundle of the active repository’s pinned history. Other repositories’ code and credentials are excluded. **Restore workspace copy…** verifies the
+checksums and database into a separate empty folder. Bundled history is imported when that profile reconnects to its repository. Older backups containing private history repositories remain readable. **Open restored workspace** opens that profile; the original
 profile remains available. The source repository and its YAML definitions remain in their Git working directory;
 use **Locate moved repository…** if that directory moved. `--data-root /path/to/profile` also opens a separate profile.
 
@@ -200,6 +201,4 @@ saving. The text copy includes unsent review text and anchor information. **Oper
 operation IDs and recorded effects across restarts. An explicit server rejection permits a later manual send;
 an unknown result keeps sending blocked until reconciliation or a manual GitHub check.
 
-Settings include a disposable download budget (2 GiB by default). Active readers are protected from eviction;
-historical objects are removed only by explicit action, with a warning after 5 GiB. **Export diagnostics…** copies
-bounded local metadata logs containing operation IDs, stages, durations, byte counts and problem codes.
+Settings show the selected Git storage location and its current object size. Git manages disk storage; active comparisons retain their history pins until they close. **Export diagnostics…** copies bounded local metadata logs containing operation IDs, stages, durations, byte counts and problem codes.

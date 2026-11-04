@@ -31,9 +31,7 @@ public sealed partial class SqliteHistoryStore
         }
         using(var catalog=Command(c,tx,"INSERT OR IGNORE INTO object_catalog(scope,availability) SELECT $n,availability FROM object_catalog WHERE scope=$o",("$n",newScope),("$o",oldScope)))catalog.ExecuteNonQuery();
         tx.Commit();
-        var oldPath=Path.Combine(Path.GetDirectoryName(_path)!,"history-objects",ApplicationStore.Key(oldScope));
-        var newPath=Path.Combine(Path.GetDirectoryName(_path)!,"history-objects",ApplicationStore.Key(newScope));
-        if(Directory.Exists(oldPath)&&!Directory.Exists(newPath))Directory.Move(oldPath,newPath);
+
     }
     internal string BoundScope(string localScope,string reference,string? activeAccount)
     {

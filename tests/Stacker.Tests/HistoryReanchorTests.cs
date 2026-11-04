@@ -15,14 +15,14 @@ public sealed class HistoryReanchorTests
             await f.Write("old.cs", "one\ntwo\nthree\nfour\nfive\nsix\n"); await f.Commit("initial"); var oldHead = await f.Git("rev-parse", "HEAD");
             await f.Git("mv", "old.cs", "new.cs"); await f.Write("new.cs", "one\ntwo\nthree\nfour\nfive\nfix\n"); await f.Commit("rename"); var currentHead = await f.Git("rev-parse", "HEAD");
             var state = new ApplicationStore(root); var objects = new HistoryGit(f.Runner, new(), state);
-            (await objects.CaptureAsync(FakeGitHub.Context.Identity, f.Root, [basis, oldHead, currentHead])).OrThrow();
+            (await objects.CaptureAsync(f.Identity,FakeGitHub.Context.Identity, [basis, oldHead, currentHead])).OrThrow();
             var anchor = new ReviewAnchor(42, oldHead, basis, "old.cs", "RIGHT", 1);
             await state.WriteAsync("drafts", FakeGitHub.Context.Identity + "/42", new ReviewDraft
                 { EditorVersion = 1, BaseSha = basis, HeadSha = oldHead, Comments = [new(anchor, "Check contract")] });
             var hub = new FakeGitHub { Current = DiscoveryTests.Pr(42, "main", "feature") with { BaseSha = basis, HeadSha = currentHead } };
             using var section = new DiffSectionViewModel(f.Reader, f.Root, new("feature", "main", basis, currentHead, null, await f.Reader.FilesAsync(f.Root, basis, currentHead)))
                 { IsPrSnapshot = true, AssociatedPr = hub.Current, GitHubContext = FakeGitHub.Context };
-            using var review = new ReviewViewModel(hub, hub, state, f.Reader, FakeGitHub.Context, hub.Current, section, false) { HistoryObjects = objects };
+            using var review = new ReviewViewModel(hub, hub, state, f.Reader, FakeGitHub.Context, hub.Current, section, false) { HistoryObjects = objects,HistoryRepository=f.Identity };
             await review.InitializeAsync(); var original = Assert.Single(review.DraftComments);
             await review.ProposeReanchorAsync(original);
             Assert.True(review.HasAnchorProposal, review.Message); Assert.Equal(oldHead, Assert.Single(review.DraftComments).Anchor.HeadSha);

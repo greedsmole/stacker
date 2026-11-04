@@ -5,7 +5,7 @@ using Stacker.Core;
 namespace Stacker.Infrastructure;
 
 public sealed record DemoExpectation(string Stack, DiffMode Mode, int[] Positions, int Files, int Additions, int Deletions);
-public sealed partial class DemoRepositoryGenerator(IProcessRunner runner, GitExecutable executable, IStackStore stacks, ApplicationStore store, IHistoryStore? history = null, IHistoryGit? historyObjects = null) : IDemoRepository
+public sealed partial class DemoRepositoryGenerator(IProcessRunner runner, GitExecutable executable, IStackStore stacks, ApplicationStore store, IHistoryStore? history = null, IHistoryGit? historyObjects = null, IChangeIdentityService? identities = null) : IDemoRepository
 {
     /// <summary>An empty directory used as the hooks path; "/dev/null" is not a directory on Windows.</summary>
     private static string NoHooks => Framework.Neutral.HooksPath;

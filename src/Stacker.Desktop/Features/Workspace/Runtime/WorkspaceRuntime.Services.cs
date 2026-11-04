@@ -4,7 +4,6 @@ namespace Stacker.Desktop.ViewModels;
 internal sealed partial class WorkspaceRuntime
 {
     internal IChangeIdentityService? Identities;
-    internal IObjectStore? Objects;
     internal IDiagnosticSink? Diagnostics;
     internal IGitRepositoryReader _git = default!;
     internal IStackStore _store = default!;

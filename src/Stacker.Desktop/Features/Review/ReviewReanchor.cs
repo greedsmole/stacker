@@ -9,6 +9,7 @@ public partial class ReviewViewModel
     public async Task RetrySaveAsync(){QueueSave();await FlushAsync();}
     internal IGitRepositoryReader AnchorGit = null!;
     public IHistoryGit? HistoryObjects { get; set; }
+    public RepositoryIdentity? HistoryRepository { get; set; }
     private DraftComment? _proposedComment;
     private AnchorProposal? _proposal;
     [ObservableProperty] private string _anchorPreview = "";
@@ -17,12 +18,13 @@ public partial class ReviewViewModel
     {
         if (IsBusy || HasPendingPublication) return;
         _proposal = null; _proposedComment = null; AnchorPreview = ""; OnPropertyChanged(nameof(HasAnchorProposal));
-        if (HistoryObjects is null || AnchorGit is not IBlobReader blobs) { Message = "Historical code is unavailable; select new lines manually."; return; }
+        if (HistoryObjects is null || HistoryRepository is null || AnchorGit is not IBlobReader blobs) { Message = "Historical code is unavailable; select new lines manually."; return; }
         if (comment.Anchor.HeadSha == PullRequest.HeadSha && comment.Anchor.BaseSha == PullRequest.BaseSha) { Message = "This comment already targets the current version."; return; }
         IsBusy = true;
         try
         {
-            var root = (await HistoryObjects.RootAsync(Context.Identity)).OrThrow();
+            using var lease=(await HistoryObjects.AcquireAsync(HistoryRepository,Context.Identity)).OrThrow();
+            var root=lease.Root;
             var anchor = comment.Anchor;
             var candidates = _section.Result.Files.Where(f => f.NewPath == anchor.Path || f.OldPath == anchor.Path).ToArray();
             if (candidates.Length == 0)

@@ -3,7 +3,7 @@ using Stacker.Core;
 using Stacker.Core.Framework;
 namespace Stacker.Infrastructure;
 
-public sealed class ChangeIdentityService(SqliteHistoryStore store,IProcessRunner runner,GitExecutable git, IHistoryGit? historyObjects = null) : IChangeIdentityService
+public sealed class ChangeIdentityService(SqliteHistoryStore store,IProcessRunner runner,GitExecutable git) : IChangeIdentityService
 {
     public Task<Result<IReadOnlyList<RepositoryIdentity>>> KnownAsync(CancellationToken ct=default)=>Boundary.CaptureAsync<IReadOnlyList<RepositoryIdentity>>(()=>Task.Run<IReadOnlyList<RepositoryIdentity>>(()=>
     {
@@ -38,8 +38,6 @@ public sealed class ChangeIdentityService(SqliteHistoryStore store,IProcessRunne
             Execute("INSERT INTO scope_aliases(alias,scope) VALUES($a,$s) ON CONFLICT(alias) DO UPDATE SET scope=$s",("$a","local:"+location),("$s","local:"+id));
             tx.Commit(); store.MigrateScope("local:"+location,"local:"+id); return new RepositoryIdentity(new(id),new(worktree),location,common);
         },ct);
-        var legacy=Path.Combine(store.Root,"history-objects",ApplicationStore.Key("local:"+location));
-        await ImportObjectsAsync(identity.Scope,legacy,ct);
         return identity;
     },ProblemCodes.StoreWrite);
     public Task<Result<Unit>> BindAsync(string localScope,string localRef,GitHubRepositoryContext context,PullRequest pr,CancellationToken ct=default)=>
@@ -65,14 +63,5 @@ public sealed class ChangeIdentityService(SqliteHistoryStore store,IProcessRunne
                 alias.Parameters.AddWithValue("$a",local.Id);alias.Parameters.AddWithValue("$c",remote.Id);await alias.ExecuteNonQueryAsync(ct);
             }
             tx.Commit();
-            await ImportObjectsAsync(context.Identity,Path.Combine(store.Root,"history-objects",ApplicationStore.Key(localScope)),ct);
         },ProblemCodes.StoreWrite);
-    private async Task ImportObjectsAsync(string scope,string source,CancellationToken ct)
-    {
-        if(historyObjects is null||!Directory.Exists(source))return;
-        var refs=(await runner.RunAsync(new(git.Resolve(),["for-each-ref","--format=%(objectname)","refs/stacker/history"],source),ct)).OrThrow();
-        if(refs.ExitCode!=0)throw new StackerException("Historical objects could not be migrated. The original cache was retained.");
-        var commits=refs.StdOut.Split('\n',StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries);
-        if(commits.Length>0)(await historyObjects.CaptureAsync(scope,source,commits,ct)).OrThrow();
-    }
 }

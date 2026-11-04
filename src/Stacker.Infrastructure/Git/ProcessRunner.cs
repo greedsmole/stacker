@@ -11,6 +11,7 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
     /// <summary>Starts a program without waiting for it, for editors and other interactive tools.</summary>
     public void Start(ProcessRequest request)
     {
+        if((commandLog??new GitCommandLog()).IsGit(request))request=GitEnvironment.ForRepository(request);
         var info = new ProcessStartInfo(request.Executable)
         {
             UseShellExecute = false, CreateNoWindow = true,
@@ -19,6 +20,7 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
         foreach (var arg in request.Arguments) info.ArgumentList.Add(arg);
         if (request.Environment is not null)
             foreach (var (key, value) in request.Environment) info.Environment[key] = value;
+        if(request.UnsetEnvironment is not null)foreach(var key in request.UnsetEnvironment)info.Environment.Remove(key);
         try { using var process = Process.Start(info); }
         catch (System.ComponentModel.Win32Exception ex)
         { throw new StackerException($"Cannot start {request.Executable}. Set the full path in Settings if it is not on PATH. {ex.Message}"); }
@@ -27,6 +29,7 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
     /// <summary>Executes without a shell, logs Git-only diagnostics, and returns structured process output.</summary>
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {
+        if((commandLog??new GitCommandLog()).IsGit(request))request=GitEnvironment.ForRepository(request);
         var started = DateTimeOffset.UtcNow;
         var watch = Stopwatch.StartNew();
         var logId = commandLog?.Begin(request, started);

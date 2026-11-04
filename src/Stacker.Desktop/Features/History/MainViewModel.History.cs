@@ -53,8 +53,9 @@ public sealed partial class MainViewModel
             var graph = group.IsRemote && _runtime._remoteSnapshot is not null
                 ? await _runtime.HistoryGraph.ObserveRemoteAsync(_runtime._remoteSnapshot, GitHubPreferences.BoundaryBranches ?? [], ct)
                 : await _runtime.HistoryGraph.ObserveLocalAsync(repo, _runtime._document?.Stacks ?? [], ct);
-            var source = group.IsRemote ? await PrepareRemoteAsync(group, DiffMode.MultiLayer, Enumerable.Range(0, group.Layers.Count).ToArray(), ct) : repo;
-            var path = new List<(ChangeNode Node, ChangeVersion Version)>(); string? objectRoot = null;
+            if(group.IsRemote)await PrepareRemoteAsync(group,DiffMode.MultiLayer,Enumerable.Range(0,group.Layers.Count).ToArray(),ct);
+            var repository=repo.Identity??throw new StackerException("Repository identity is unavailable.");
+            var path = new List<(ChangeNode Node, ChangeVersion Version)>();
             for (var i = 0; i < group.Layers.Count; i++)
             {
                 ct.ThrowIfCancellationRequested();
@@ -62,21 +63,21 @@ public sealed partial class MainViewModel
                 var node = graph.Nodes.Single(n => pr is null ? n.Reference == layer.Snapshot.Branch : n.PullRequest == pr.Number);
                 var head = pr?.HeadSha ?? layer.Snapshot.HeadSha; var basis = pr?.BaseSha ?? layer.Snapshot.ParentSha;
                 if (head is null || basis is null) throw new StackerException("A layer ref is missing; refresh its definition first.");
-                objectRoot = (await _runtime.HistoryObjects.CaptureAsync(graph.Scope, source.Root, [basis, head], ct)).OrThrow();
-                var bases = (await _runtime._git.MergeBasesAsync(objectRoot, basis, head, ct)).OrThrow();
+                (await _runtime.HistoryObjects.CaptureAsync(repository,graph.Scope,[basis,head],ct)).OrThrow();
+                var bases = (await _runtime._git.MergeBasesAsync(repository.Root, basis, head, ct)).OrThrow();
                 var version = (await _runtime.HistoryStore.ObserveAsync(new("", node.Id, basis, head, bases.Count == 1 ? bases[0] : null, DateTimeOffset.UtcNow), ct)).OrThrow();
                 if (version.MergeBase is null) throw new StackerException("Layer has no unique merge-base. Its metadata was saved; code comparison is unavailable.");
                 path.Add((node, version));
             }
-            if (objectRoot is null) throw new StackerException("The stack has no layers.");
+            if(path.Count==0)throw new StackerException("The stack has no layers.");
             var context = _runtime._remoteSnapshot?.Context; var demo = IsDemo;
             var view = new HistoryWorkspaceViewModel(_runtime.HistoryStore, _runtime.HistoryObjects, _runtime._git, _runtime.HistoryComparisons, _runtime.HistoryProgress,
-                graph with { Versions = graph.Versions.Concat(path.Select(p => new KeyValuePair<string, string>(p.Node.Id, p.Version.Id))).GroupBy(p => p.Key).ToDictionary(g => g.Key, g => g.Last().Value) }, objectRoot, path, group.IsRemote ? async (node, version, token) =>
+                graph with { Versions = graph.Versions.Concat(path.Select(p => new KeyValuePair<string, string>(p.Node.Id, p.Version.Id))).GroupBy(p => p.Key).ToDictionary(g => g.Key, g => g.Last().Value) }, repository, path, group.IsRemote ? async (node, version, token) =>
                 {
                     var pr = group.PullRequests.Single(p => p.Number == node.PullRequest) with { BaseSha = version.BaseSha, HeadSha = version.HeadSha };
                     return demo ? DemoReviewData.Discussion(pr) : _runtime._github is null || context is null ? null : (await _runtime._github.DiscussionAsync(context, pr, token)).OrThrow();
                 } : null);
-            view.ContentLease = (await _runtime.HistoryObjects.AcquireAsync(graph.Scope, ct)).OrThrow();
+            view.ContentLease = (await _runtime.HistoryObjects.AcquireAsync(repository,graph.Scope,ct)).OrThrow();
             try { await view.InitializeAsync(); return view; } catch { view.Dispose(); throw; }
         }
         catch (OperationCanceledException) { throw; }
@@ -91,7 +92,7 @@ public sealed partial class MainViewModel
         var node = (await _runtime.HistoryStore.ResolveNodeAsync(scope, remote ? section.AssociatedPr!.HeadRef : section.Result.Layer, remote ? section.AssociatedPr!.Title : section.Title,
             remote ? section.AssociatedPr!.Number : null, ct)).OrThrow();
         var declaredBase = remote ? section.AssociatedPr!.BaseSha : _runtime._repository.Refs.FirstOrDefault(r => r.Name == section.Result.ParentRef)?.Sha ?? section.Result.BaseSha;
-        (await _runtime.HistoryObjects.CaptureAsync(scope, section.Root, [declaredBase, section.Result.HeadSha], ct)).OrThrow();
+        (await _runtime.HistoryObjects.CaptureAsync(_runtime._repository.Identity!,scope,[declaredBase,section.Result.HeadSha],ct)).OrThrow();
         (await _runtime.HistoryStore.ObserveAsync(new("", node.Id, declaredBase, section.Result.HeadSha, section.Result.BaseSha, DateTimeOffset.UtcNow), ct)).OrThrow();
     }
     internal async Task ObserveHistoryMetadataAsync(CancellationToken ct)

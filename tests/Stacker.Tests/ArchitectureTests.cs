@@ -90,7 +90,7 @@ public sealed partial class ArchitectureTests
         {
             using var services = Stacker.Desktop.Composition.Build(root);
             Assert.NotNull(services.GetRequiredService<MainViewModel>());
-            foreach (var contract in new[] { typeof(IGitBranchWriter), typeof(IGitRepositoryReader), typeof(IJournal), typeof(IEditorLauncher), typeof(IStackStore), typeof(ISettingsStore), typeof(Stacker.Core.Framework.IClock), typeof(IHistoryStore), typeof(IHistoryGit),typeof(IChangeIdentityService),typeof(IReviewDraftRepository),typeof(IWorkspaceBackupService),typeof(IObjectStore),typeof(IDiagnosticSink) })
+            foreach (var contract in new[] { typeof(IGitBranchWriter), typeof(IGitRepositoryReader), typeof(IJournal), typeof(IEditorLauncher), typeof(IStackStore), typeof(ISettingsStore), typeof(Stacker.Core.Framework.IClock), typeof(IHistoryStore), typeof(IHistoryGit),typeof(IPullRequestObjects),typeof(IChangeIdentityService),typeof(IReviewDraftRepository),typeof(IWorkspaceBackupService),typeof(IObjectStore),typeof(IDiagnosticSink) })
                 Assert.NotNull(services.GetRequiredService(contract));
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
@@ -111,7 +111,7 @@ public sealed partial class ArchitectureTests
         Type[] ports = [typeof(IProcessRunner), typeof(IProcessLauncher), typeof(IEditorLauncher),
             typeof(IGitRepositoryReader), typeof(IGitBranchWriter), typeof(IStackStore), typeof(ISettingsStore),
             typeof(IBlobReader), typeof(IGitHubReader), typeof(IGitHubWriter), typeof(IGitHubPullRequestWriter),
-            typeof(IGitObjectCache), typeof(ISyntaxHighlighter), typeof(IJournal), typeof(IApplicationState),
+            typeof(IPullRequestObjects), typeof(ISyntaxHighlighter), typeof(IJournal), typeof(IApplicationState),
             typeof(IDemoRepository), typeof(IDemoSnapshotReader), typeof(IAtomicFile), typeof(IHistoryStore), typeof(IHistoryGit), typeof(IHistoryRemoteReader),typeof(IChangeIdentityService),typeof(IReviewDraftRepository),typeof(IWorkspaceBackupService),typeof(IObjectStore),typeof(IDiagnosticSink)];
         foreach (var port in ports)
             foreach (var method in port.GetMethods().Where(method => !method.IsSpecialName))
@@ -136,6 +136,14 @@ public sealed partial class ArchitectureTests
     {
         foreach(var source in ProductSources("Desktop").Where(s=>s.Path.EndsWith("Controller.cs",StringComparison.Ordinal)&&!s.Path.Contains("Review")))
             Assert.DoesNotContain("MainViewModel",source.Text);
+    }
+
+    [Fact] public void Object_operations_require_the_selected_repository_and_never_create_a_private_clone()
+    {
+        foreach(var port in new[]{typeof(IHistoryGit),typeof(IPullRequestObjects)})
+            foreach(var method in port.GetMethods())Assert.Equal(typeof(RepositoryIdentity),method.GetParameters()[0].ParameterType);
+        foreach(var source in ProductSources("Infrastructure").Where(s=>s.Path.Contains("History")||s.Path.Contains("Repositories")||s.Path.EndsWith("LocalPullRequestObjects.cs",StringComparison.Ordinal)))
+        {Assert.DoesNotContain("[\"init\", \"--bare\"]",source.Text);Assert.DoesNotContain("[\"clone\"",source.Text);}
     }
 
     [GeneratedRegex("Problem\\.Of\\(\"|Result<[^>]+>\\.Fail\\(\"")]

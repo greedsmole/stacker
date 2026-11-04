@@ -6,7 +6,7 @@ internal sealed partial class WorkspaceRuntime
 {
     internal IGitHubReader? _github = default!;
     internal IGitHubWriter? _writer = default!;
-    internal IGitObjectCache? _objectCache = default!;
+    internal IPullRequestObjects? _prObjects = default!;
     internal IApplicationState _applicationStore = default!;
     internal IDemoRepository? _demo = default!;
     internal IGhToolSettings? _ghExecutable = default!;
