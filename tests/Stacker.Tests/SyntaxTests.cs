@@ -7,6 +7,9 @@ public sealed class SyntaxTests
     [Fact] public async Task TextMate_colors_multiline_comments_and_themes_without_patch_markers()
     {
         var highlighter=new TextMateSyntaxHighlighter(); var text="public class Example\n{\n/* comment\nstill comment */\npublic string Name => \"hello\";\n}\n";
+        // Accuracy assertions use warm grammars; a cold load may legitimately hit the production time budget.
+        await highlighter.HighlightAsync("warmup-dark","code.cs",text,"Dark");
+        await highlighter.HighlightAsync("warmup-light","code.cs",text,"Light");
         var dark=await highlighter.HighlightAsync("blob","code.cs",text,"Dark"); Assert.NotEmpty(dark); Assert.NotEmpty(dark[4]); Assert.True(dark[5].Select(t=>t.Color).Distinct().Count()>1);
         var light=await highlighter.HighlightAsync("blob","code.cs",text,"Light"); Assert.NotEqual(dark[5].Select(t=>t.Color),light[5].Select(t=>t.Color));
         var cached=await highlighter.HighlightAsync("blob","code.cs",text,"Dark"); Assert.Same(dark,cached);
