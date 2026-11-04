@@ -5,7 +5,7 @@ namespace Stacker.Desktop;
 internal static class Program
 {
     [STAThread]
-    public static void Main(string[] args)
+    public static int Main(string[] args)
     {
         var dataRootIndex = Array.IndexOf(args, "--data-root");
         if(dataRootIndex >= 0 && dataRootIndex + 1 < args.Length) App.UseDataRoot(args[dataRootIndex + 1]);
@@ -14,9 +14,15 @@ internal static class Program
         if (!single.TryAcquire())
         {
             Console.Error.WriteLine("Stacker is already running. Close the other window first.");
-            return;
+            return 0;
         }
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            if (e.ExceptionObject is Exception error) StartupGuard.Record(App.AppRoot, error);
+        };
+        return StartupGuard.Run(App.AppRoot,
+            () => BuildAvaloniaApp().StartWithClassicDesktopLifetime(args),
+            OperatingSystem.IsMacOS() ? StartupGuard.ProbeMacDisplay : null);
     }
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().UsePlatformDetect().WithInterFont().LogToTrace();
 }
