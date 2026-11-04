@@ -1,3 +1,48 @@
+# Verification — v0.6.0 release
+
+Recorded on **2026-11-04**. Product version is **0.6.0**. The workspace-foundation and opened-repository
+changes are integrated into `master`; release validation fixes are reviewed in
+[PR #1](https://github.com/greedsmole/stacker/pull/1).
+
+## Automated verification
+
+The full local Release suite on `d5b1866eb516b87cafcc8507be9fb66bf104d780` completed with **293 passed,
+0 failed, 0 skipped**, in approximately **2 min 54 s**. Machine-readable evidence:
+`artifacts/test-results/release-v0.6.0-final.trx`. Compilation completed without warnings or errors.
+The suite includes an autosave regression that times out before the fix when the caller's dispatcher stops
+pumping, then completes after the worker and Flush are independent of that dispatcher.
+
+Native macOS ARM64 and Windows x64 test/package status is recorded in the
+[release validation run](https://github.com/greedsmole/stacker/actions/runs/41802657288).
+The published [v0.6.0 release](https://github.com/greedsmole/stacker/releases/tag/v0.6.0) carries the final
+package manifest and SHA-256 checksums. The versioned project file remains the source of truth for both
+application and archive versions.
+
+## Corrections found during release validation
+
+Backup/restore and migration databases now use the same unpooled connection factory as the live store,
+so disposing them releases the file handles before staging directories move or are deleted. Windows
+integration fixtures also release their own SQLite handles and clear read-only attributes on owned Git objects.
+The conflict UI fixture uses Git's portable no-op editor and blob assertions use an explicit full ref.
+
+The headless suite uses one application/dispatcher with the production Inter font setup, and a nonparallel
+collection for UI scenarios. This avoids disposing font/dispatcher resources while other scenarios retain them.
+[The supported assembly isolation mode](https://docs.avaloniaui.net/docs/testing/headless-xunit#test-isolation-level)
+requires shared application state to be managed explicitly. Grammar accuracy fixtures warm their grammars and
+run without competing integration work; production fallback budgets remain enabled.
+CI reports individual tests, captures inactive-host diagnostics after two minutes, and bounds each job to
+20 minutes. No tests are skipped.
+
+## Native visual limits
+
+Automated UI coverage is headless. Native graphical startup/visual acceptance on the local Mac is not confirmed:
+a prior local launch exited before workspace initialization with Avalonia RenderTimer error `-6661` while
+computer use reported the Mac was locked. The session does not establish the cause. A manual Windows GUI
+walkthrough and live GitHub/GHES publication scenarios are also outside this verification record.
+The macOS package is not Developer ID signed or notarized.
+
+## Earlier verification records
+
 # Verification — opened local repository execution
 
 Recorded on **2026-11-04**, macOS ARM64 / Apple M1 Pro, .NET SDK 10.0.201. This is the current record;
