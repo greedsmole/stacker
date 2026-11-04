@@ -4,6 +4,7 @@ using Stacker.Core.Framework;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 
+[Collection(HeadlessApp.CollectionName)]
 public sealed class LocalRepositoryHistoryTests
 {
     [Fact] public async Task Legacy_history_is_imported_from_each_opened_clone_without_commands_in_the_legacy_folder()

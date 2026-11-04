@@ -5,6 +5,7 @@ using Stacker.Core;
 using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
+[Collection(HeadlessApp.CollectionName)]
 public sealed class DiffQualityTests
 {
     /// <summary>Returns a patch with no hunks: a rename, an empty file or a mode change looks like this.</summary>

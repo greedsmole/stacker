@@ -9,6 +9,7 @@ using Stacker.Infrastructure;
 namespace Stacker.Tests;
 
 /// <summary>Exercises real window events while replacing only the native folder picker.</summary>
+[Collection(HeadlessApp.CollectionName)]
 public sealed class WindowInteractionTests
 {
     [AvaloniaFact]

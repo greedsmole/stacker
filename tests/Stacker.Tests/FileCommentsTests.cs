@@ -9,6 +9,7 @@ using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 
+[Collection(HeadlessApp.CollectionName)]
 public sealed class FileCommentsTests
 {
     private static DiffSectionViewModel Section(GitFixture f, PullRequest pr, bool snapshot = true) => new(f.Reader, f.Root,

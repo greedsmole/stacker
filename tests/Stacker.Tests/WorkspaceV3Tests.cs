@@ -10,6 +10,7 @@ using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 
+[Collection(HeadlessApp.CollectionName)]
 public sealed class WorkspaceV3Tests
 {
     private static MainViewModel Create(GitFixture f, ApplicationStore store, FakeGitHub? hub = null) =>

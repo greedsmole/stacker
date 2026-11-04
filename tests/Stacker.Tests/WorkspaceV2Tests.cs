@@ -29,6 +29,7 @@ public sealed class CountingReader(IGitRepositoryReader inner) : IGitRepositoryR
 
     Task<Result<FileDiff>> IGitRepositoryReader.PatchAsync(string root,string @base,string head,FileChange file,CancellationToken ct) => Boundary.CaptureAsync(() => PatchAsync(root, @base, head, file, ct), ProblemCodes.GitFailed);
 }
+[Collection(HeadlessApp.CollectionName)]
 public sealed class WorkspaceV2Tests
 {
     // Scenario: Demo manifest checks real changes across multiple stacks.

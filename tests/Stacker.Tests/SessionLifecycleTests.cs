@@ -4,6 +4,7 @@ using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 
+[Collection(HeadlessApp.CollectionName)]
 public sealed class SessionLifecycleTests
 {
     [AvaloniaFact] public async Task Review_eviction_keeps_the_recent_session_and_flushes_the_actual_oldest()

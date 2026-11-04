@@ -66,6 +66,7 @@ public sealed class FakeGitHub : IGitHubReader, IGitHubWriter
 
     Task<Result<Unit>> IGitHubWriter.SubmitReviewAsync(GitHubRepositoryContext context,ReviewDraft draft,CancellationToken ct) => Boundary.CaptureAsync(() => SubmitReviewAsync(context, draft, ct), ProblemCodes.GitHubRequest);
 }
+[Collection(HeadlessApp.CollectionName)]
 public sealed class ReviewTests
 {
     private static DiffSectionViewModel Section(GitFixture f,PullRequest pr)=>new(f.Reader,f.Root,new("feature","main",pr.BaseSha,pr.HeadSha,null,[])){IsPrSnapshot=true,AssociatedPr=pr,GitHubContext=FakeGitHub.Context};

@@ -16,6 +16,7 @@ using Stacker.Infrastructure;
 
 namespace Stacker.Tests;
 
+[Collection(HeadlessApp.CollectionName)]
 public sealed class ReviewToolsTests
 {
     private sealed class RecordingCache(string root):IPullRequestObjects

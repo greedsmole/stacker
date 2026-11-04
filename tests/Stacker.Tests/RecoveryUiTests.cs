@@ -7,6 +7,7 @@ using Stacker.Desktop;
 using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
+[Collection(HeadlessApp.CollectionName)]
 public sealed class RecoveryUiTests
 {
     private static MainViewModel CreateVm(GitFixture f, string? appRoot = null) => new(
