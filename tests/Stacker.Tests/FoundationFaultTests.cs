@@ -13,13 +13,13 @@ public sealed class FoundationFaultTests
         var root=Directory.CreateTempSubdirectory("foundation-migrate-").FullName;
         try
         {
-            using(var c=new SqliteConnection("Data Source="+Path.Combine(root,"review-history.db")))
+            using(var c=new SqliteConnection("Data Source="+Path.Combine(root,"review-history.db")+";Pooling=False"))
             {
                 c.Open();using var command=c.CreateCommand();command.CommandText="CREATE TABLE documents(kind TEXT,id TEXT,json TEXT,revision INTEGER);INSERT INTO documents VALUES('unknown','id','{}',1);PRAGMA user_version=1";command.ExecuteNonQuery();
             }
             Assert.True((await new SqliteHistoryStore(root).GraphsAsync("s")).IsFailed);
             Assert.Single(Directory.GetFiles(Path.Combine(root,"backups"),"*.db"));
-            using var verify=new SqliteConnection("Data Source="+Path.Combine(root,"review-history.db"));verify.Open();using var query=verify.CreateCommand();query.CommandText="PRAGMA user_version";Assert.Equal(1L,query.ExecuteScalar());
+            using var verify=new SqliteConnection("Data Source="+Path.Combine(root,"review-history.db")+";Pooling=False");verify.Open();using var query=verify.CreateCommand();query.CommandText="PRAGMA user_version";Assert.Equal(1L,query.ExecuteScalar());
             query.CommandText="SELECT COUNT(*) FROM documents";Assert.Equal(1L,query.ExecuteScalar());
         }finally{Directory.Delete(root,true);}
     }

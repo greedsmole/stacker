@@ -21,7 +21,7 @@ public sealed class LocalRepositoryHistoryTests
             trace.Calls.Clear();(await history.CaptureAsync(other.Identity,"scope",[basis,old])).OrThrow();Assert.All(trace.Calls,c=>Assert.Equal(other.Root,c.WorkingDirectory));Assert.Single(trace.Calls,c=>c.Arguments.Contains("fetch"));
             Assert.True(Directory.Exists(legacy));
             Assert.Equal("old.txt",Assert.Single(await other.Reader.FilesAsync(other.Root,basis,old)).NewPath);
-        }finally{Directory.Delete(appRoot,true);}
+        }finally{GitFixture.DeleteDirectory(appRoot);}
     }
     [Theory]
     [InlineData(1)]
@@ -39,7 +39,7 @@ public sealed class LocalRepositoryHistoryTests
             else
             {
                 foreach(var scope in new[]{"scope","second"}){var legacy=Path.Combine(app.Root,"history-objects",ApplicationStore.Key(scope));Directory.CreateDirectory(legacy);await f.GitAt(legacy,"init","--bare");await f.GitAt(legacy,"fetch","--no-tags",f.Root,"+refs/heads/old:refs/stacker/history/"+old);}
-                using(var connection=new Microsoft.Data.Sqlite.SqliteConnection("Data Source="+Path.Combine(app.Root,"review-history.db")))
+                using(var connection=new Microsoft.Data.Sqlite.SqliteConnection("Data Source="+Path.Combine(app.Root,"review-history.db")+";Pooling=False"))
                 {connection.Open();using var command=connection.CreateCommand();command.CommandText="DROP TABLE repository_contents;DROP TABLE object_imports;PRAGMA user_version=2";command.ExecuteNonQuery();}
                 var hashes=new Dictionary<string,string>();foreach(var file in Directory.EnumerateFiles(app.Root,"*",SearchOption.AllDirectories)){await using var stream=File.OpenRead(file);hashes[Path.GetRelativePath(app.Root,file).Replace('\\','/')]=Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(stream));}
                 await File.WriteAllTextAsync(Path.Combine(app.Root,"manifest.json"),System.Text.Json.JsonSerializer.Serialize(new{Schema=1,CreatedAt=DateTimeOffset.UtcNow,Files=hashes}));ZipFile.CreateFromDirectory(app.Root,archive);
@@ -53,7 +53,7 @@ public sealed class LocalRepositoryHistoryTests
             using var lease=(await restoredHistory.AcquireAsync(f.Identity,"scope")).OrThrow();Assert.Equal(f.Root,lease.Root);Assert.Equal(old,await f.Git("rev-parse",old));Assert.Equal("unsent",(await restoredStore.ReadDraftAsync("draft")).OrThrow()!.Draft.Summary);
             using var second=(await restoredHistory.AcquireAsync(f.Identity,"second")).OrThrow();Assert.Equal(f.Root,second.Root);
             Assert.All(trace.Calls,c=>Assert.Equal(f.Root,c.WorkingDirectory));
-        }finally{Directory.Delete(root,true);}
+        }finally{GitFixture.DeleteDirectory(root);}
     }
     [Fact] public async Task History_cleanup_waits_for_an_underlying_diff_read_and_preserves_backup_refs()
     {
@@ -69,7 +69,7 @@ public sealed class LocalRepositoryHistoryTests
             using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(10));
             while((await f.Git("for-each-ref","--format=%(refname)","refs/stacker/history")).Length>0)await Task.Delay(10,timeout.Token);
             Assert.Equal(head,await f.Git("rev-parse","refs/stacker/backup/keep/main"));Assert.True(Directory.Exists(Path.Combine(f.Root,".git")));
-        }finally{Directory.Delete(root,true);}
+        }finally{GitFixture.DeleteDirectory(root);}
     }
     [Fact] public async Task Linked_worktree_uses_its_opened_root_and_the_shared_object_database()
     {
@@ -80,7 +80,7 @@ public sealed class LocalRepositoryHistoryTests
             var before=await f.GitAt(worktree,"rev-parse","HEAD");var head=await f.Git("rev-parse","A");var basis=await f.Git("rev-parse","main");var trace=new RepositoryRecordingRunner(f.Runner);var git=new RepositoryGit(trace,new());
             (await new LocalPullRequestObjects(git).EnsureAsync(identity,FakeGitHub.Context,[DiscoveryTests.Pr(42,"main","A") with{HeadSha=head,BaseSha=basis}])).OrThrow();
             Assert.All(trace.Calls,c=>Assert.Equal(identity.Root,c.WorkingDirectory));Assert.DoesNotContain(trace.Calls,c=>c.Arguments.Contains("fetch"));Assert.Equal(before,await f.GitAt(worktree,"rev-parse","HEAD"));Assert.Contains("refs/stacker/pr/",await f.Git("show-ref"));
-        }finally{Directory.Delete(root,true);}
+        }finally{GitFixture.DeleteDirectory(root);}
     }
     [Fact] public async Task Repository_selection_overrides_redirecting_Git_environment_variables()
     {
@@ -100,7 +100,7 @@ public sealed class LocalRepositoryHistoryTests
             var marker=Path.Combine(f.Root,"driver-ran");await f.Git("config","merge.unsafe.driver","echo unsafe > \""+marker+"\"");
             var before=await GitCacheTests.UserState(f);var history=new HistoryGit(f.Runner,new(),new ApplicationStore(root));(await history.CaptureAsync(f.Identity,"scope",[basis,left,right])).OrThrow();
             var result=await history.MergeAsync(f.Identity,left,right);Assert.True(result.IsFailed);Assert.Contains("external merge driver",result.Problem!.Message);Assert.False(File.Exists(marker));Assert.Equal(before,await GitCacheTests.UserState(f));
-        }finally{Directory.Delete(root,true);}
+        }finally{GitFixture.DeleteDirectory(root);}
     }
     [Fact] public async Task Binding_a_local_change_moves_its_pins_into_the_remote_scope_and_cleanup_releases_both()
     {
@@ -118,7 +118,7 @@ public sealed class LocalRepositoryHistoryTests
             Assert.Equal("",await f.Git("for-each-ref","--format=%(refname)",source));Assert.Contains(head,await f.Git("for-each-ref","--format=%(refname)",destination));
             (await history.ForgetContentsAsync(repository,FakeGitHub.Context.Identity)).OrThrow();Assert.Equal("",await f.Git("for-each-ref","--format=%(refname)","refs/stacker/history"));
             Assert.Equal(head,await f.Git("rev-parse","HEAD"));
-        }finally{Directory.Delete(root,true);}
+        }finally{GitFixture.DeleteDirectory(root);}
     }
     [Avalonia.Headless.XUnit.AvaloniaFact] public async Task The_real_workspace_executes_git_only_in_its_opened_repository()
     {
@@ -134,7 +134,7 @@ public sealed class LocalRepositoryHistoryTests
             Assert.NotEmpty(log);var resolved=await f.ResolvedRoot();Assert.All(log,entry=>Assert.True(entry.WorkingDirectory==f.Root||entry.WorkingDirectory==resolved,entry.WorkingDirectory));
             Assert.DoesNotContain(log,entry=>entry.Command.Contains("init --bare",StringComparison.Ordinal)||entry.Command.Contains("git clone",StringComparison.Ordinal));
             Assert.False(Directory.Exists(Path.Combine(root,"objects")));Assert.False(Directory.Exists(Path.Combine(root,"history-objects")));Assert.Equal(before,await GitCacheTests.UserState(f));await vm.ShutdownAsync();
-        }finally{Directory.Delete(root,true);}
+        }finally{GitFixture.DeleteDirectory(root);}
     }
     private static async Task Collect(GitFixture f){await f.Git("reflog","expire","--expire=now","--all");await f.Git("gc","--prune=now");}
     private sealed class GatedGitRunner(IProcessRunner inner):IProcessRunner

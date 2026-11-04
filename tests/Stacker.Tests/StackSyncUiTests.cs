@@ -30,18 +30,6 @@ public sealed class StackSyncUiTests
     Task<Result<string?>> IEditorLauncher.OpenAsync(string root,IReadOnlyList<string> paths,string? overrideCommand,CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(root, paths, overrideCommand, ct), ProblemCodes.GitFailed);
     }
 
-    /// <summary>A real no-op program git can run as an editor on either platform, in a path without spaces (git runs GIT_EDITOR through a shell).</summary>
-    private static string NoOpEditor()
-    {
-        if (OperatingSystem.IsWindows()) return "cmd /c exit 0";
-        var directory = Path.Combine(Path.GetTempPath(), "stacker-editor-" + Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, "noop-editor.sh");
-        File.WriteAllText(path, "#!/bin/sh\nexit 0\n");
-        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        return path;
-    }
-
     /// <summary>Leaves main moved under a layer that conflicts, with the stack definition committed.</summary>
     private static async Task Conflicting(GitFixture f)
     {
@@ -299,7 +287,8 @@ public sealed class StackSyncUiTests
     public async Task The_conflict_panel_resolves_and_continues_from_the_window()
     {
         await using var f = new GitFixture(); await Conflicting(f);
-        var editor = new FakeEditor(NoOpEditor());
+        // Git supplies its shell's no-op command on both platforms.
+        var editor = new FakeEditor("true");
         using var vm = CreateVm(f, editor: editor);
         await vm.OpenRepositoryAsync(f.Root);
         var plan = await vm.BuildRestackPlanAsync();

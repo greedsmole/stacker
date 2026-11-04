@@ -30,7 +30,7 @@ public sealed class HistorySafetyTests
             await service.ObserveRemoteAsync(snapshot with { PullRequests = prs.Skip(1).ToArray() }, ["main"], default);
             Assert.Equal(1, remote.Reads);
         }
-        finally { Directory.Delete(root, true); }
+        finally { GitFixture.DeleteDirectory(root); }
     }
     [Fact] public async Task Rebinding_local_ref_preserves_identity_and_rejects_independent_history()
     {
@@ -44,7 +44,7 @@ public sealed class HistorySafetyTests
             var independent = (await store.ResolveNodeAsync("local:repo", "refs/heads/independent", "other")).OrThrow();
             Assert.True((await store.RebindLocalNodeAsync(independent, "refs/heads/new")).IsFailed);
         }
-        finally { Directory.Delete(root, true); }
+        finally { GitFixture.DeleteDirectory(root); }
     }
     [Fact] public async Task Future_schema_is_not_downgraded_or_replaced()
     {
@@ -86,7 +86,7 @@ public sealed class HistorySafetyTests
             Assert.True(vm.IsDemo); Assert.True(vm.ActiveReview is null || !vm.ActiveReview.CanPublish);
             await vm.ShutdownAsync();
         }
-        finally { Directory.Delete(root, true); }
+        finally { GitFixture.DeleteDirectory(root); }
     }
     private sealed class ClosedReader : IHistoryRemoteReader
     {

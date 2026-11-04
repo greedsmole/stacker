@@ -27,7 +27,7 @@ public sealed class WorkspaceBackupService(IApplicationState state,SqliteHistory
                     await git.RunAsync(repository,["bundle","create",Path.Combine(bundles,repository.Repository.Value+".bundle"),"--stdin"],ct,input:string.Join('\n',refs.Keys)+"\n");
                 }
             }
-            using(var source=database.Open())using(var backup=new Microsoft.Data.Sqlite.SqliteConnection("Data Source="+Path.Combine(staging,"review-history.db")))
+            using(var source=database.Open())using(var backup=SqliteHistoryStore.CreateConnection(Path.Combine(staging,"review-history.db")))
             {backup.Open();source.BackupDatabase(backup);}
             foreach(var folder in Folders)
             {
@@ -65,7 +65,7 @@ public sealed class WorkspaceBackupService(IApplicationState state,SqliteHistory
                 using(var input=entry.Open())using(var output=File.Create(target))await input.CopyToAsync(output,ct);
                 if(await HashAsync(target,ct)!=hash)throw new StackerException("Backup checksum mismatch: "+path);
             }
-            using(var verify=new Microsoft.Data.Sqlite.SqliteConnection("Data Source="+Path.Combine(staging,"review-history.db")))
+            using(var verify=SqliteHistoryStore.CreateConnection(Path.Combine(staging,"review-history.db")))
             {
                 verify.Open();using var check=verify.CreateCommand();check.CommandText="PRAGMA integrity_check";
                 if(check.ExecuteScalar() as string!="ok")throw new StackerException("Restored database integrity check failed.");

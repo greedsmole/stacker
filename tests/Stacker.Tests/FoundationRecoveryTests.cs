@@ -37,7 +37,7 @@ public sealed class FoundationRecoveryTests
             var state=new ApplicationStore(root);var store=new SqliteHistoryStore(root);
             (await store.SaveDraftAsync("key",new ReviewDraft{Summary="unsent"},0)).OrThrow();
             var backup=new WorkspaceBackupService(state,store,new ProcessRunner());
-            Assert.True((await backup.ExportAsync(archive)).IsOk);Assert.True((await backup.RestoreAsync(archive,restored)).IsOk);
+            (await backup.ExportAsync(archive)).OrThrow();(await backup.RestoreAsync(archive,restored)).OrThrow();
             Assert.Equal("unsent",(await new SqliteHistoryStore(restored).ReadDraftAsync("key")).OrThrow()!.Draft.Summary);
             Assert.True((await backup.RestoreAsync(archive,restored)).IsFailed);
         }finally{Directory.Delete(root,true);Directory.Delete(target,true);}
@@ -66,7 +66,7 @@ public sealed class FoundationRecoveryTests
             using(OperationCorrelation.Enter(new string('a',32)))Assert.True((await bus.RunRemoteAsync(FakeGitHub.Context,new CommentCommand(42,(_,_)=>Task.FromResult(Result.Fail(ProblemCodes.GitHubRequest,"Connection lost"))))).NeedsUser);
             var entry=Assert.Single(journal.Recent("github:"+FakeGitHub.Context.Identity).OrThrow());Assert.Equal(new string('a',32),entry.Id);Assert.True(entry.NeedsAttention);Assert.Equal(StepState.Unknown,entry.Steps[0].State);
             ReviewSessionService.Transition(draft,PublicationPhase.Confirmed);draft.PendingOperation=null;(await store.SaveDraftAsync("key",draft,2)).OrThrow();
-            using var c=new SqliteConnection("Data Source="+Path.Combine(root,"review-history.db"));c.Open();using var check=c.CreateCommand();check.CommandText="SELECT phase FROM publication_operations";
+            using var c=new SqliteConnection("Data Source="+Path.Combine(root,"review-history.db")+";Pooling=False");c.Open();using var check=c.CreateCommand();check.CommandText="SELECT phase FROM publication_operations";
             Assert.Equal((long)PublicationPhase.Confirmed,check.ExecuteScalar());Assert.Null((await store.ReadDraftAsync("key")).OrThrow()!.Draft.PendingOperation);
             Assert.Equal(JournalPhase.Applied,Assert.Single(journal.Recent("github:"+FakeGitHub.Context.Identity).OrThrow()).Phase);
         }finally{Directory.Delete(root,true);}
