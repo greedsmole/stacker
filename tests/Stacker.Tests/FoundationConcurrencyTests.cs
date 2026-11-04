@@ -5,6 +5,20 @@ namespace Stacker.Tests;
 
 public sealed class FoundationConcurrencyTests
 {
+    [Fact] public async Task Autosave_drain_and_flush_do_not_depend_on_the_callers_dispatcher()
+    {
+        var saved=new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writer=new CoalescingWriter<int>(async value=>{await Task.Delay(1);saved.SetResult(value);});
+        var context=new UnpumpedContext();var previous=SynchronizationContext.Current;Task queued;Task flushed;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            queued=writer.Queue(7);flushed=writer.FlushAsync();
+        }
+        finally{SynchronizationContext.SetSynchronizationContext(previous);}
+        await Task.WhenAll(queued,flushed).WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(7,await saved.Task);Assert.Equal(0,context.Posts);
+    }
     [Fact] public async Task Shared_git_read_keeps_objects_alive_after_the_view_requests_removal()
     {
         var root=Directory.CreateTempSubdirectory("foundation-lease-").FullName;
@@ -48,5 +62,10 @@ public sealed class FoundationConcurrencyTests
         public Task<Result<IReadOnlyList<string>>> MergeBasesAsync(string root,string left,string right,CancellationToken ct=default)=>throw new NotSupportedException();
         public Task<Result<(int Ahead,int Behind)>> CountsAsync(string root,string parent,string head,CancellationToken ct=default)=>throw new NotSupportedException();
         public Task<Result<IReadOnlyList<FileChange>>> FilesAsync(string root,string basis,string head,CancellationToken ct=default)=>throw new NotSupportedException();
+    }
+    private sealed class UnpumpedContext:SynchronizationContext
+    {
+        public int Posts;
+        public override void Post(SendOrPostCallback callback,object? state)=>Interlocked.Increment(ref Posts);
     }
 }
