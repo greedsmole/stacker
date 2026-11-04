@@ -1,6 +1,7 @@
 // Purpose: Syntax tokenizer scenarios for supported languages, unsupported files, limits, and fallback rendering.
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
+[Collection(HeadlessApp.CollectionName)]
 public sealed class SyntaxTests
 {
     // Scenario: TextMate colors multiline comments and themes without patch markers.

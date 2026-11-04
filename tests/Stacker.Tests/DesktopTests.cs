@@ -9,11 +9,12 @@ using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 
 [assembly: AvaloniaTestApplication(typeof(Stacker.Tests.HeadlessApp))]
+[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerAssembly)]
 namespace Stacker.Tests;
 public static class HeadlessApp
 {
     public const string CollectionName = "Avalonia UI";
-    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().UseHeadless(new AvaloniaHeadlessPlatformOptions());
+    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().WithInterFont().UseHeadless(new AvaloniaHeadlessPlatformOptions());
 }
 [CollectionDefinition(HeadlessApp.CollectionName, DisableParallelization = true)]
 public sealed class HeadlessCollection { }
