@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Stacker.Core;
@@ -47,7 +48,11 @@ internal sealed class ReviewDraftController(ReviewViewModel owner)
     {
         await previous;
         try { (await owner.Session.SaveAsync(owner.Key, copy)).OrThrow(); owner._saveError = null; }
-        catch (Exception ex) { owner._saveError = "Cannot save draft: " + ex.Message; owner.Message = owner._saveError; }
+        catch (Exception ex)
+        {
+            var error = "Cannot save draft: " + ex.Message; owner._saveError = error;
+            Dispatcher.UIThread.Post(() => { if (owner._saveError == error) owner.Message = error; });
+        }
     }
 
     public async Task FlushAsync() { if (_buffer is not null) await _buffer.FlushAsync(); await owner._saveQueue; if (owner._saveError is not null) throw new StackerException(owner._saveError); }
