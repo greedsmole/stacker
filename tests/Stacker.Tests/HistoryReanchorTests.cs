@@ -4,6 +4,7 @@ using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 
+[Collection(HeadlessApp.CollectionName)]
 public sealed class HistoryReanchorTests
 {
     [AvaloniaFact] public async Task Renamed_draft_requires_confirmation_and_preserves_original_anchor()

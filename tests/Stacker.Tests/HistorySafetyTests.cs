@@ -8,6 +8,7 @@ using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 
+[Collection(HeadlessApp.CollectionName)]
 public sealed class HistorySafetyTests
 {
     [Fact] public async Task Closed_parent_is_retained_and_explicit_edges_survive_refresh()

@@ -8,6 +8,7 @@ using Stacker.Desktop.ViewModels;
 using Xunit.Abstractions;
 namespace Stacker.Tests;
 
+[Collection(HeadlessApp.CollectionName)]
 public sealed class FoundationLoadTests(ITestOutputHelper output)
 {
     [Fact] public void Discovery_handles_one_thousand_prs_in_twenty_layer_paths()

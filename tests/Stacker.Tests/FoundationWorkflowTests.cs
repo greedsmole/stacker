@@ -8,6 +8,7 @@ using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 
+[Collection(HeadlessApp.CollectionName)]
 public sealed class FoundationWorkflowTests
 {
     [AvaloniaTheory]

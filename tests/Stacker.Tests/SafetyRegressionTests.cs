@@ -7,6 +7,7 @@ using Stacker.Infrastructure.Framework;
 
 namespace Stacker.Tests;
 
+[Collection(HeadlessApp.CollectionName)]
 public sealed class SafetyRegressionTests
 {
     internal sealed class FailedFiles : IAtomicFile

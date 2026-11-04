@@ -12,8 +12,12 @@ using Stacker.Infrastructure;
 namespace Stacker.Tests;
 public static class HeadlessApp
 {
+    public const string CollectionName = "Avalonia UI";
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().UseHeadless(new AvaloniaHeadlessPlatformOptions());
 }
+[CollectionDefinition(HeadlessApp.CollectionName, DisableParallelization = true)]
+public sealed class HeadlessCollection { }
+[Collection(HeadlessApp.CollectionName)]
 public sealed class DesktopTests
 {
     [AvaloniaFact]

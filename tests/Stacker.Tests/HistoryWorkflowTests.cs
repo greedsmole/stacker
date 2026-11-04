@@ -7,6 +7,7 @@ using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 
+[Collection(HeadlessApp.CollectionName)]
 public sealed class HistoryWorkflowTests
 {
     [Fact] public async Task Progress_preserves_unmodified_files_and_invalidates_base_context()
