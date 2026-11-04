@@ -102,7 +102,7 @@ public sealed class SafetyRegressionTests
         Assert.Equal(1, plan.Steps.Single(s => s.BranchName == "B").CommitCount);
         var outcome = await writer.RestackAsync(plan);
         Assert.True(outcome.Applied, outcome.Message);
-        Assert.Equal("amended A", (await f.Git("show", "C:A.txt")).Trim());
+        Assert.Equal("amended A", (await f.Git("show", "refs/heads/C:A.txt", "--")).Trim());
     }
 
     [Fact] public async Task Another_restack_keeps_unrestored_stash()

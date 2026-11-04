@@ -9,9 +9,11 @@ public sealed partial class SqliteHistoryStore : IHistoryStore, IReviewDraftRepo
     private readonly string _path;
     internal string Root=>Path.GetDirectoryName(_path)!;
     public SqliteHistoryStore(string root) { Directory.CreateDirectory(root); _path = Path.Combine(root, "review-history.db"); }
+    internal static SqliteConnection CreateConnection(string path) => new(new SqliteConnectionStringBuilder
+        { DataSource = path, Pooling = false, DefaultTimeout = 5, ForeignKeys = true }.ToString());
     internal SqliteConnection Open()
     {
-        var c = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = _path, Pooling = false, DefaultTimeout = 5, ForeignKeys = true }.ToString());
+        var c = CreateConnection(_path);
         try { c.Open(); Initialize(c); return c; } catch { c.Dispose(); throw; }
     }
     private static SqliteCommand Command(SqliteConnection c, SqliteTransaction? tx, string sql, params (string, object?)[] values)

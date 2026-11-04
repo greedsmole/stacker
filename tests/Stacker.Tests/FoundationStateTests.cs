@@ -14,7 +14,7 @@ public sealed class FoundationStateTests
         {
             var node=new ChangeNode("node","scope","A","A");var id=ApplicationStore.Key("node|base|head");
             var version=new ChangeVersion(id,node.Id,"base","head","base",DateTimeOffset.UtcNow);
-            using(var c=new SqliteConnection("Data Source="+Path.Combine(root,"review-history.db")))
+            using(var c=new SqliteConnection("Data Source="+Path.Combine(root,"review-history.db")+";Pooling=False"))
             {
                 c.Open();using var setup=c.CreateCommand();setup.CommandText="CREATE TABLE documents(kind TEXT,id TEXT,json TEXT,revision INTEGER DEFAULT 1,PRIMARY KEY(kind,id)); PRAGMA user_version=1;";setup.ExecuteNonQuery();
                 foreach(var(kind,key,json)in new[]{("node","scope|A",JsonSerializer.Serialize(node)),("version",id,JsonSerializer.Serialize(version)),("draft","key",JsonSerializer.Serialize(new ReviewDraft{Summary="preserved"}))})

@@ -71,14 +71,19 @@ public sealed class GitFixture : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         foreach (var path in _worktrees) { await Git("worktree", "remove", "--force", path); }
-        // Git object files can be read-only on Windows.
-        foreach (var path in Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories)) File.SetAttributes(path, FileAttributes.Normal);
         // Cancelled ViewModel loads release their process working directories asynchronously.
         for (var attempt = 0; ; attempt++)
         {
-            try { Directory.Delete(Root, true); break; }
+            try { DeleteDirectory(Root); break; }
             catch (IOException) when (OperatingSystem.IsWindows() && attempt < 20) { await Task.Delay(100); }
         }
-        if (RemoteRoot is not null && Directory.Exists(RemoteRoot)) Directory.Delete(RemoteRoot, true);
+        if (RemoteRoot is not null) DeleteDirectory(RemoteRoot);
+    }
+    public static void DeleteDirectory(string path)
+    {
+        if (!Directory.Exists(path)) return;
+        // Git marks object files read-only, including in bare remotes and demo repositories.
+        foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)) File.SetAttributes(file, FileAttributes.Normal);
+        Directory.Delete(path, true);
     }
 }

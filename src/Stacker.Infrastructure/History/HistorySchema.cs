@@ -79,7 +79,7 @@ public sealed partial class SqliteHistoryStore
     {
         var directory = Path.Combine(Path.GetDirectoryName(_path)!, "backups"); Directory.CreateDirectory(directory);
         var destination = Path.Combine(directory, "history-" + DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmssffff") + ".db");
-        using var backup = new SqliteConnection("Data Source=" + destination); backup.Open(); source.BackupDatabase(backup);
+        using var backup = CreateConnection(destination); backup.Open(); source.BackupDatabase(backup);
         foreach (var stale in Directory.GetFiles(directory, "history-*.db").OrderByDescending(Path.GetFileName).Skip(3)) File.Delete(stale);
     }
 }
