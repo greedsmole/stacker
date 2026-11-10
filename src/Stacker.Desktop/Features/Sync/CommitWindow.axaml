@@ -1,16 +1,21 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Stacker.Desktop.CommitWindow" Title="Commit" Width="640" Height="560" MinWidth="520" MinHeight="420" WindowStartupLocation="CenterOwner">
-  <Grid Margin="24" RowDefinitions="Auto,Auto,*,Auto,Auto,Auto" RowSpacing="12">
+  <Grid Margin="24" RowDefinitions="Auto,*,Auto,Auto" RowSpacing="12">
     <StackPanel Spacing="6">
       <TextBlock Text="Commit the working tree" FontSize="22" FontWeight="SemiBold"/>
       <TextBlock x:Name="BranchLabel" Classes="muted"/>
       <TextBlock Text="Your hooks and signing configuration run exactly as they would in a terminal." Classes="muted" FontSize="11" TextWrapping="Wrap"/>
     </StackPanel>
-    <ListBox Grid.Row="1" x:Name="ChangeList" MaxHeight="220" Background="Transparent" BorderThickness="0" FontFamily="Menlo,Consolas,monospace" FontSize="11"/>
-    <CheckBox Grid.Row="2" x:Name="StageAllToggle" Content="Stage every change, including new files" IsChecked="True" VerticalAlignment="Top"/>
-    <TextBox Grid.Row="3" x:Name="MessageInput" AcceptsReturn="True" MinHeight="80" TextWrapping="Wrap" Watermark="Commit message"/>
-    <TextBlock Grid.Row="4" x:Name="ErrorLabel" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/>
-    <Grid Grid.Row="5" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-      <Button Content="Cancel" Click="CancelClick" HorizontalAlignment="Left"/>
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"><StackPanel Spacing="12">
+      <TextBlock Text="Changed files" Classes="section-title"/>
+      <TextBlock x:Name="EmptyLabel" Text="The working tree is clean. Make a change in your editor, then reopen Commit." TextWrapping="Wrap" Classes="muted" IsVisible="False"/>
+      <ListBox x:Name="ChangeList" MaxHeight="160" Background="{DynamicResource PanelBrush}" BorderThickness="0" FontFamily="Menlo,Consolas,monospace" FontSize="12"/>
+      <CheckBox x:Name="StageAllToggle" Content="Stage every change, including new files" IsChecked="True"/>
+      <TextBlock Text="Commit message" Classes="section-title"/>
+      <TextBox x:Name="MessageInput" AutomationProperties.Name="Commit message" AcceptsReturn="True" MinHeight="100" TextWrapping="Wrap" Watermark="Describe what changed and why"/>
+    </StackPanel></ScrollViewer>
+    <ScrollViewer Grid.Row="2" MaxHeight="64"><TextBlock x:Name="ErrorLabel" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/></ScrollViewer>
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+      <Button Content="Cancel" IsCancel="True" Click="CancelClick" HorizontalAlignment="Left"/>
       <Button Grid.Column="2" x:Name="CommitButton" Content="Commit" Classes="primary" Click="CommitClick"/>
     </Grid>
   </Grid>

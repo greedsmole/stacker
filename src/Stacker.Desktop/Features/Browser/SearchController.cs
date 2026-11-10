@@ -29,10 +29,15 @@ internal sealed class SearchController(ISearchPresentation owner, WorkspaceRunti
         owner.SearchResults.Clear();
         var request = SearchRequest.Create(owner.SearchQuery, owner.SearchRegex);
         if (request.IsFailed) { owner.SearchStatus = request.Problem!.Message; return; }
+        var sections = owner.Sections.ToArray(); var hits = new List<ChangeSearchHit>(); var skipped = 0; var truncated = false; var patternTimeouts = 0;
+        if (sections.Length == 0)
+        {
+            owner.SearchStatus = "Select a stack or pull request before searching its changes.";
+            return;
+        }
         using var load = new CancellationTokenSource(); runtime._searchLoad = load;
         using var deadline = new CancellationTokenSource(SearchRequest.Budget);
         using var work = CancellationTokenSource.CreateLinkedTokenSource(load.Token, deadline.Token);
-        var sections = owner.Sections.ToArray(); var hits = new List<ChangeSearchHit>(); var skipped = 0; var truncated = false; var patternTimeouts = 0;
         // One budget for the whole search: a per-match timeout can still add up to minutes across a large stack.
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var budget = SearchRequest.Budget; var stopped = false;
@@ -85,7 +90,7 @@ internal sealed class SearchController(ISearchPresentation owner, WorkspaceRunti
             }
             load.Token.ThrowIfCancellationRequested();
             foreach (var hit in hits) owner.SearchResults.Add(hit);
-            owner.SearchStatus = $"{hits.Count} result(s)" + (truncated ? " · first 500 shown" : "")
+            owner.SearchStatus = (hits.Count == 0 ? "No matches. Try a shorter query or change the search scope." : $"{hits.Count} result(s)") + (truncated ? " · first 500 shown" : "")
                 + (stopped ? $" · stopped after {budget.TotalSeconds:0} s, narrow the search" : "")
                 + (patternTimeouts > 0 ? $" · {patternTimeouts} file(s) where the pattern timed out" : "")
                 + (skipped > 0 ? $" · {skipped} file(s) unavailable" : "");

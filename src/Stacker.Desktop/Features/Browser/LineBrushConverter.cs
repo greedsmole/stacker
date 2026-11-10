@@ -11,7 +11,7 @@ public sealed class LineBrushConverter : IValueConverter
     {
         DiffLineKind.Added => new SolidColorBrush(Color.Parse("#243BA66A")),
         DiffLineKind.Removed => new SolidColorBrush(Color.Parse("#24DA5B65")),
-        DiffLineKind.Header => new SolidColorBrush(Color.Parse("#24526BEA")),
+        DiffLineKind.Header => new SolidColorBrush(Color.Parse("#187D8E83")),
         _ => Brushes.Transparent
     };
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();

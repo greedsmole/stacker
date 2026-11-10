@@ -1,17 +1,17 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.ReviewPanel">
  <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="16" RowSpacing="12">
-  <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"/>
+  <TextBlock Text="{Binding Title}" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap"/>
   <TextBlock Grid.Row="1" Text="{Binding Message}" Classes="muted" TextWrapping="Wrap" MaxHeight="100"/>
   <StackPanel Grid.Row="2" Spacing="6"><Button Content="Retry loading review" Command="{Binding RetryInitializeCommand}" IsVisible="{Binding !IsInitialized}"/>
-   <Border IsVisible="{Binding HasRecoveredText}" Classes="notice" Padding="10"><StackPanel Spacing="6"><TextBlock Text="Recovered draft — choose its destination before posting" TextWrapping="Wrap"/><SelectableTextBlock Text="{Binding RecoveredText}" TextWrapping="Wrap" MaxHeight="100"/><Button Content="Use in current editor" Command="{Binding RestoreRecoveredTextCommand}"/></StackPanel></Border>
+   <Border IsVisible="{Binding HasRecoveredText}" Classes="notice" Padding="10"><StackPanel Spacing="6"><TextBlock Text="Recovered draft: choose its destination before posting" TextWrapping="Wrap"/><SelectableTextBlock Text="{Binding RecoveredText}" TextWrapping="Wrap" MaxHeight="100"/><Button Content="Use in current editor" Command="{Binding RestoreRecoveredTextCommand}"/></StackPanel></Border>
    <Button Content="Recheck draft against current PR" Command="{Binding UseCurrentVersionCommand}" IsVisible="{Binding HasStaleDraft}"/>
-   <StackPanel IsVisible="{Binding HasPendingPublication}" Spacing="6"><Button Content="Check publication status" Command="{Binding ReloadCommand}"/><Button Content="I checked GitHub — allow retry" Command="{Binding UnlockRetryCommand}"/></StackPanel>
+   <StackPanel IsVisible="{Binding HasPendingPublication}" Spacing="6"><Button Content="Check publication status" Command="{Binding ReloadCommand}"/><Button Content="I checked GitHub: allow retry" Command="{Binding UnlockRetryCommand}"/></StackPanel>
   </StackPanel>
   <TabControl Grid.Row="3" SelectedIndex="{Binding PanelTab}" SelectionChanged="TabChanged" IsEnabled="{Binding CanEditDraft}">
    <TabItem Header="Discussion"><Grid RowDefinitions="*,Auto,Auto" RowSpacing="10">
     <ScrollViewer><StackPanel Spacing="16">
-     <ItemsControl ItemsSource="{Binding Comments}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Spacing="5" Margin="0,10"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding CreatedAt, StringFormat={}{0:g}}" Classes="muted" FontSize="10"/></Grid><local:ReviewBodyView Body="{Binding DisplayBody}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-     <TextBlock Text="REVIEWS" Classes="label"/>
+     <ItemsControl ItemsSource="{Binding Comments}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Spacing="5" Margin="0,10"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding CreatedAt, StringFormat={}{0:g}}" Classes="muted" FontSize="11"/></Grid><local:ReviewBodyView Body="{Binding DisplayBody}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+     <TextBlock Text="Review decisions" Classes="label"/>
      <ItemsControl ItemsSource="{Binding Reviews}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Spacing="5" Margin="0,6"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><TextBlock Text="{Binding State}" Classes="muted"/><local:ReviewBodyView Body="{Binding DisplayBody}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
     </StackPanel></ScrollViewer>
     <TextBox Grid.Row="1" Text="{Binding Composer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" MaxHeight="180" Watermark="Comment on this pull request…"/>

@@ -21,7 +21,32 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
     private Task _selectionSync = Task.CompletedTask;
     private bool _loadingSelection;
     partial void OnSelectedFileChanged(FileReviewStatus? value)
-    { if (!_loadingSelection && SelectedNode is { } node) _selectionSync = SelectDocumentFileAsync(node, value?.Change); }
+    {
+        NotifySelectionCommands();
+        if (!_loadingSelection && SelectedNode is { } node) _selectionSync = SelectDocumentFileAsync(node, value?.Change);
+    }
+    partial void OnPreviousVersionChanged(ChangeVersion? value) => NotifySelectionCommands();
+    /// <summary>Allows loading only when a layer is selected and no history operation is running.</summary>
+    public bool CanLoadLayer => !IsBusy && SelectedNode is not null;
+    /// <summary>Requires a selected file from the loaded version of the selected layer.</summary>
+    public bool CanReviewFile => CanLoadLayer && _current?.ChangeId == SelectedNode?.Id && SelectedFile is not null;
+    /// <summary>Requires both the selected layer's loaded version and an earlier version to compare.</summary>
+    public bool CanCompareVersions => CanLoadLayer && _current?.ChangeId == SelectedNode?.Id && PreviousVersion is not null;
+    /// <summary>Enables the earlier diff only when a file and earlier version are available.</summary>
+    public bool CanShowPrevious => CanReviewFile && PreviousVersion is not null;
+    /// <summary>Enables checkpoint operations only for a selected file with a saved review checkpoint.</summary>
+    public bool CanUseCheckpoint => CanReviewFile && SelectedFile?.CheckedVersion is not null;
+    /// <summary>Distinguishes an unloaded selection from a loaded layer with no changed files.</summary>
+    public string EmptyFilesMessage => _current is null ? "Choose a layer and select Load layer." : "This layer has no changed files.";
+    /// <summary>Explains the next step needed to show a history document.</summary>
+    public string EmptyDocumentMessage => SelectedFile is null ? "Load a layer and select a file to review its changes." : "Choose Current diff or a comparison from Compare and navigate.";
+    private void NotifySelectionCommands()
+    {
+        LoadLayerCommand.NotifyCanExecuteChanged(); MarkReviewedCommand.NotifyCanExecuteChanged(); UnmarkReviewedCommand.NotifyCanExecuteChanged();
+        ShowCurrentCommand.NotifyCanExecuteChanged(); ShowPreviousCommand.NotifyCanExecuteChanged(); CompareVersionsCommand.NotifyCanExecuteChanged();
+        SinceReviewedCommand.NotifyCanExecuteChanged(); EvolutionCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(EmptyFilesMessage)); OnPropertyChanged(nameof(EmptyDocumentMessage));
+    }
     private async Task SyncSelectionAsync(ChangeNode node, FileChange? file)
     { try { if (SelectionChanged is not null) await SelectionChanged(node, file); } catch (Exception ex) { Message = ex.Message; } }
     private readonly Func<ChangeNode, ChangeVersion, CancellationToken, Task<ReviewDiscussion?>>? _discussion;
@@ -56,8 +81,14 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
         SelectedNode = Nodes.FirstOrDefault();
         await LoadLayerAsync();
     }
-    partial void OnSelectedNodeChanged(ChangeNode? value) { _generation++; Files.Clear(); Versions.Clear(); Preview = ""; ClearDocument(); }
-    [RelayCommand]
+    partial void OnSelectedNodeChanged(ChangeNode? value)
+    {
+        _generation++; _current = null; SelectedFile = null; PreviousVersion = null;
+        Files.Clear(); Versions.Clear(); Preview = ""; ClearDocument();
+        Message = value is null ? "Select a layer to load its review history." : "Select Load layer to read this layer's files and versions.";
+        NotifySelectionCommands();
+    }
+    [RelayCommand(CanExecute = nameof(CanLoadLayer))]
     private async Task LoadLayerAsync()
     {
         var node = SelectedNode; _loadingSelection = true; var generation = ++_generation;
@@ -82,8 +113,8 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
         catch (Exception ex) { Message = ex.Message; }
         finally { IsBusy = false; _loadingSelection = false; }
     }
-    [RelayCommand] private async Task MarkReviewedAsync() => await SetReviewedAsync(false);
-    [RelayCommand] private async Task UnmarkReviewedAsync() => await SetReviewedAsync(true);
+    [RelayCommand(CanExecute = nameof(CanReviewFile))] private async Task MarkReviewedAsync() => await SetReviewedAsync(false);
+    [RelayCommand(CanExecute = nameof(CanUseCheckpoint))] private async Task UnmarkReviewedAsync() => await SetReviewedAsync(true);
     private async Task SetReviewedAsync(bool remove)
     {
         var file = SelectedFile; var current = _current;
@@ -95,8 +126,8 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
         }
         catch (Exception ex) { Message = ex.Message; }
     }
-    [RelayCommand] private async Task ShowCurrentAsync() => await ShowVersionAsync(_current);
-    [RelayCommand] private async Task ShowPreviousAsync() => await ShowVersionAsync(PreviousVersion);
+    [RelayCommand(CanExecute = nameof(CanReviewFile))] private async Task ShowCurrentAsync() => await ShowVersionAsync(_current);
+    [RelayCommand(CanExecute = nameof(CanShowPrevious))] private async Task ShowPreviousAsync() => await ShowVersionAsync(PreviousVersion);
     private async Task ShowVersionAsync(ChangeVersion? version)
     {
         var selected = SelectedFile;
@@ -110,7 +141,7 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
             Message = version.Label + " · original layer diff · read-only";
         });
     }
-    [RelayCommand] private Task CompareVersionsAsync() => CompareVersionDocumentAsync(DiffDocumentMode.BetweenVersions);
+    [RelayCommand(CanExecute = nameof(CanCompareVersions))] private Task CompareVersionsAsync() => CompareVersionDocumentAsync(DiffDocumentMode.BetweenVersions);
     private async Task CompareVersionDocumentAsync(DiffDocumentMode mode)
     {
         if (_current is null || PreviousVersion is null) { Message = "No earlier observed version. Open this layer again after it changes."; return; }
@@ -130,7 +161,7 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
             await ShowDocumentAsync(new(mode, sections, Message), changed?.NewPath, previous.Id);
         });
     }
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanUseCheckpoint))]
     private async Task SinceReviewedAsync()
     {
         if (SelectedFile?.CheckedVersion is not { } version) { Message = "This file has no review checkpoint."; return; }
@@ -159,7 +190,7 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
         }
         Preview = string.Join("\n", Attention); Message = $"{Attention.Count} files require attention, in dependency order.";
     });
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanReviewFile))]
     private async Task EvolutionAsync()
     {
         if (SelectedFile is not { } selected) return;
