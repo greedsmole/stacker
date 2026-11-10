@@ -29,12 +29,12 @@ public partial class MainWindow
     private async Task<UnsavedCloseChoice> AskUnsavedAsync(IReadOnlyList<string> problems)
     {
         if (CloseFailureHandler is not null) return await CloseFailureHandler(problems);
-        var dialog = new Window { Title = "Unsaved work", Width = 580, Height = 330, CanResize = false };
-        var panel = new StackPanel { Margin = new(20), Spacing = 12 }; panel.Children.Add(new TextBlock { Text = "Some changes could not be saved", FontSize = 20 });
-        panel.Children.Add(new TextBlock { Text = string.Join("\n", problems), TextWrapping = Avalonia.Media.TextWrapping.Wrap, MaxHeight = 150 });
+        var dialog = new Window { Title = "Unsaved work", Width = 620, Height = 420, MinWidth = 500, MinHeight = 340, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        var actions = new List<Control>();
         foreach (var (label, choice) in new[] { ("Retry", UnsavedCloseChoice.Retry), ("Save a text copy and close", UnsavedCloseChoice.SaveCopy), ("Continue editing", UnsavedCloseChoice.ContinueEditing), ("Close without saving", UnsavedCloseChoice.Discard) })
-        { var button = new Button { Content = label }; button.Click += (_, _) => dialog.Close(choice); panel.Children.Add(button); }
-        dialog.Content = new ScrollViewer { Content = panel }; return await dialog.ShowDialog<UnsavedCloseChoice>(this);
+        { var button = new Button { Content = label, IsCancel = choice == UnsavedCloseChoice.ContinueEditing }; if (choice == UnsavedCloseChoice.Retry) button.Classes.Add("primary"); button.Click += (_, _) => dialog.Close(choice); actions.Add(button); }
+        dialog.Content = DialogLayout.Create("Some changes could not be saved", "Retry saving, keep editing, or save a text copy before closing.", new Control[] { new SelectableTextBlock { Text = string.Join("\n", problems), TextWrapping = Avalonia.Media.TextWrapping.Wrap } }, actions.ToArray());
+        return await dialog.ShowDialog<UnsavedCloseChoice>(this);
     }
     private async Task HandleCloseAsync()
     {

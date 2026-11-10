@@ -10,9 +10,12 @@ public partial class MainWindow
         var repositories = await Vm.KnownRepositoriesAsync();
         if (repositories.Count == 0) { Vm.Error = "No previous repository identity is available."; return; }
         var original = new ComboBox { ItemsSource = repositories.Select(r => r.Root).ToArray(), SelectedIndex = 0, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
-        var choose = new Button { Content = "Locate new folder…" };
-        var dialog = new Window { Title = "Locate moved repository", Width = 620, Height = 200, WindowStartupLocation = WindowStartupLocation.CenterOwner };
-        dialog.Content = new StackPanel { Margin = new(20), Spacing = 14, Children = { new TextBlock { Text = "Select its previous location to keep history and review progress." }, original, choose } };
+        Avalonia.Automation.AutomationProperties.SetName(original, "Previous repository location");
+        var choose = new Button { Content = "Locate new folder…", Classes = { "primary" } };
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var dialog = new Window { Title = "Locate moved repository", Width = 620, Height = 320, MinWidth = 480, MinHeight = 280, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        dialog.Content = DialogLayout.Create("Locate moved repository", "Keep its history and review progress by reconnecting the previous location.", new Control[] { new TextBlock { Text = "Previous location" }, original }, cancel, choose);
+        cancel.Click += (_, _) => dialog.Close();
         choose.Click += (_, _) => AsyncHandler.Run(async () =>
         {
             var folders = await dialog.StorageProvider.OpenFolderPickerAsync(new() { Title = "Locate this repository", AllowMultiple = false });

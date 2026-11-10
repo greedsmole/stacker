@@ -70,3 +70,14 @@ and unknown-effect recovery intentionally retain the limitations stated below.
 | R8 | Next restack forgets pending stash | Tested | SafetyRegressionTests.Another_restack_keeps_unrestored_stash; StateMigrationTests multiple stash identity/restart. |
 | R9 | Abort of a terminal merge undoes a previous completed restack | Tested | SafetyRegressionTests.Aborting_a_terminal_merge_does_not_undo_an_earlier_completed_restack; recovery only restores an interrupted restack. |
 | R10 | Partial push offers branch restoration / misleading rollback | Tested | SafetyRegressionTests.A_partial_push_never_offers_branch_restoration_or_claims_remote_rollback; CommandRecoveryTests explicit partial outcome and effect list. |
+
+
+## Desktop UI findings
+
+| ID | Finding | Status | Evidence |
+| --- | --- | --- | --- |
+| UI-1 | Dialog content and diagnostics crowd actions at minimum size | Implemented + rendered | Shared scrollable-body/persistent-footer layout; both-theme minimum-size matrix in [UI review](ui-review.md). |
+| UI-2 | Cleared history selection retains previous context and enabled review actions | Tested | `UiReviewTests` asserts cleared file/version, updated guidance and disabled review/comparison commands. |
+| UI-3 | Search and empty/loading/error states do not explain the next step clearly | Tested + rendered | No-comparison/no-match search assertions, separate loading guidance and dismissible diagnostic captures. |
+| UI-4 | Light warning contrast on the notice surface is below 4.5:1 | Measured | Updated token yields 5.18:1; both theme captures recorded in the UI review. |
+| UI-5 | Final native click-through of the overhaul | External verification pending | Updated macOS bundle launched; desktop lock prevented the final native inspection. Skia control captures and keyboard tests passed. |

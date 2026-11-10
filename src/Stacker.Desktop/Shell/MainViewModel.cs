@@ -42,6 +42,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     [ObservableProperty] internal string _comparisonTitle = "Changes";
     public bool HasError => !string.IsNullOrEmpty(Error);
     public bool HasNoSections => Sections.Count == 0;
+    /// <summary>Shows setup guidance only when the comparison is empty and loading has finished.</summary>
+    public bool ShowEmptyState => HasNoSections && !IsBusy;
+    /// <summary>Explains pending workspace work while no comparison content is available.</summary>
+    public bool ShowLoadingState => HasNoSections && IsBusy;
     public bool HasSelectedLayer => _runtime._selectedPositions.Length == 1;
     public bool IsLocalSelected => _runtime._activeGroup is { IsRemote: false } && CanEdit;
     /// <summary>Packaged product version, read from the assembly so the status bar cannot drift from the release.</summary>
@@ -75,11 +79,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
         Sections.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasNoSections));
+            OnPropertyChanged(nameof(ShowEmptyState));
+            OnPropertyChanged(nameof(ShowLoadingState));
             // Search results point at sections; when the sections go, the results must go with them.
             if (Sections.Count == 0) ResetSearch();
         };
     }
     partial void OnErrorChanged(string value) => OnPropertyChanged(nameof(HasError));
+    partial void OnIsBusyChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowEmptyState));
+        OnPropertyChanged(nameof(ShowLoadingState));
+    }
     partial void OnSelectedStackChanged(StackDefinition? value)
     {
         if (!_runtime._suppress && value is not null && LocalGroups.FirstOrDefault(g => g.Definition.Id == value.Id) is { } group) _ = SelectGroupAsync(group);

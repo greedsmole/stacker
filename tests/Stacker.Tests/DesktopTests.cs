@@ -1,6 +1,7 @@
 using Stacker.Core.Framework;
 // Purpose: Regression scenarios for view-model navigation and desktop state behavior without starting external services.
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Stacker.Core;
@@ -15,13 +16,29 @@ namespace Stacker.Tests;
 public static class HeadlessApp
 {
     public const string CollectionName = "Avalonia UI";
-    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().WithInterFont().UseHeadless(new AvaloniaHeadlessPlatformOptions());
+    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().WithInterFont().UseSkia()
+        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = Environment.GetEnvironmentVariable("STACKER_UI_CAPTURE_DIR") is null });
 }
 [CollectionDefinition(HeadlessApp.CollectionName, DisableParallelization = true)]
 public sealed class HeadlessCollection { }
 [Collection(HeadlessApp.CollectionName)]
 public sealed class DesktopTests
 {
+    [AvaloniaFact]
+    public void File_navigator_can_collapse_and_restore_its_width()
+    {
+        var view = new DiffSectionView();
+        var grid = view.FindControl<Avalonia.Controls.Grid>("ContentGrid")!;
+        var pane = view.FindControl<Avalonia.Controls.Grid>("FilePane")!;
+        view.Measure(new Size(900, 600)); view.Arrange(new Rect(0, 0, 900, 600));
+        var original = grid.ColumnDefinitions[0].ActualWidth;
+        var toggle = Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(view)
+            .OfType<Avalonia.Controls.Button>().Single(b => Equals(b.Content, "Files"));
+        toggle.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+        Assert.False(pane.IsVisible); Assert.Equal(0, grid.ColumnDefinitions[0].Width.Value);
+        toggle.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+        Assert.True(pane.IsVisible); Assert.Equal(original, grid.ColumnDefinitions[0].Width.Value);
+    }
     [AvaloniaFact]
     public async Task Window_loads_repository_stack_and_diff()
     {

@@ -13,7 +13,7 @@ public sealed partial class HistoryWorkspaceViewModel
     private bool _restoringNavigation;
     public bool CanGoBack => !IsBusy && _back.Count > 0;
     public bool CanGoForward => !IsBusy && _forward.Count > 0;
-    partial void OnIsBusyChanged(bool value) => NotifyNavigation();
+    partial void OnIsBusyChanged(bool value) { NotifyNavigation(); NotifySelectionCommands(); }
     private void NotifyNavigation() { BackCommand.NotifyCanExecuteChanged(); ForwardCommand.NotifyCanExecuteChanged(); }
     private void RememberNavigation(NavigationTarget target)
     {

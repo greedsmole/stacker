@@ -494,3 +494,10 @@ and production-scale performance benchmarks are not claimed by the headless test
 Final Release verification for this update: **251 passed, 0 failed, 0 skipped** (17 new history/workflow/safety
 scenarios on top of the 234-test baseline). The build completed without warnings or errors. `git diff --check`
 passed. Final archives: `artifacts/Stacker-0.5.0-osx-arm64.tar.gz` and `artifacts/Stacker-0.5.0-win-x64.zip`.
+
+
+## Desktop UI overhaul
+
+Release desktop build and self-contained macOS ARM64 publish succeeded. The focused `UiReviewTests`, `DesktopTests`, and `HistoryWorkflowTests` pass recorded **9 passed, 0 failed**. A Skia-rendered matrix produced 52 captures across light/dark appearances at the 1060 × 640 workspace minimum and each dialog's declared minimum. Tests also exercise search outcomes, history selection reset and command availability, dialog validation, Tab focus, Escape dismissal, and safe unsaved-work cancellation.
+
+See [the UI review](docs/ui-review.md) for concrete findings, representative committed screenshots, capture reproduction, contrast measurements, and the scoped anti-slop checklist. The final native bundle launched with an isolated offline demo profile, but a repeat native click-through was blocked by the locked macOS desktop. Windows rendering and exhaustive accessibility traversal were not verified in this pass.

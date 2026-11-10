@@ -23,7 +23,13 @@ public partial class MainWindow : Window
         Activated += (_, _) => { if (_ready) Vm.SetWindowActive(true); };
         KeyDown += SearchShortcut;
         Deactivated += (_, _) => { if (_ready) Vm.SetWindowActive(false); };
-        SizeChanged += (_, _) => Grid.SetColumn(ReviewHost, Bounds.Width < 1320 ? 2 : 3);
+        SizeChanged += (_, _) =>
+        {
+            var compact = Bounds.Width < 1320;
+            Grid.SetColumn(ReviewHost, compact ? 2 : 3);
+            ReviewHost.Width = compact ? double.NaN : 390;
+            ReviewHost.HorizontalAlignment = compact ? HorizontalAlignment.Stretch : HorizontalAlignment.Right;
+        };
         Opened += (_, _) =>
 AsyncHandler.Run(async () =>
 {
@@ -68,6 +74,7 @@ AsyncHandler.Run(async () =>
     private void SearchKeyDown(object? sender, KeyEventArgs e)
     { if (e.Key == Key.Enter) { e.Handled = true; _ = Vm.SearchAsync(); } else if (e.Key == Key.Escape) Vm.CloseSearch(); }
     private void CloseSearchClick(object? sender, RoutedEventArgs e) => Vm.CloseSearch();
+    private void DismissErrorClick(object? sender, RoutedEventArgs e) => Vm.Error = "";
     private void SearchResultSelected(object? sender, SelectionChangedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
@@ -159,8 +166,11 @@ AsyncHandler.Run(async () =>
     private void HelpClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
-    var text = "For main → A → B → C:\n\nEntire stack: main → C. Click Overview inside a stack.\n\nThis layer: A → B. Click layer 2.\n\nThrough this layer: main → B. Includes layers 1 and 2. At layer 3 it equals Entire stack.\n\nSelected layers: check 1 and 3. Two separate comparisons: main → A and B → C. Layer 2 is not folded into layer 3.\n\nComparisons start from the common ancestor. Diverged branches show a warning.\n\nTry Open demo: Authorization changes the same file across three layers; Payments is independent. Shared foundation demonstrates branching PRs. Service branches demonstrate discovery boundaries.\n\nStack titles restore your last view. GitHub updates quietly every minute while this window is active. New code waits for Update changes; returning to the window does not reload it.";
-    await new Window { Title = "How comparisons work", Width = 590, Height = 590, WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = new ScrollViewer { Content = new SelectableTextBlock { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new Thickness(24) } } }.ShowDialog(this);
+    var text = "For main → A → B → C:\n\nEntire stack: main → C. Click Entire stack in the sidebar.\n\nThis layer: A → B. Click layer 2.\n\nThrough this layer: main → B. Includes layers 1 and 2. At layer 3 it equals Entire stack.\n\nSelected layers: check 1 and 3. Two separate comparisons: main → A and B → C. Layer 2 is not folded into layer 3.\n\nComparisons start from the common ancestor. Diverged branches show a warning.\n\nTry Open demo: Authorization changes the same file across three layers; Payments is independent. Shared foundation demonstrates branching PRs. Service branches demonstrate discovery boundaries.\n\nStack titles restore your last view. GitHub updates quietly every minute while this window is active. New code waits for Update changes; returning to the window does not reload it.";
+    var help = new Window { Title = "How comparisons work", Width = 590, Height = 560, MinWidth = 460, MinHeight = 360, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+    var close = new Button { Content = "Close", IsCancel = true }; close.Click += (_, _) => help.Close();
+    help.Content = DialogLayout.Create("How comparisons work", "Every layer is compared with its own parent.", new Control[] { new SelectableTextBlock { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap } }, close);
+    await help.ShowDialog(this);
 }, message => AsyncHandler.Report(this, message));
     private void GitHubSettingsClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
@@ -168,24 +178,25 @@ AsyncHandler.Run(async () =>
     if (Vm.Repository is null) return;
     var origin = new TextBox { Text = Vm.GitHubPreferences.GitHubOverride, Watermark = "Auto-detect origin, or host/owner/repo" };
     var boundaries = new TextBox { Text = string.Join("\n", Vm.GitHubPreferences.BoundaryBranches ?? []), AcceptsReturn = true, MinHeight = 130 };
-    var save = new Button { Content = "Save and refresh", HorizontalAlignment = HorizontalAlignment.Right };
+    Avalonia.Automation.AutomationProperties.SetName(origin, "GitHub repository override");
+    Avalonia.Automation.AutomationProperties.SetName(boundaries, "Boundary branches");
+    var save = new Button { Content = "Save and refresh", Classes = { "primary" } };
+    var cancel = new Button { Content = "Cancel", IsCancel = true };
     var clear = new Button { Content = "Clear PR retention references" };
     var window = new Window
     {
         Title = "GitHub settings",
         Width = 570,
-        Height = 440,
+        Height = 520,
+        MinWidth = 480,
+        MinHeight = 400,
         WindowStartupLocation = WindowStartupLocation.CenterOwner,
-        Content = new StackPanel
-        {
-            Margin = new Thickness(24),
-            Spacing = 12,
-            Children = {
+        Content = DialogLayout.Create("GitHub connection", "Choose the repository and where stacks begin.", new Control[] {
                 new TextBlock { Text = "GitHub repository override" }, origin,
                 new TextBlock { Text = "Stack boundaries · one exact branch name per line" }, boundaries,
-                new TextBlock { Text = "PRs into these branches can start stacks; links do not cross them.", TextWrapping = Avalonia.Media.TextWrapping.Wrap }, clear, save }
-        }
+                new TextBlock { Text = "PRs into these branches can start stacks; links do not cross them.", TextWrapping = Avalonia.Media.TextWrapping.Wrap }, clear }, cancel, save)
     };
+    cancel.Click += (_, _) => window.Close();
     save.Click += (_, _) => AsyncHandler.Run(async () => { await Vm.SaveGitHubPreferencesAsync(new() { GitHubOverride = string.IsNullOrWhiteSpace(origin.Text) ? null : origin.Text.Trim(), BoundaryBranches = (boundaries.Text ?? "").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Distinct().ToList() }); window.Close(); }, message => AsyncHandler.Report(this, message));
     clear.Click += (_, _) => AsyncHandler.Run(async () => { await Vm.ClearGitHubCacheAsync(); }, message => AsyncHandler.Report(this, message));
     await window.ShowDialog(this);

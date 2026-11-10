@@ -14,6 +14,8 @@ public partial class CommitWindow : Window
         BranchLabel.Text = state?.Branch is { } branch ? "On " + branch : "HEAD is detached";
         ChangeList.ItemsSource = (state?.Entries ?? []).Select(entry => entry.Display).ToArray();
         CommitButton.IsEnabled = state is { Entries.Count: > 0 };
+        EmptyLabel.IsVisible = state is { Entries.Count: 0 };
+        StageAllToggle.IsEnabled = CommitButton.IsEnabled;
         MessageInput.Focus();
     }
     private void CommitClick(object? sender, RoutedEventArgs e)

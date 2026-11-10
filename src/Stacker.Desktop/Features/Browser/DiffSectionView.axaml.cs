@@ -14,6 +14,34 @@ public partial class DiffSectionView : UserControl
 {
     private ScrollViewer? _scroll;
     private bool _restoring;
+    private double _filesWidth = 220;
+    /// <summary>History already supplies a file navigator; omit the duplicate pane there.</summary>
+    public bool ShowFileNavigator
+    {
+        get => FilesToggle.IsVisible;
+        set
+        {
+            FilesToggle.IsVisible = value;
+            if (!value && FilePane.IsVisible) ToggleFilesClick(null, new RoutedEventArgs());
+        }
+    }
+    private void ToggleFilesClick(object? sender, RoutedEventArgs e)
+    {
+        var column = ContentGrid.ColumnDefinitions[0];
+        if (FilePane.IsVisible)
+        {
+            _filesWidth = column.ActualWidth;
+            FilePane.IsVisible = FileSplitter.IsVisible = false;
+            column.MinWidth = 0;
+            column.Width = new GridLength(0);
+        }
+        else
+        {
+            column.MinWidth = 200;
+            column.Width = new GridLength(_filesWidth);
+            FilePane.IsVisible = FileSplitter.IsVisible = true;
+        }
+    }
     private DiffSectionViewModel? _section;
     public DiffSectionView()
     {
@@ -25,7 +53,7 @@ public partial class DiffSectionView : UserControl
         ContentGrid.ColumnDefinitions[0].MaxWidth = 600;
         AttachedToVisualTree += (_, _) =>
         {
-            if (TopLevel.GetTopLevel(this) is MainWindow window && window.DataContext is MainViewModel vm)
+            if (ShowFileNavigator && TopLevel.GetTopLevel(this) is MainWindow window && window.DataContext is MainViewModel vm)
                 ContentGrid.ColumnDefinitions[0].Width = new(vm.Settings.FilesWidth);
         };
         Loaded += (_, _) =>
@@ -43,7 +71,7 @@ public partial class DiffSectionView : UserControl
         };
         ContentGrid.SizeChanged += (_, _) =>
         {
-            if (TopLevel.GetTopLevel(this) is MainWindow window && window.DataContext is MainViewModel vm && ContentGrid.ColumnDefinitions[0].ActualWidth >= 150)
+            if (ShowFileNavigator && FilePane.IsVisible && TopLevel.GetTopLevel(this) is MainWindow window && window.DataContext is MainViewModel vm && ContentGrid.ColumnDefinitions[0].ActualWidth >= 150)
                 vm.Settings.FilesWidth = ContentGrid.ColumnDefinitions[0].ActualWidth;
         };
     }
