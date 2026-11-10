@@ -16,12 +16,13 @@ public sealed class FileCommentsTests
         new("feature", "main", pr.BaseSha, pr.HeadSha, null,
         [new("before ü.png", "renamed ü.png", FileChangeKind.Renamed, null, null, "100644", "100644"),
          new("other.cs", "other.cs", FileChangeKind.Modified, 1, 0, "100644", "100644")]))
-        { IsPrSnapshot = snapshot, AssociatedPr = pr, GitHubContext = FakeGitHub.Context };
+    { IsPrSnapshot = snapshot, AssociatedPr = pr, GitHubContext = FakeGitHub.Context };
     private static ReviewViewModel View(FakeGitHub hub, ApplicationStore store, GitFixture f, DiffSectionViewModel section, bool demo = false) =>
         new(hub, hub, store, f.Reader, FakeGitHub.Context, section.AssociatedPr!, section, demo);
 
     // Scenario: File and PR posts use distinct endpoints and file has no line anchor.
-    [Fact] public async Task File_and_PR_posts_use_distinct_endpoints_and_file_has_no_line_anchor()
+    [Fact]
+    public async Task File_and_PR_posts_use_distinct_endpoints_and_file_has_no_line_anchor()
     {
         var runner = new ScriptedRunner(_ => new(0, "{}", "")); var cli = new GitHubCli(runner, new(), new()); var pr = DiscoveryTests.Pr(42, "main", "feature");
         await cli.FileCommentAsync(FakeGitHub.Context, pr, "renamed ü.png", "File comment\nwith text");
@@ -34,7 +35,8 @@ public sealed class FileCommentsTests
         Assert.Equal("PR comment", JsonDocument.Parse(runner.Calls[1].StandardInput!).RootElement.GetProperty("body").GetString());
     }
     // Scenario: File validation accepts binary and new rename path but rejects old or absent path.
-    [Fact] public async Task File_validation_accepts_binary_and_new_rename_path_but_rejects_old_or_absent_path()
+    [Fact]
+    public async Task File_validation_accepts_binary_and_new_rename_path_but_rejects_old_or_absent_path()
     {
         var runner = new ScriptedRunner(_ => new(0, """[[{"filename":"renamed ü.png","previous_filename":"before ü.png","status":"renamed"}]]""", ""));
         var cli = new GitHubCli(runner, new(), new()); var pr = DiscoveryTests.Pr(42, "main", "feature");
@@ -43,7 +45,8 @@ public sealed class FileCommentsTests
         Assert.Contains("--paginate", runner.Calls[0].Arguments);
     }
     // Scenario: Discussion preserves file subject path replies and outdated line identity.
-    [Fact] public async Task Discussion_preserves_file_subject_path_replies_and_outdated_line_identity()
+    [Fact]
+    public async Task Discussion_preserves_file_subject_path_replies_and_outdated_line_identity()
     {
         var page = 0;
         object Comment(int id) => new { id = "node" + id, databaseId = id, body = "Body " + id, url = "https://example.invalid", createdAt = "2026-09-24T00:00:00Z", author = new { login = "alice" }, commit = new { oid = new string('b', 40) } };
@@ -59,7 +62,8 @@ public sealed class FileCommentsTests
         var outdated = result.Threads[1]; Assert.False(outdated.IsFileLevel); Assert.True(outdated.IsOutdated); Assert.Contains("old ü.cs", outdated.Label); Assert.Null(outdated.Anchor);
         Assert.Contains("subjectType", runner.Calls[2].StandardInput!); Assert.Contains("next", runner.Calls[3].StandardInput!);
     }
-    [AvaloniaFact] public async Task File_drafts_survive_file_switch_and_restart_and_publish_separately_from_PR()
+    [AvaloniaFact]
+    public async Task File_drafts_survive_file_switch_and_restart_and_publish_separately_from_PR()
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub(); var store = new ApplicationStore(f.Root); using var section = Section(f, hub.Current);
         var vm = View(hub, store, f, section); await vm.InitializeAsync(); vm.Composer = "PR draft"; vm.FileComposer = "First file";
@@ -69,7 +73,8 @@ public sealed class FileCommentsTests
         reopened.SelectedReviewFile = "other.cs"; Assert.Equal("Second file", reopened.FileComposer); Assert.Empty(reopened.FileThreads);
         await reopened.PostCommentCommand.ExecuteAsync(null); Assert.Equal(2, hub.Writes); Assert.Equal("Second file", reopened.FileComposer); Assert.Single(reopened.Comments); await reopened.FlushAsync();
     }
-    [AvaloniaFact] public async Task File_send_rechecks_version_membership_and_preserves_text_on_failure()
+    [AvaloniaFact]
+    public async Task File_send_rechecks_version_membership_and_preserves_text_on_failure()
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub(); var store = new ApplicationStore(f.Root); using var section = Section(f, hub.Current);
         var vm = View(hub, store, f, section); await vm.InitializeAsync(); vm.FileComposer = "Keep file draft";
@@ -77,7 +82,8 @@ public sealed class FileCommentsTests
         hub.Current = section.AssociatedPr!; hub.RejectFile = true; await vm.PostFileCommentCommand.ExecuteAsync(null); Assert.Equal(0, hub.Writes); Assert.Contains("disappeared", vm.Message); Assert.Equal("Keep file draft", vm.FileComposer); await vm.FlushAsync();
         var demo = View(hub, store, f, section, true); await demo.InitializeAsync(); await demo.PostFileCommentCommand.ExecuteAsync(null); Assert.Equal(0, hub.Writes); Assert.False(demo.CanPostFile); await demo.FlushAsync();
     }
-    [AvaloniaFact] public async Task Uncertain_file_send_reconciles_after_restart_without_duplicate_or_clearing_other_file()
+    [AvaloniaFact]
+    public async Task Uncertain_file_send_reconciles_after_restart_without_duplicate_or_clearing_other_file()
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub { FailAfterSend = true }; var store = new ApplicationStore(f.Root); using var section = Section(f, hub.Current);
         var vm = View(hub, store, f, section); await vm.InitializeAsync(); vm.FileComposer = "Only once"; await vm.PostFileCommentCommand.ExecuteAsync(null);
@@ -86,7 +92,8 @@ public sealed class FileCommentsTests
         var reopened = View(hub, store, f, section); await reopened.InitializeAsync(); Assert.True(reopened.CanPublish); Assert.Equal("", reopened.FileComposer); Assert.Equal(1, hub.Writes);
         reopened.SelectedReviewFile = "other.cs"; Assert.Equal("Keep other draft", reopened.FileComposer); await reopened.FlushAsync();
     }
-    [AvaloniaFact] public async Task PR_discussion_can_post_file_comments_without_downloading_git_objects()
+    [AvaloniaFact]
+    public async Task PR_discussion_can_post_file_comments_without_downloading_git_objects()
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub(); var store = new ApplicationStore(f.Root);
         using var section = new DiffSectionViewModel(f.Reader, f.Root, new("feature", "main", hub.Current.BaseSha, hub.Current.HeadSha, null, [])) { AssociatedPr = hub.Current };
@@ -94,7 +101,8 @@ public sealed class FileCommentsTests
         vm.FileComposer = "Discuss file without a local checkout"; await vm.PostFileCommentCommand.ExecuteAsync(null);
         Assert.Equal(1, hub.Writes); Assert.Single(vm.FileThreads); await vm.FlushAsync();
     }
-    [AvaloniaFact] public async Task Review_window_displays_file_and_PR_tabs_without_line_selection()
+    [AvaloniaFact]
+    public async Task Review_window_displays_file_and_PR_tabs_without_line_selection()
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub(); using var section = Section(f, hub.Current);
         var vm = View(hub, new ApplicationStore(f.Root), f, section, true); await vm.InitializeAsync();

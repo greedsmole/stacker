@@ -7,9 +7,16 @@ using Stacker.Core;
 using Stacker.Core.Framework;
 namespace Stacker.Desktop.ViewModels;
 
+/// <summary>Loads, persists and flushes one review editor's draft state.</summary>
+/// <remarks>Draft writes are serialized through <see cref="CoalescingWriter{T}"/> so rapid changes cannot race or leave an
+/// older snapshot after a newer one.</remarks>
 internal sealed class ReviewDraftController(ReviewViewModel owner)
 {
+    /// <summary>Pending serialized draft writer, created after the first change.</summary>
     private CoalescingWriter<ReviewDraft>? _buffer;
+    /// <summary>Loads the draft, restores buffers and refreshes reviewable files.</summary>
+    /// <param name="selection">Optional line selection restored after loading.</param>
+    /// <param name="ct">Cancellation requested by the owning session.</param>
     public async Task InitializeAsync(IEnumerable<RenderedDiffLine>? selection = null, CancellationToken ct = default)
     {
         owner._loading = true;
@@ -36,6 +43,7 @@ internal sealed class ReviewDraftController(ReviewViewModel owner)
         finally { owner._loading = false; owner.NotifyPublicationState(); QueueSave(); }
     }
 
+    /// <summary>Queues an immutable draft copy unless loading is still in progress.</summary>
     public void QueueSave()
     {
         if (owner._loading || !owner._draftLoaded) return;
@@ -44,6 +52,8 @@ internal sealed class ReviewDraftController(ReviewViewModel owner)
         owner._saveQueue = _buffer.Queue(copy);
     }
 
+    /// <summary>Waits for the previous write and persists the next snapshot.</summary>
+    /// <param name="previous">Preceding save task.</param><param name="copy">Detached draft snapshot.</param>
     public async Task SaveOrderedAsync(Task previous, ReviewDraft copy)
     {
         await previous;
@@ -55,6 +65,7 @@ internal sealed class ReviewDraftController(ReviewViewModel owner)
         }
     }
 
+    /// <summary>Waits for queued writes and throws when the last write failed.</summary>
     public async Task FlushAsync() { if (_buffer is not null) await _buffer.FlushAsync(); await owner._saveQueue; if (owner._saveError is not null) throw new StackerException(owner._saveError); }
 
 }

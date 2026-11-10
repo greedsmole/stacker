@@ -9,6 +9,7 @@ using Avalonia.Controls.Primitives;
 using Stacker.Core;
 using Stacker.Desktop.ViewModels;
 namespace Stacker.Desktop;
+
 public partial class DiffSectionView : UserControl
 {
     private ScrollViewer? _scroll;
@@ -110,13 +111,15 @@ public partial class DiffSectionView : UserControl
         _extendRange = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
     }
     private void DiffKeyDown(object? sender, KeyEventArgs e)
-=>AsyncHandler.Run(async () => {         if (e.Key != Key.C || (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0) return;
-        if (DiffLines.GetVisualDescendants().OfType<SyntaxText>().Any(t => !string.IsNullOrEmpty(t.SelectedText))) return;
-        var lines = DiffLines.SelectedItems?.OfType<RenderedDiffLine>().Where(l => l.IsCode).ToHashSet();
-        if (DataContext is not DiffSectionViewModel section || lines is null || lines.Count == 0) return;
-        try { if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard) { await clipboard.SetTextAsync(string.Join("\n", section.Lines.Where(lines.Contains).Select(l => l.Text))); e.Handled = true; } }
-        catch (Exception ex) { section.Message = "Cannot copy code: " + ex.Message; }
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (e.Key != Key.C || (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0) return;
+    if (DiffLines.GetVisualDescendants().OfType<SyntaxText>().Any(t => !string.IsNullOrEmpty(t.SelectedText))) return;
+    var lines = DiffLines.SelectedItems?.OfType<RenderedDiffLine>().Where(l => l.IsCode).ToHashSet();
+    if (DataContext is not DiffSectionViewModel section || lines is null || lines.Count == 0) return;
+    try { if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard) { await clipboard.SetTextAsync(string.Join("\n", section.Lines.Where(lines.Contains).Select(l => l.Text))); e.Handled = true; } }
+    catch (Exception ex) { section.Message = "Cannot copy code: " + ex.Message; }
+}, message => AsyncHandler.Report(this, message));
     public void ScrollTo(ReviewAnchor? anchor)
     {
         if (anchor is null || DataContext is not DiffSectionViewModel section) return;
@@ -130,39 +133,47 @@ public partial class DiffSectionView : UserControl
         if (line is not null) DiffLines.ScrollIntoView(line);
     }
     private void ReviewClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (DataContext is not DiffSectionViewModel section || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
-        if (!section.IsPrSnapshot) { await main.OpenPrChangesAsync(section); return; }
-        await main.ShowReviewAsync(section);
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (DataContext is not DiffSectionViewModel section || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
+    if (!section.IsPrSnapshot) { await main.OpenPrChangesAsync(section); return; }
+    await main.ShowReviewAsync(section);
+}, message => AsyncHandler.Report(this, message));
     private void FileCommentClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => { if (DataContext is DiffSectionViewModel section && TopLevel.GetTopLevel(this)?.DataContext is MainViewModel main) await main.ShowReviewAsync(section, 1);  }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () => { if (DataContext is DiffSectionViewModel section && TopLevel.GetTopLevel(this)?.DataContext is MainViewModel main) await main.ShowReviewAsync(section, 1); }, message => AsyncHandler.Report(this, message));
     private void WrapCodeClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (sender is not ToggleButton toggle || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
-        await main.SetWrapCodeAsync(toggle.IsChecked == true);
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (sender is not ToggleButton toggle || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
+    await main.SetWrapCodeAsync(toggle.IsChecked == true);
+}, message => AsyncHandler.Report(this, message));
     private void CommentSelectedClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (DataContext is not DiffSectionViewModel section || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
-        var selected = DiffLines.SelectedItems?.OfType<RenderedDiffLine>().Where(l => l.IsCode).ToHashSet() ?? [];
-        if (selected.Count == 0) { section.Message = "Select adjacent code rows with Shift-click, then comment on the selection."; return; }
-        var session = await main.EnsureReviewAsync(section);
-        if (session is null || session.IsBusy) return;
-        session.SetSelection(section.Lines.Where(selected.Contains));
-        if (!session.HasSelection) { section.Message = session.Message; return; }
-        foreach (var row in section.Lines) row.Editor = null;
-        var last = section.Lines.Last(selected.Contains); last.Editor = session; main.ActiveReview = session;
-        DiffLines.ScrollIntoView(last);
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (DataContext is not DiffSectionViewModel section || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
+    var selected = DiffLines.SelectedItems?.OfType<RenderedDiffLine>().Where(l => l.IsCode).ToHashSet() ?? [];
+    if (selected.Count == 0) { section.Message = "Select adjacent code rows with Shift-click, then comment on the selection."; return; }
+    var session = await main.EnsureReviewAsync(section);
+    if (session is null || session.IsBusy) return;
+    session.SetSelection(section.Lines.Where(selected.Contains));
+    if (!session.HasSelection) { section.Message = session.Message; return; }
+    foreach (var row in section.Lines) row.Editor = null;
+    var last = section.Lines.Last(selected.Contains); last.Editor = session; main.ActiveReview = session;
+    DiffLines.ScrollIntoView(last);
+}, message => AsyncHandler.Report(this, message));
     private void AddLineClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (sender is not Control { DataContext: RenderedDiffLine line }) return;
-        var selected = ReferenceEquals(_commentLine, line) ? _commentSelection
-            : DiffLines.SelectedItems?.OfType<RenderedDiffLine>().Where(l => l.IsCode).ToArray();
-        var range = _extendRange;
-        _commentLine = null; _commentSelection = null; _extendRange = false;
-        // A plus inside the selected range comments on that range. A plus outside it starts a new single-line comment.
-        await BeginLineAsync(line, range, selectedRows: selected is { Length: > 1 } && selected.Contains(line) ? selected : null);
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (sender is not Control { DataContext: RenderedDiffLine line }) return;
+    var selected = ReferenceEquals(_commentLine, line) ? _commentSelection
+        : DiffLines.SelectedItems?.OfType<RenderedDiffLine>().Where(l => l.IsCode).ToArray();
+    var range = _extendRange;
+    _commentLine = null; _commentSelection = null; _extendRange = false;
+    // A plus inside the selected range comments on that range. A plus outside it starts a new single-line comment.
+    await BeginLineAsync(line, range, selectedRows: selected is { Length: > 1 } && selected.Contains(line) ? selected : null);
+}, message => AsyncHandler.Report(this, message));
     private void LineNumberPressed(object? sender, PointerPressedEventArgs e)
-=>AsyncHandler.Run(async () => { if (sender is Control { DataContext: RenderedDiffLine line }) { e.Handled = true; await BeginLineAsync(line, e.KeyModifiers.HasFlag(KeyModifiers.Shift), Grid.GetColumn((Control)sender) == 1 ? "LEFT" : "RIGHT"); }  }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () => { if (sender is Control { DataContext: RenderedDiffLine line }) { e.Handled = true; await BeginLineAsync(line, e.KeyModifiers.HasFlag(KeyModifiers.Shift), Grid.GetColumn((Control)sender) == 1 ? "LEFT" : "RIGHT"); } }, message => AsyncHandler.Report(this, message));
     private async Task BeginLineAsync(RenderedDiffLine line, bool range, string? side = null, RenderedDiffLine[]? selectedRows = null)
     {
         if (DataContext is not DiffSectionViewModel section || !line.IsCode || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
@@ -184,15 +195,21 @@ public partial class DiffSectionView : UserControl
     private void CloseInlineClick(object? sender, RoutedEventArgs e)
     { if (DataContext is DiffSectionViewModel section) foreach (var line in section.Lines) line.Editor = null; }
     private void EditInlineDraftClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (sender is not Control { DataContext: DraftComment draft } || DataContext is not DiffSectionViewModel section || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
-        await main.ShowReviewAsync(section); main.ActiveReview?.EditDraftCommentCommand.Execute(draft);
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (sender is not Control { DataContext: DraftComment draft } || DataContext is not DiffSectionViewModel section || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
+    await main.ShowReviewAsync(section); main.ActiveReview?.EditDraftCommentCommand.Execute(draft);
+}, message => AsyncHandler.Report(this, message));
     private void RetryClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (DataContext is DiffSectionViewModel vm) await vm.LoadAsync(vm.SelectedFile);
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (DataContext is DiffSectionViewModel vm) await vm.LoadAsync(vm.SelectedFile);
+}, message => AsyncHandler.Report(this, message));
     private void CopyClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (DataContext is not DiffSectionViewModel vm) return;
-        try { if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard) await clipboard.SetTextAsync(vm.Patch); }
-        catch (Exception ex) { vm.Message = "Cannot copy patch: " + ex.Message; }
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (DataContext is not DiffSectionViewModel vm) return;
+    try { if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard) await clipboard.SetTextAsync(vm.Patch); }
+    catch (Exception ex) { vm.Message = "Cannot copy patch: " + ex.Message; }
+}, message => AsyncHandler.Report(this, message));
 }

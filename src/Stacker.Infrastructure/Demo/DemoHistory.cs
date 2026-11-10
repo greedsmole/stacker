@@ -8,7 +8,7 @@ public sealed partial class DemoRepositoryGenerator
         var pr = snapshot.PullRequests.Single(p => p.Number == 102);
         var previousHead = await git(["rev-parse", "auth/api^"]);
         var canonicalRoot = await git(["rev-parse", "--show-toplevel"]);
-        var repository=identities is null?new RepositoryIdentity(new(StableIdentity.For(await git(["rev-parse","--path-format=absolute","--git-common-dir"]))[..32]),new(StableIdentity.For(canonicalRoot)[..32]),canonicalRoot,await git(["rev-parse","--path-format=absolute","--git-common-dir"])):(await identities.RegisterAsync(canonicalRoot,ct)).OrThrow();
+        var repository = identities is null ? new RepositoryIdentity(new(StableIdentity.For(await git(["rev-parse", "--path-format=absolute", "--git-common-dir"]))[..32]), new(StableIdentity.For(canonicalRoot)[..32]), canonicalRoot, await git(["rev-parse", "--path-format=absolute", "--git-common-dir"])) : (await identities.RegisterAsync(canonicalRoot, ct)).OrThrow();
         foreach (var scope in new[] { "local:" + canonicalRoot, snapshot.Context.Identity })
         {
             var remote = scope == snapshot.Context.Identity;

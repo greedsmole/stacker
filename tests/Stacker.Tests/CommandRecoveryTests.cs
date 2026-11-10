@@ -33,7 +33,8 @@ public sealed class CommandRecoveryTests
         }
     }
 
-    [Fact] public async Task A_nonreversible_partial_failure_reports_completed_effects_without_claiming_rollback()
+    [Fact]
+    public async Task A_nonreversible_partial_failure_reports_completed_effects_without_claiming_rollback()
     {
         await using var f = new GitFixture(); var journal = f.CreateJournal();
         var result = await new CommandRunner(journal).RunAsync(f.Root, new Partial());
@@ -43,7 +44,9 @@ public sealed class CommandRecoveryTests
         Assert.Equal(JournalPhase.NeedsUser, journal.Recent(f.Root).OrThrow()[0].Phase);
     }
 
-    [Theory] [InlineData(false)] [InlineData(true)]
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task Returned_failures_and_cancellation_both_compensate_with_a_live_cleanup_token(bool cancel)
     {
         await using var f = new GitFixture(); var journal = f.CreateJournal();

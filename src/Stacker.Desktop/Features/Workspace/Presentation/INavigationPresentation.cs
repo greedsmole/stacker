@@ -1,5 +1,6 @@
 // Generated presentation boundary; application state lives in WorkspaceRuntime/WorkspaceSession.
 namespace Stacker.Desktop.ViewModels;
+
 internal interface INavigationPresentation
 {
     global::Stacker.Desktop.ViewModels.ReviewViewModel? ActiveReview { get; set; }
@@ -7,14 +8,14 @@ internal interface INavigationPresentation
     global::System.Boolean CanEdit { get; set; }
     global::System.Boolean CanRestackActiveStack { get; }
     global::System.Boolean CanReview { get; }
-    global::System.Threading.Tasks.Task CaptureHistorySectionAsync(global::Stacker.Desktop.ViewModels.DiffSectionViewModel @section,global::System.Threading.CancellationToken @ct);
+    global::System.Threading.Tasks.Task CaptureHistorySectionAsync(global::Stacker.Desktop.ViewModels.DiffSectionViewModel @section, global::System.Threading.CancellationToken @ct);
     global::System.Threading.Tasks.Task ClearReviewSessionsAsync();
     void CommandStarting();
     global::System.String ComparisonDetail { get; }
     global::System.String ComparisonTitle { get; set; }
     void DisposeReviewSessions();
     global::System.String EmptyMessage { get; set; }
-    global::System.Threading.Tasks.Task<global::Stacker.Desktop.ViewModels.ReviewViewModel?> EnsureReviewAsync(global::Stacker.Desktop.ViewModels.DiffSectionViewModel @section,global::System.Threading.CancellationToken @ct = default);
+    global::System.Threading.Tasks.Task<global::Stacker.Desktop.ViewModels.ReviewViewModel?> EnsureReviewAsync(global::Stacker.Desktop.ViewModels.DiffSectionViewModel @section, global::System.Threading.CancellationToken @ct = default);
     global::System.String Error { get; set; }
     global::Stacker.Core.PullRequest? FindLocalPr(global::System.String @branch);
     global::System.String GitHubStatus { get; set; }
@@ -33,7 +34,7 @@ internal interface INavigationPresentation
     global::Stacker.Core.DiffMode Mode { get; set; }
     void Notify(global::System.String @name);
     global::System.Collections.ObjectModel.ObservableCollection<global::Stacker.Desktop.ViewModels.StackGroupViewModel> OtherGroups { get; }
-    global::System.Threading.Tasks.Task<global::Stacker.Core.RepositorySnapshot> PrepareRemoteAsync(global::Stacker.Desktop.ViewModels.StackGroupViewModel @group,global::Stacker.Core.DiffMode @mode,global::System.Int32[] @positions,global::System.Threading.CancellationToken @ct);
+    global::System.Threading.Tasks.Task<global::Stacker.Core.RepositorySnapshot> PrepareRemoteAsync(global::Stacker.Desktop.ViewModels.StackGroupViewModel @group, global::Stacker.Core.DiffMode @mode, global::System.Int32[] @positions, global::System.Threading.CancellationToken @ct);
     global::System.Collections.ObjectModel.ObservableCollection<global::System.String> RecentRepositories { get; }
     global::System.Threading.Tasks.Task RefreshGitHubAsync();
     global::System.Threading.Tasks.Task RefreshSyncAvailabilityAsync(global::System.Threading.CancellationToken @ct = default);

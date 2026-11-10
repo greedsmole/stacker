@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Stacker.Desktop.ViewModels;
 namespace Stacker.Desktop;
+
 public partial class MainWindow : Window
 {
     private bool _ready;
@@ -24,26 +25,28 @@ public partial class MainWindow : Window
         Deactivated += (_, _) => { if (_ready) Vm.SetWindowActive(false); };
         SizeChanged += (_, _) => Grid.SetColumn(ReviewHost, Bounds.Width < 1320 ? 2 : 3);
         Opened += (_, _) =>
-AsyncHandler.Run(async () => {             await Vm.InitializeAsync();
-            Width = Vm.Settings.WindowWidth; Height = Vm.Settings.WindowHeight;
-            Workspace.ColumnDefinitions[0].Width = new(Vm.Settings.NavigationWidth);
-            ApplyTheme();
-            Vm.Sections.CollectionChanged += (_, _) => ResizeSections();
-            SectionScroll.SizeChanged += (_, _) => ResizeSections();
-            Workspace.ColumnDefinitions[0].MinWidth = 200;
-            Workspace.ColumnDefinitions[0].MaxWidth = 500;
-            _ready = true;
-            var args = Environment.GetCommandLineArgs();
-            if (args.Contains("--demo")) await Vm.OpenDemoAsync();
-            else if (args.Length > 1 && !args[1].StartsWith('-')) await Vm.OpenRepositoryAsync(args[1]);
-            else if (Vm.Settings.LastRepository is { } last) await Vm.OpenRepositoryAsync(last);
-            Vm.SetWindowActive(IsActive);
- }, message => AsyncHandler.Report(this, message));
+AsyncHandler.Run(async () =>
+{
+    await Vm.InitializeAsync();
+    Width = Vm.Settings.WindowWidth; Height = Vm.Settings.WindowHeight;
+    Workspace.ColumnDefinitions[0].Width = new(Vm.Settings.NavigationWidth);
+    ApplyTheme();
+    Vm.Sections.CollectionChanged += (_, _) => ResizeSections();
+    SectionScroll.SizeChanged += (_, _) => ResizeSections();
+    Workspace.ColumnDefinitions[0].MinWidth = 200;
+    Workspace.ColumnDefinitions[0].MaxWidth = 500;
+    _ready = true;
+    var args = Environment.GetCommandLineArgs();
+    if (args.Contains("--demo")) await Vm.OpenDemoAsync();
+    else if (args.Length > 1 && !args[1].StartsWith('-')) await Vm.OpenRepositoryAsync(args[1]);
+    else if (Vm.Settings.LastRepository is { } last) await Vm.OpenRepositoryAsync(last);
+    Vm.SetWindowActive(IsActive);
+}, message => AsyncHandler.Report(this, message));
         Closing += (_, e) =>
         {
-            if(_closing)return;
-            e.Cancel=true;
-            AsyncHandler.Run(HandleCloseAsync,message=>AsyncHandler.Report(this,message));
+            if (_closing) return;
+            e.Cancel = true;
+            AsyncHandler.Run(HandleCloseAsync, message => AsyncHandler.Report(this, message));
         };
     }
 
@@ -66,21 +69,25 @@ AsyncHandler.Run(async () => {             await Vm.InitializeAsync();
     { if (e.Key == Key.Enter) { e.Handled = true; _ = Vm.SearchAsync(); } else if (e.Key == Key.Escape) Vm.CloseSearch(); }
     private void CloseSearchClick(object? sender, RoutedEventArgs e) => Vm.CloseSearch();
     private void SearchResultSelected(object? sender, SelectionChangedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (sender is not ListBox { SelectedItem: ChangeSearchHit hit } list) return;
-        list.SelectedItem = null;
-        await Vm.OpenSearchHitAsync(hit);
-        var view = SectionScroll.GetVisualDescendants().OfType<DiffSectionView>().FirstOrDefault(v => ReferenceEquals(v.DataContext, hit.Section));
-        if (view is not null) { view.BringIntoView(); if (hit.Line is not null) view.ScrollTo(hit.Line); }
-        Vm.CloseSearch();
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (sender is not ListBox { SelectedItem: ChangeSearchHit hit } list) return;
+    list.SelectedItem = null;
+    await Vm.OpenSearchHitAsync(hit);
+    var view = SectionScroll.GetVisualDescendants().OfType<DiffSectionView>().FirstOrDefault(v => ReferenceEquals(v.DataContext, hit.Section));
+    if (view is not null) { view.BringIntoView(); if (hit.Line is not null) view.ScrollTo(hit.Line); }
+    Vm.CloseSearch();
+}, message => AsyncHandler.Report(this, message));
     private void CopyGitLogClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         try
-        {
-            if (Clipboard is { } clipboard)
-                await clipboard.SetTextAsync(string.Join("\n\n", Vm.GitLogEntries.Select(entry => entry.Summary + "\n" + entry.WorkingDirectory + "\n" + entry.Detail)));
-        }
-        catch (Exception ex) { Vm.Error = "Cannot copy Git logs: " + ex.Message; }
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    try
+    {
+        if (Clipboard is { } clipboard)
+            await clipboard.SetTextAsync(string.Join("\n\n", Vm.GitLogEntries.Select(entry => entry.Summary + "\n" + entry.WorkingDirectory + "\n" + entry.Detail)));
+    }
+    catch (Exception ex) { Vm.Error = "Cannot copy Git logs: " + ex.Message; }
+}, message => AsyncHandler.Report(this, message));
     /// <summary>Ends popup interaction before starting a repository action on the owning main window.</summary>
     private async Task RunRepositoryActionAsync(Func<Task> action)
     {
@@ -107,60 +114,89 @@ AsyncHandler.Run(async () => {             await Vm.InitializeAsync();
         try { return folders.Count > 0 ? folders[0].TryGetLocalPath() : null; }
         finally { foreach (var folder in folders) folder.Dispose(); }
     }
-    private void OpenFolderClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await RunRepositoryActionAsync(async () =>
+    private void OpenFolderClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () =>
+    {
+        await RunRepositoryActionAsync(async () =>
     {
         var path = await PickRepositoryFolderAsync();
         if (path is not null && !_closing && IsVisible) await Vm.OpenRepositoryAsync(path);
-    }); }, message => AsyncHandler.Report(this, message));
-    private void OpenDemoClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await RunRepositoryActionAsync(Vm.OpenDemoAsync); }, message => AsyncHandler.Report(this, message));
+    });
+    }, message => AsyncHandler.Report(this, message));
+    private void OpenDemoClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await RunRepositoryActionAsync(Vm.OpenDemoAsync); }, message => AsyncHandler.Report(this, message));
     private void PathKeyDown(object? sender, KeyEventArgs e)
-=>AsyncHandler.Run(async () => {         if (e.Key != Key.Enter) return;
-        e.Handled = true;
-        var path = Vm.RepositoryPath;
-        await RunRepositoryActionAsync(() => Vm.OpenRepositoryAsync(path));
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (e.Key != Key.Enter) return;
+    e.Handled = true;
+    var path = Vm.RepositoryPath;
+    await RunRepositoryActionAsync(() => Vm.OpenRepositoryAsync(path));
+}, message => AsyncHandler.Report(this, message));
     private void RecentChanged(object? sender, SelectionChangedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (_ready && RecentBox.SelectedItem is string path)
-        {
-            RecentBox.SelectedItem = null;
-            await RunRepositoryActionAsync(() => Vm.OpenRepositoryAsync(path));
-        }
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (_ready && RecentBox.SelectedItem is string path)
+    {
+        RecentBox.SelectedItem = null;
+        await RunRepositoryActionAsync(() => Vm.OpenRepositoryAsync(path));
+    }
+}, message => AsyncHandler.Report(this, message));
     private void StackClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => { if (sender is Control { DataContext: StackGroupViewModel group })
-        { if (group.IsSinglePr) await Vm.SelectLayerAsync(group.Layers[0], false); else await Vm.SelectGroupAsync(group); }  }, message => AsyncHandler.Report(this, message));
-    private void LayerClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { if (sender is Control { DataContext: LayerViewModel layer }) await Vm.SelectLayerAsync(layer, false);  }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (sender is Control { DataContext: StackGroupViewModel group })
+    { if (group.IsSinglePr) await Vm.SelectLayerAsync(group.Layers[0], false); else await Vm.SelectGroupAsync(group); }
+}, message => AsyncHandler.Report(this, message));
+    private void LayerClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { if (sender is Control { DataContext: LayerViewModel layer }) await Vm.SelectLayerAsync(layer, false); }, message => AsyncHandler.Report(this, message));
     private void LayerPointerPressed(object? sender, PointerPressedEventArgs e)
-=>AsyncHandler.Run(async () => {         if ((e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0 && sender is Control { DataContext: LayerViewModel layer }) { e.Handled = true; await Vm.SelectLayerAsync(layer, true); }
- }, message => AsyncHandler.Report(this, message));
-    private void LayerChecked(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { if (sender is Control { DataContext: LayerViewModel layer }) await Vm.SelectLayerAsync(layer, true);  }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if ((e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0 && sender is Control { DataContext: LayerViewModel layer }) { e.Handled = true; await Vm.SelectLayerAsync(layer, true); }
+}, message => AsyncHandler.Report(this, message));
+    private void LayerChecked(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { if (sender is Control { DataContext: LayerViewModel layer }) await Vm.SelectLayerAsync(layer, true); }, message => AsyncHandler.Report(this, message));
     private void ThisLayerClick(object? sender, RoutedEventArgs e) => Vm.Mode = Stacker.Core.DiffMode.Layer;
     private void ThroughLayerClick(object? sender, RoutedEventArgs e) => Vm.Mode = Stacker.Core.DiffMode.Cumulative;
-    private void SaveAsLocalClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await Vm.SaveRemoteAsLocalAsync(); }, message => AsyncHandler.Report(this, message));
+    private void SaveAsLocalClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await Vm.SaveRemoteAsLocalAsync(); }, message => AsyncHandler.Report(this, message));
     private void HelpClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         var text = "For main → A → B → C:\n\nEntire stack: main → C. Click Overview inside a stack.\n\nThis layer: A → B. Click layer 2.\n\nThrough this layer: main → B. Includes layers 1 and 2. At layer 3 it equals Entire stack.\n\nSelected layers: check 1 and 3. Two separate comparisons: main → A and B → C. Layer 2 is not folded into layer 3.\n\nComparisons start from the common ancestor. Diverged branches show a warning.\n\nTry Open demo: Authorization changes the same file across three layers; Payments is independent. Shared foundation demonstrates branching PRs. Service branches demonstrate discovery boundaries.\n\nStack titles restore your last view. GitHub updates quietly every minute while this window is active. New code waits for Update changes; returning to the window does not reload it.";
-        await new Window { Title = "How comparisons work", Width = 590, Height = 590, WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = new ScrollViewer { Content = new SelectableTextBlock { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new Thickness(24) } } }.ShowDialog(this);
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    var text = "For main → A → B → C:\n\nEntire stack: main → C. Click Overview inside a stack.\n\nThis layer: A → B. Click layer 2.\n\nThrough this layer: main → B. Includes layers 1 and 2. At layer 3 it equals Entire stack.\n\nSelected layers: check 1 and 3. Two separate comparisons: main → A and B → C. Layer 2 is not folded into layer 3.\n\nComparisons start from the common ancestor. Diverged branches show a warning.\n\nTry Open demo: Authorization changes the same file across three layers; Payments is independent. Shared foundation demonstrates branching PRs. Service branches demonstrate discovery boundaries.\n\nStack titles restore your last view. GitHub updates quietly every minute while this window is active. New code waits for Update changes; returning to the window does not reload it.";
+    await new Window { Title = "How comparisons work", Width = 590, Height = 590, WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = new ScrollViewer { Content = new SelectableTextBlock { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new Thickness(24) } } }.ShowDialog(this);
+}, message => AsyncHandler.Report(this, message));
     private void GitHubSettingsClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (Vm.Repository is null) return;
-        var origin = new TextBox { Text = Vm.GitHubPreferences.GitHubOverride, Watermark = "Auto-detect origin, or host/owner/repo" };
-        var boundaries = new TextBox { Text = string.Join("\n", Vm.GitHubPreferences.BoundaryBranches ?? []), AcceptsReturn = true, MinHeight = 130 };
-        var save = new Button { Content = "Save and refresh", HorizontalAlignment = HorizontalAlignment.Right };
-        var clear = new Button { Content = "Clear PR retention references" };
-        var window = new Window { Title = "GitHub settings", Width = 570, Height = 440, WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = new StackPanel { Margin = new Thickness(24), Spacing = 12, Children = {
+=> AsyncHandler.Run(async () =>
+{
+    if (Vm.Repository is null) return;
+    var origin = new TextBox { Text = Vm.GitHubPreferences.GitHubOverride, Watermark = "Auto-detect origin, or host/owner/repo" };
+    var boundaries = new TextBox { Text = string.Join("\n", Vm.GitHubPreferences.BoundaryBranches ?? []), AcceptsReturn = true, MinHeight = 130 };
+    var save = new Button { Content = "Save and refresh", HorizontalAlignment = HorizontalAlignment.Right };
+    var clear = new Button { Content = "Clear PR retention references" };
+    var window = new Window
+    {
+        Title = "GitHub settings",
+        Width = 570,
+        Height = 440,
+        WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        Content = new StackPanel
+        {
+            Margin = new Thickness(24),
+            Spacing = 12,
+            Children = {
                 new TextBlock { Text = "GitHub repository override" }, origin,
                 new TextBlock { Text = "Stack boundaries · one exact branch name per line" }, boundaries,
-                new TextBlock { Text = "PRs into these branches can start stacks; links do not cross them.", TextWrapping = Avalonia.Media.TextWrapping.Wrap }, clear, save } } };
-        save.Click += (_, _) => AsyncHandler.Run(async () => { await Vm.SaveGitHubPreferencesAsync(new() { GitHubOverride = string.IsNullOrWhiteSpace(origin.Text) ? null : origin.Text.Trim(), BoundaryBranches = (boundaries.Text ?? "").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Distinct().ToList() }); window.Close();  }, message => AsyncHandler.Report(this, message));
-        clear.Click += (_, _) => AsyncHandler.Run(async () => { await Vm.ClearGitHubCacheAsync(); }, message => AsyncHandler.Report(this, message));
-        await window.ShowDialog(this);
- }, message => AsyncHandler.Report(this, message));
+                new TextBlock { Text = "PRs into these branches can start stacks; links do not cross them.", TextWrapping = Avalonia.Media.TextWrapping.Wrap }, clear, save }
+        }
+    };
+    save.Click += (_, _) => AsyncHandler.Run(async () => { await Vm.SaveGitHubPreferencesAsync(new() { GitHubOverride = string.IsNullOrWhiteSpace(origin.Text) ? null : origin.Text.Trim(), BoundaryBranches = (boundaries.Text ?? "").Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Distinct().ToList() }); window.Close(); }, message => AsyncHandler.Report(this, message));
+    clear.Click += (_, _) => AsyncHandler.Run(async () => { await Vm.ClearGitHubCacheAsync(); }, message => AsyncHandler.Report(this, message));
+    await window.ShowDialog(this);
+}, message => AsyncHandler.Report(this, message));
     /// <summary>Opens the restack preview for a stack chosen in the sidebar or the active comparison.</summary>
     private void RestackClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (sender is Control { DataContext: StackGroupViewModel group }) await Vm.SelectGroupAsync(group);
-        await ShowSyncWindowAsync();
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (sender is Control { DataContext: StackGroupViewModel group }) await Vm.SelectGroupAsync(group);
+    await ShowSyncWindowAsync();
+}, message => AsyncHandler.Report(this, message));
     private async Task ShowSyncWindowAsync()
     {
         try
@@ -174,44 +210,52 @@ AsyncHandler.Run(async () => {             await Vm.InitializeAsync();
         }
         catch (Exception ex) { Vm.Error = ex.Message; }
     }
-    private void UndoRestackClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await Vm.UndoAsync(); }, message => AsyncHandler.Report(this, message));
+    private void UndoRestackClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await Vm.UndoAsync(); }, message => AsyncHandler.Report(this, message));
     /// <summary>Opens the conflicted files in the editor the user configured.</summary>
-    private void ResolveConflictsClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await Vm.OpenConflictsInEditorAsync(); }, message => AsyncHandler.Report(this, message));
+    private void ResolveConflictsClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await Vm.OpenConflictsInEditorAsync(); }, message => AsyncHandler.Report(this, message));
     /// <summary>Opens the sync window, whose conflict panel covers Continue, Skip and Abort.</summary>
-    private void ReviewConflictsClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await ShowSyncWindowAsync(); }, message => AsyncHandler.Report(this, message));
+    private void ReviewConflictsClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await ShowSyncWindowAsync(); }, message => AsyncHandler.Report(this, message));
     /// <summary>Restores what an interrupted run moved; the result is always reported.</summary>
     private void RestoreRecoveryClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         var (ok, message) = await Vm.RestoreRecoveryAsync();
-        if (ok) Vm.Status = message; else Vm.Error = message;
-        await Vm.RefreshWorkingTreeAsync();
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    var (ok, message) = await Vm.RestoreRecoveryAsync();
+    if (ok) Vm.Status = message; else Vm.Error = message;
+    await Vm.RefreshWorkingTreeAsync();
+}, message => AsyncHandler.Report(this, message));
     /// <summary>Dismisses the interrupted run without touching the branches, and says so.</summary>
     private void DismissRecoveryClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         var (ok, message) = await Vm.DismissRecoveryAsync();
-        if (ok) Vm.Status = message; else Vm.Error = message;
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    var (ok, message) = await Vm.DismissRecoveryAsync();
+    if (ok) Vm.Status = message; else Vm.Error = message;
+}, message => AsyncHandler.Report(this, message));
     /// <summary>Commits the working tree, staging everything when the user leaves the box ticked.</summary>
     private void CommitClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         try
-        {
-            if (sender is Control { DataContext: StackGroupViewModel group }) await Vm.SelectGroupAsync(group);
-            await Vm.RefreshWorkingTreeAsync();
-            await new CommitWindow(Vm).ShowDialog<bool>(this);
-        }
-        catch (Exception ex) { Vm.Error = ex.Message; }
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    try
+    {
+        if (sender is Control { DataContext: StackGroupViewModel group }) await Vm.SelectGroupAsync(group);
+        await Vm.RefreshWorkingTreeAsync();
+        await new CommitWindow(Vm).ShowDialog<bool>(this);
+    }
+    catch (Exception ex) { Vm.Error = ex.Message; }
+}, message => AsyncHandler.Report(this, message));
     /// <summary>Creates a new layer branch on top of a local stack and adds it to the definition.</summary>
     private void AddLayerClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (sender is not Control { DataContext: StackGroupViewModel group }) return;
-        try
-        {
-            await Vm.SelectGroupAsync(group);
-            await new AddLayerWindow(group.Definition, Vm.AddLayerAsync).ShowDialog<bool>(this);
-        }
-        catch (Exception ex) { Vm.Error = ex.Message; }
- }, message => AsyncHandler.Report(this, message));
-    private void NewStackClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await EditAsync(false); }, message => AsyncHandler.Report(this, message));
-    private void EditStackClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await EditAsync(true); }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (sender is not Control { DataContext: StackGroupViewModel group }) return;
+    try
+    {
+        await Vm.SelectGroupAsync(group);
+        await new AddLayerWindow(group.Definition, Vm.AddLayerAsync).ShowDialog<bool>(this);
+    }
+    catch (Exception ex) { Vm.Error = ex.Message; }
+}, message => AsyncHandler.Report(this, message));
+    private void NewStackClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await EditAsync(false); }, message => AsyncHandler.Report(this, message));
+    private void EditStackClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await EditAsync(true); }, message => AsyncHandler.Report(this, message));
     private async Task EditAsync(bool existing)
     {
         if (Vm.Repository is null || existing && Vm.SelectedStack is null) return;
@@ -223,15 +267,17 @@ AsyncHandler.Run(async () => {             await Vm.InitializeAsync();
         }
         catch (Exception ex) { Vm.Error = ex.Message; }
     }
-    private void PrCommentsClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await Vm.ShowReviewAsync(tab: 0); }, message => AsyncHandler.Report(this, message));
+    private void PrCommentsClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await Vm.ShowReviewAsync(tab: 0); }, message => AsyncHandler.Report(this, message));
     private void ReviewPrClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (Vm.Sections.FirstOrDefault() is { IsPrSnapshot: false, HasPr: true } section) await Vm.OpenPrChangesAsync(section);
-        await Vm.ShowReviewAsync();
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (Vm.Sections.FirstOrDefault() is { IsPrSnapshot: false, HasPr: true } section) await Vm.OpenPrChangesAsync(section);
+    await Vm.ShowReviewAsync();
+}, message => AsyncHandler.Report(this, message));
     private void OverviewClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => { if (sender is Control { DataContext: StackGroupViewModel group }) await Vm.SelectOverviewAsync(group);  }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () => { if (sender is Control { DataContext: StackGroupViewModel group }) await Vm.SelectOverviewAsync(group); }, message => AsyncHandler.Report(this, message));
     private void EditGroupClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => { if (sender is Control { DataContext: StackGroupViewModel group }) { await Vm.SelectGroupAsync(group); await EditAsync(true); }  }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () => { if (sender is Control { DataContext: StackGroupViewModel group }) { await Vm.SelectGroupAsync(group); await EditAsync(true); } }, message => AsyncHandler.Report(this, message));
     private void SaveGroupClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => { if (sender is Control { DataContext: StackGroupViewModel group }) { await Vm.SelectGroupAsync(group); await Vm.SaveRemoteAsLocalAsync(); }  }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () => { if (sender is Control { DataContext: StackGroupViewModel group }) { await Vm.SelectGroupAsync(group); await Vm.SaveRemoteAsLocalAsync(); } }, message => AsyncHandler.Report(this, message));
 }

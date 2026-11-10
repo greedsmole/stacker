@@ -6,10 +6,15 @@ using Avalonia.Media;
 using Stacker.Desktop.ViewModels;
 namespace Stacker.Desktop;
 
+/// <summary>Renders syntax-highlighted tokens while retaining selectable text behavior.</summary>
+/// <remarks>Token positions are clamped to the source text so malformed grammar output cannot produce invalid slices.</remarks>
 public sealed class SyntaxText : SelectableTextBlock
 {
+    /// <summary>Avalonia property containing the rendered diff line.</summary>
     public static readonly StyledProperty<RenderedDiffLine?> LineProperty = AvaloniaProperty.Register<SyntaxText, RenderedDiffLine?>(nameof(Line));
+    /// <summary>The current syntax-tokenized line, or null when empty.</summary>
     public RenderedDiffLine? Line { get => GetValue(LineProperty); set => SetValue(LineProperty, value); }
+    /// <summary>Maintains the line subscription and redraws when the bound line changes.</summary>
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -20,9 +25,13 @@ public sealed class SyntaxText : SelectableTextBlock
             Render();
         }
     }
+    /// <summary>Releases the line subscription when detached.</summary>
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e) { if (Line is { } line) line.PropertyChanged -= LineChanged; base.OnDetachedFromVisualTree(e); }
+    /// <summary>Reattaches the line subscription and renders the current value.</summary>
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e) { base.OnAttachedToVisualTree(e); if (Line is { } line) { line.PropertyChanged -= LineChanged; line.PropertyChanged += LineChanged; } Render(); }
+    /// <summary>Redraws only when token spans change.</summary>
     private void LineChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (e.PropertyName == nameof(RenderedDiffLine.Tokens)) Render(); }
+    /// <summary>Rebuilds inline runs from source text and clamped token spans.</summary>
     private void Render()
     {
         Inlines?.Clear(); if (Line is null) return;
@@ -37,8 +46,12 @@ public sealed class SyntaxText : SelectableTextBlock
         if (cursor < text.Length) Inlines!.Add(new Run(text[cursor..]));
     }
     // Themes come from a grammar bundle, so a colour is data: parse it defensively and reuse the brush.
+    /// <summary>Brushes keyed by grammar color text to avoid one allocation per span.</summary>
     private static readonly Dictionary<string, IBrush> BrushCache = new(StringComparer.Ordinal);
+    /// <summary>Safe fallback for invalid grammar colors.</summary>
     private static readonly IBrush FallbackBrush = new SolidColorBrush(Colors.Transparent);
+    /// <summary>Parses and caches a grammar color, using the fallback for invalid input.</summary>
+    /// <param name="colour">Color text emitted by the syntax grammar.</param>
     private static IBrush BrushFor(string colour)
     {
         lock (BrushCache)

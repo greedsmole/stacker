@@ -57,8 +57,8 @@ public sealed partial class SqliteHistoryStore
     private void ImportDocuments(SqliteConnection c, SqliteTransaction tx)
     {
         using var query = Command(c, tx, "SELECT kind,id,json,revision FROM documents ORDER BY CASE kind WHEN 'node' THEN 0 WHEN 'version' THEN 1 WHEN 'graph' THEN 2 ELSE 3 END,rowid");
-        var rows = new List<(string Kind,string Id,string Json,long Revision)>();
-        using (var reader = query.ExecuteReader()) while (reader.Read()) rows.Add((reader.GetString(0),reader.GetString(1),reader.GetString(2),reader.GetInt64(3)));
+        var rows = new List<(string Kind, string Id, string Json, long Revision)>();
+        using (var reader = query.ExecuteReader()) while (reader.Read()) rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt64(3)));
         foreach (var row in rows)
         {
             switch (row.Kind)
@@ -69,7 +69,7 @@ public sealed partial class SqliteHistoryStore
                 case "checkpoint": Put(c, tx, row.Kind, row.Id, JsonSerializer.Deserialize<ReviewCheckpoint>(row.Json)!); break;
                 case "concern": Put(c, tx, row.Kind, row.Id, JsonSerializer.Deserialize<ReviewConcern>(row.Json)!); break;
                 case "draft":
-                    using (var insert = Command(c, tx, "INSERT INTO drafts(id,json,revision) VALUES($i,$j,$r)", ("$i",row.Id),("$j",row.Json),("$r",row.Revision))) insert.ExecuteNonQuery();
+                    using (var insert = Command(c, tx, "INSERT INTO drafts(id,json,revision) VALUES($i,$j,$r)", ("$i", row.Id), ("$j", row.Json), ("$r", row.Revision))) insert.ExecuteNonQuery();
                     break;
                 default: throw new StackerException("Unknown history document kind. Original database and migration backup were retained: " + row.Kind);
             }

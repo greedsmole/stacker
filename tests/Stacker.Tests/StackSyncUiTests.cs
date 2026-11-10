@@ -8,6 +8,7 @@ using Stacker.Desktop;
 using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
+
 [Collection(HeadlessApp.CollectionName)]
 public sealed class StackSyncUiTests
 {
@@ -26,9 +27,9 @@ public sealed class StackSyncUiTests
         public Task<string?> OpenAsync(string root, IReadOnlyList<string> paths, string? overrideCommand, CancellationToken ct = default)
         { Opened.Add(paths); return Task.FromResult<string?>(_command); }
 
-    Task<Result<string?>> IEditorLauncher.ResolveAsync(string root,string? overrideCommand,CancellationToken ct) => Boundary.CaptureAsync(() => ResolveAsync(root, overrideCommand, ct), ProblemCodes.GitFailed);
+        Task<Result<string?>> IEditorLauncher.ResolveAsync(string root, string? overrideCommand, CancellationToken ct) => Boundary.CaptureAsync(() => ResolveAsync(root, overrideCommand, ct), ProblemCodes.GitFailed);
 
-    Task<Result<string?>> IEditorLauncher.OpenAsync(string root,IReadOnlyList<string> paths,string? overrideCommand,CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(root, paths, overrideCommand, ct), ProblemCodes.GitFailed);
+        Task<Result<string?>> IEditorLauncher.OpenAsync(string root, IReadOnlyList<string> paths, string? overrideCommand, CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(root, paths, overrideCommand, ct), ProblemCodes.GitFailed);
     }
 
     /// <summary>Leaves main moved under a layer that conflicts, with the stack definition committed.</summary>
@@ -423,24 +424,24 @@ public sealed class StackSyncUiTests
         public Task<IReadOnlyList<string>> ChangedFilePathsAsync(GitHubRepositoryContext context, PullRequest pr, CancellationToken ct = default) => throw new NotSupportedException();
         public Task ValidateFileAsync(GitHubRepositoryContext context, PullRequest pr, string path, CancellationToken ct = default) => throw new NotSupportedException();
 
-    Task<Result<GitHubRepositoryContext>> IGitHubReader.ConnectAsync(string root,string? repositoryOverride,CancellationToken ct) => Boundary.CaptureAsync(() => ConnectAsync(root, repositoryOverride, ct), ProblemCodes.GitHubRequest);
+        Task<Result<GitHubRepositoryContext>> IGitHubReader.ConnectAsync(string root, string? repositoryOverride, CancellationToken ct) => Boundary.CaptureAsync(() => ConnectAsync(root, repositoryOverride, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<GitHubSnapshot>> IGitHubReader.SnapshotAsync(GitHubRepositoryContext context,CancellationToken ct) => Boundary.CaptureAsync(() => SnapshotAsync(context, ct), ProblemCodes.GitHubRequest);
+        Task<Result<GitHubSnapshot>> IGitHubReader.SnapshotAsync(GitHubRepositoryContext context, CancellationToken ct) => Boundary.CaptureAsync(() => SnapshotAsync(context, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<PullRequest>> IGitHubReader.PullRequestAsync(GitHubRepositoryContext context,long number,CancellationToken ct) => Boundary.CaptureAsync(() => PullRequestAsync(context, number, ct), ProblemCodes.GitHubRequest);
+        Task<Result<PullRequest>> IGitHubReader.PullRequestAsync(GitHubRepositoryContext context, long number, CancellationToken ct) => Boundary.CaptureAsync(() => PullRequestAsync(context, number, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<ReviewDiscussion>> IGitHubReader.DiscussionAsync(GitHubRepositoryContext context,PullRequest pr,CancellationToken ct) => Boundary.CaptureAsync(() => DiscussionAsync(context, pr, ct), ProblemCodes.GitHubRequest);
+        Task<Result<ReviewDiscussion>> IGitHubReader.DiscussionAsync(GitHubRepositoryContext context, PullRequest pr, CancellationToken ct) => Boundary.CaptureAsync(() => DiscussionAsync(context, pr, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<Unit>> IGitHubReader.ValidateAnchorsAsync(GitHubRepositoryContext context,PullRequest pr,IReadOnlyList<ReviewAnchor> anchors,CancellationToken ct) => Boundary.CaptureAsync(() => ValidateAnchorsAsync(context, pr, anchors, ct), ProblemCodes.GitHubRequest);
+        Task<Result<Unit>> IGitHubReader.ValidateAnchorsAsync(GitHubRepositoryContext context, PullRequest pr, IReadOnlyList<ReviewAnchor> anchors, CancellationToken ct) => Boundary.CaptureAsync(() => ValidateAnchorsAsync(context, pr, anchors, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<IReadOnlyList<string>>> IGitHubReader.ChangedFilePathsAsync(GitHubRepositoryContext context,PullRequest pr,CancellationToken ct) => Boundary.CaptureAsync(() => ChangedFilePathsAsync(context, pr, ct), ProblemCodes.GitHubRequest);
+        Task<Result<IReadOnlyList<string>>> IGitHubReader.ChangedFilePathsAsync(GitHubRepositoryContext context, PullRequest pr, CancellationToken ct) => Boundary.CaptureAsync(() => ChangedFilePathsAsync(context, pr, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<Unit>> IGitHubReader.ValidateFileAsync(GitHubRepositoryContext context,PullRequest pr,string path,CancellationToken ct) => Boundary.CaptureAsync(() => ValidateFileAsync(context, pr, path, ct), ProblemCodes.GitHubRequest);
+        Task<Result<Unit>> IGitHubReader.ValidateFileAsync(GitHubRepositoryContext context, PullRequest pr, string path, CancellationToken ct) => Boundary.CaptureAsync(() => ValidateFileAsync(context, pr, path, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<Unit>> IGitHubReader.VerifyAccessAsync(GitHubRepositoryContext context,CancellationToken ct) => Boundary.CaptureAsync(() => VerifyAccessAsync(context, ct), ProblemCodes.GitHubRequest);
+        Task<Result<Unit>> IGitHubReader.VerifyAccessAsync(GitHubRepositoryContext context, CancellationToken ct) => Boundary.CaptureAsync(() => VerifyAccessAsync(context, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<PullRequest>> IGitHubPullRequestWriter.CreatePullRequestAsync(GitHubRepositoryContext context,string headBranch,string baseBranch,        string title,string body,bool draft,CancellationToken ct) => Boundary.CaptureAsync(() => CreatePullRequestAsync(context, headBranch, baseBranch, title, body, draft, ct), ProblemCodes.GitHubRequest);
+        Task<Result<PullRequest>> IGitHubPullRequestWriter.CreatePullRequestAsync(GitHubRepositoryContext context, string headBranch, string baseBranch, string title, string body, bool draft, CancellationToken ct) => Boundary.CaptureAsync(() => CreatePullRequestAsync(context, headBranch, baseBranch, title, body, draft, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<PullRequest>> IGitHubPullRequestWriter.UpdatePullRequestBaseAsync(GitHubRepositoryContext context,long number,string baseBranch,CancellationToken ct) => Boundary.CaptureAsync(() => UpdatePullRequestBaseAsync(context, number, baseBranch, ct), ProblemCodes.GitHubRequest);
+        Task<Result<PullRequest>> IGitHubPullRequestWriter.UpdatePullRequestBaseAsync(GitHubRepositoryContext context, long number, string baseBranch, CancellationToken ct) => Boundary.CaptureAsync(() => UpdatePullRequestBaseAsync(context, number, baseBranch, ct), ProblemCodes.GitHubRequest);
     }
 }

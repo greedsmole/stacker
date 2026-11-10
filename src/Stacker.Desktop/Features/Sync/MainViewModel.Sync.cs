@@ -5,10 +5,14 @@ namespace Stacker.Desktop.ViewModels;
 
 public sealed partial class MainViewModel
 {
+    /// <summary>True while a local Git mutation is executing.</summary>
     [ObservableProperty] internal bool _isSyncing;
+    /// <summary>Latest progress text for the active sync operation.</summary>
     [ObservableProperty] internal string _syncProgress = "";
+    /// <summary>Whether the active group has an eligible local undo.</summary>
     /// <summary>The restack entry point is offered only for a local stack that can be rewritten.</summary>
     public bool? UndoAvailable => _runtime._activeGroup?.UndoAvailable ?? false;
+    /// <summary>Whether a restack can start for the active local group.</summary>
     public bool CanRestackActiveStack => _runtime._repository is not null && _runtime._activeGroup is { IsRemote: false } && !IsSyncing;
     partial void OnIsSyncingChanged(bool value) => OnPropertyChanged(nameof(CanRestackActiveStack));
 

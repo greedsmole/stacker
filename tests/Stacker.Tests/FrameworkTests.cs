@@ -2,10 +2,12 @@
 using Stacker.Core;
 using Stacker.Core.Framework;
 namespace Stacker.Tests;
+
 public sealed class FrameworkTests
 {
     // Scenario: A result carries either a value or a problem, and never both.
-    [Fact] public void A_result_carries_either_a_value_or_a_problem()
+    [Fact]
+    public void A_result_carries_either_a_value_or_a_problem()
     {
         var ok = Result<int>.Ok(41);
         Assert.True(ok.IsOk); Assert.Equal(41, ok.Value); Assert.Null(ok.Problem);
@@ -20,7 +22,8 @@ public sealed class FrameworkTests
     }
 
     // Scenario: Only local branches may be rewritten; a remote-tracking ref is refused with an actionable message.
-    [Fact] public void Only_local_branches_may_be_rewritten()
+    [Fact]
+    public void Only_local_branches_may_be_rewritten()
     {
         var local = StackBranchRef.Parse("refs/heads/feature/x");
         Assert.True(local.IsOk); Assert.True(local.Value.IsLocal); Assert.Equal("feature/x", local.Value.Name);
@@ -37,7 +40,8 @@ public sealed class FrameworkTests
     }
 
     // Scenario: An editor command is split without a shell and quoted for git, so a path with spaces survives both uses.
-    [Fact] public void An_editor_command_survives_both_uses()
+    [Fact]
+    public void An_editor_command_survives_both_uses()
     {
         var plain = ShellCommand.Parse("code --wait");
         Assert.Equal("code", plain.Value.Program); Assert.Equal("--wait", Assert.Single(plain.Value.Arguments));
@@ -50,7 +54,8 @@ public sealed class FrameworkTests
     }
 
     // Scenario: A persisted publication marker round-trips, and a damaged one is refused instead of throwing.
-    [Fact] public void A_publication_marker_round_trips_and_a_damaged_one_is_refused()
+    [Fact]
+    public void A_publication_marker_round_trips_and_a_damaged_one_is_refused()
     {
         var expected = new[] { ("comment", PendingKind.Comment), ("file", PendingKind.FileComment), ("inline", PendingKind.Inline), ("reply", PendingKind.Reply), ("review", PendingKind.Review) };
         foreach (var (wire, kind) in expected)
@@ -87,21 +92,21 @@ public sealed class FrameworkTests
         public Task<JournalEntry?> ByIdAsync(string repository, string id, CancellationToken ct = default) => Task.FromResult(Last);
         public IReadOnlyList<JournalEntry> Recent(string repository, int count = 20) => Last is null ? [] : [Last];
 
-    Task<Result<JournalEntry>> IJournal.OpenAsync(string repository,string kind,IReadOnlyList<JournalStep> planned,CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(repository, kind, planned, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry>> IJournal.OpenAsync(string repository, string kind, IReadOnlyList<JournalStep> planned, CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(repository, kind, planned, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry>> IJournal.StepAsync(JournalEntry entry,JournalStep step,CancellationToken ct) => Boundary.CaptureAsync(() => StepAsync(entry, step, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry>> IJournal.StepAsync(JournalEntry entry, JournalStep step, CancellationToken ct) => Boundary.CaptureAsync(() => StepAsync(entry, step, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry>> IJournal.CloseAsync(JournalEntry entry,JournalPhase phase,string? stashRef ,string? pendingStepId ,string? message ,CancellationToken ct) => Boundary.CaptureAsync(() => CloseAsync(entry, phase, stashRef, pendingStepId, message, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry>> IJournal.CloseAsync(JournalEntry entry, JournalPhase phase, string? stashRef, string? pendingStepId, string? message, CancellationToken ct) => Boundary.CaptureAsync(() => CloseAsync(entry, phase, stashRef, pendingStepId, message, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry>> IJournal.SetStashAsync(JournalEntry entry,string? stashRef,CancellationToken ct) => Boundary.CaptureAsync(() => SetStashAsync(entry, stashRef, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry>> IJournal.SetStashAsync(JournalEntry entry, string? stashRef, CancellationToken ct) => Boundary.CaptureAsync(() => SetStashAsync(entry, stashRef, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry?>> IJournal.ActiveAsync(string repository,CancellationToken ct) => Boundary.CaptureAsync(() => ActiveAsync(repository, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry?>> IJournal.ActiveAsync(string repository, CancellationToken ct) => Boundary.CaptureAsync(() => ActiveAsync(repository, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry?>> IJournal.UndoableAsync(string repository,CancellationToken ct) => Boundary.CaptureAsync(() => UndoableAsync(repository, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry?>> IJournal.UndoableAsync(string repository, CancellationToken ct) => Boundary.CaptureAsync(() => UndoableAsync(repository, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry?>> IJournal.ByIdAsync(string repository,string id,CancellationToken ct) => Boundary.CaptureAsync(() => ByIdAsync(repository, id, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry?>> IJournal.ByIdAsync(string repository, string id, CancellationToken ct) => Boundary.CaptureAsync(() => ByIdAsync(repository, id, ct), ProblemCodes.StoreWrite);
 
-    Result<IReadOnlyList<JournalEntry>> IJournal.Recent(string repository,int count ) => Boundary.Capture(() => Recent(repository, count), ProblemCodes.StoreWrite);
+        Result<IReadOnlyList<JournalEntry>> IJournal.Recent(string repository, int count) => Boundary.Capture(() => Recent(repository, count), ProblemCodes.StoreWrite);
     }
 
     private sealed class RefusingCommand : IStackCommand
@@ -136,7 +141,8 @@ public sealed class FrameworkTests
     }
 
     // Scenario: A blocked plan never opens a journal entry and never runs.
-    [Fact] public async Task A_blocked_plan_never_opens_a_journal_entry()
+    [Fact]
+    public async Task A_blocked_plan_never_opens_a_journal_entry()
     {
         var journal = new RecordingJournal();
         var outcome = await new CommandRunner(journal).RunAsync("/repo", new RefusingCommand());
@@ -145,7 +151,8 @@ public sealed class FrameworkTests
     }
 
     // Scenario: A failed command is journalled before the effect, then reversed and closed as rolled back.
-    [Fact] public async Task A_failed_command_is_journalled_then_reversed()
+    [Fact]
+    public async Task A_failed_command_is_journalled_then_reversed()
     {
         var journal = new RecordingJournal();
         var command = new FailingCommand();
@@ -157,7 +164,8 @@ public sealed class FrameworkTests
     }
 
     // Scenario: A command that stops for the user leaves an entry that still needs attention.
-    [Fact] public async Task A_command_that_stops_for_the_user_keeps_its_entry_open()
+    [Fact]
+    public async Task A_command_that_stops_for_the_user_keeps_its_entry_open()
     {
         var journal = new RecordingJournal();
         var outcome = await new CommandRunner(journal).RunAsync("/repo", new ConflictingCommand());

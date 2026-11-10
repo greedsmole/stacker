@@ -3,8 +3,12 @@ using Stacker.Core;
 using Stacker.Core.Framework;
 namespace Stacker.Desktop.ViewModels;
 
+/// <summary>Coordinates working-tree inspection, conflict recovery and local branch mutations.</summary>
+/// <remarks>Mutations are serialized through IsSyncing, state is refreshed after operations, and conflicts remain visible.</remarks>
 internal sealed class WorkingTreeController(IWorkingTreePresentation owner, WorkspaceRuntime runtime)
 {
+    /// <summary>Replaces the journal entry shown by the recovery banner.</summary>
+    /// <param name="entry">Current unfinished entry, or null when none exists.</param>
     public void SetActiveEntry(JournalEntry? entry)
     {
         if (entry == runtime._activeEntry) return;
@@ -12,6 +16,8 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
         owner.Notify(nameof(owner.HasRecovery)); owner.Notify(nameof(owner.RecoverySummary)); owner.Notify(nameof(owner.RecoveryAction)); owner.Notify(nameof(owner.CanRestoreRecovery));
     }
 
+    /// <summary>Reads the working tree, active journal and saved stashes as refreshed UI state.</summary>
+    /// <param name="ct">Cancellation requested by the owning session.</param>
     public async Task<(bool Ok, string Message)> RefreshWorkingTreeAsync(CancellationToken ct = default)
     {
         if (runtime._branchWriter is null || runtime._repository is null) return (false, "Open a repository first.");
@@ -68,6 +74,8 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
     public async Task<(bool Ok, string Message)> AbortOperationAsync() =>
         await OperationAsync(async (writer, root, _) => (await writer.AbortAsync(root)).OrThrow());
 
+    /// <summary>Runs one recovery operation while preventing concurrent stack mutations.</summary>
+    /// <param name="action">Operation receiving writer, repository root and resolved editor.</param>
     public async Task<(bool Ok, string Message)> OperationAsync(Func<IGitBranchWriter, string, string?, Task<RestackOutcome>> action)
     {
         if (runtime._branchWriter is null || runtime._repository is null) return (false, "Open a repository first.");
@@ -85,6 +93,8 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
         finally { owner.IsSyncing = false; }
     }
 
+    /// <summary>Creates a commit, optionally staging all tracked changes first.</summary>
+    /// <param name="message">Commit message passed to Git.</param><param name="stageAll">Whether all changes are staged first.</param>
     public async Task<(bool Ok, string Message)> CommitAsync(string message, bool stageAll)
     {
         if (runtime._branchWriter is null || runtime._repository is null) return (false, "Open a repository first.");
@@ -100,6 +110,8 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
         finally { owner.IsSyncing = false; }
     }
 
+    /// <summary>Checks out an existing local branch and refreshes the workspace.</summary>
+    /// <param name="branch">Full local branch ref.</param>
     public async Task<(bool Ok, string Message)> SwitchToBranchAsync(string branch)
     {
         if (runtime._branchWriter is null || runtime._repository is null) return (false, "Open a repository first.");
@@ -133,6 +145,8 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
         return outcome is { Conflicted: true } ? (false, (outcome.Message + tail)) : (outcome?.Applied == true, (outcome?.Message ?? "The restack did not run.") + tail);
     }
 
+    /// <summary>Restores Git's newest stash or the recorded stash identified by <paramref name="sha"/>.</summary>
+    /// <param name="sha">Recorded stash id, or null for the normal newest-stash restore.</param>
     public async Task<(bool Ok, string Message)> RestoreStashAsync(string? sha = null)
     {
         if (runtime._branchWriter is null || runtime._repository is null) return (false, "Open a repository first.");
@@ -168,6 +182,8 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
         catch (Exception ex) { owner.Error = ex.Message; return (false, ex.Message); }
     }
 
+    /// <summary>Resolves the configured editor without making editor failure block recovery.</summary>
+    /// <param name="root">Repository root used for resolution.</param>
     public async Task<string?> ResolveEditorAsync(string root)
     {
         if (runtime._editorLauncher is null) return null;

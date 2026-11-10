@@ -3,6 +3,7 @@ using Stacker.Core.Framework;
 using Stacker.Core;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
+
 public sealed class LocalGitTests
 {
     private static LocalGitClient Writer(GitFixture f) => f.Writer();
@@ -18,11 +19,12 @@ public sealed class LocalGitTests
         public List<ProcessRequest> Started { get; } = [];
         public void Start(ProcessRequest request) => Started.Add(request);
 
-    Result<Unit> IProcessLauncher.Start(ProcessRequest request) => Boundary.Capture(() => Start(request), ProblemCodes.GitFailed);
+        Result<Unit> IProcessLauncher.Start(ProcessRequest request) => Boundary.Capture(() => Start(request), ProblemCodes.GitFailed);
     }
 
     // Scenario: Porcelain v1 output decides staged, untracked, renamed and conflicted entries.
-    [Fact] public void Porcelain_entries_are_classified()
+    [Fact]
+    public void Porcelain_entries_are_classified()
     {
         var entries = WorkingTreeParser.Parse(" M a.txt\0M  b.txt\0?? new.txt\0R  moved.txt\0old.txt\0UU both.txt\0 M ü file.cs\0");
         Assert.Equal(6, entries.Count);
@@ -35,7 +37,8 @@ public sealed class LocalGitTests
     }
 
     // Scenario: A user-authored command is split without a shell, quotes included.
-    [Fact] public void Editor_commands_split_without_a_shell()
+    [Fact]
+    public void Editor_commands_split_without_a_shell()
     {
         var plain = CommandLine.Split("code --wait");
         Assert.Equal("code", plain.Program); Assert.Equal(["--wait"], plain.Arguments);
@@ -45,7 +48,8 @@ public sealed class LocalGitTests
     }
 
     // Scenario: The editor is resolved from the setting, then git, then the environment.
-    [Fact] public async Task The_editor_is_resolved_from_the_setting_then_git_then_the_environment()
+    [Fact]
+    public async Task The_editor_is_resolved_from_the_setting_then_git_then_the_environment()
     {
         var launcher = new FakeLauncher();
         var configured = new ScriptedRunner(_ => new(0, "code --wait\n", ""));
@@ -64,7 +68,8 @@ public sealed class LocalGitTests
     }
 
     // Scenario: Opening files passes each path as its own argument, never a shell string.
-    [Fact] public async Task Opening_files_keeps_each_path_a_separate_argument()
+    [Fact]
+    public async Task Opening_files_keeps_each_path_a_separate_argument()
     {
         var launcher = new FakeLauncher();
         var editor = new EditorLauncher(new ScriptedRunner(_ => new(1, "", "")), new(), launcher);
@@ -76,7 +81,8 @@ public sealed class LocalGitTests
     }
 
     // Scenario: Staging names exactly what it takes, and nothing else.
-    [Fact] public async Task Staging_names_exactly_what_it_takes()
+    [Fact]
+    public async Task Staging_names_exactly_what_it_takes()
     {
         await using var f = new GitFixture(); await f.Init();
         var writer = Writer(f);
@@ -90,7 +96,8 @@ public sealed class LocalGitTests
     }
 
     // Scenario: A commit needs a message and something staged, and the user's hooks run.
-    [Fact] public async Task A_commit_needs_a_message_and_runs_the_users_hooks()
+    [Fact]
+    public async Task A_commit_needs_a_message_and_runs_the_users_hooks()
     {
         await using var f = new GitFixture(); await f.Init();
         var writer = Writer(f);
@@ -114,7 +121,8 @@ public sealed class LocalGitTests
     }
 
     // Scenario: Switching branches moves only when the tracked working tree is clean.
-    [Fact] public async Task Switching_branches_refuses_a_dirty_tree()
+    [Fact]
+    public async Task Switching_branches_refuses_a_dirty_tree()
     {
         await using var f = new GitFixture(); await f.Linear();
         var writer = Writer(f);
@@ -129,7 +137,8 @@ public sealed class LocalGitTests
     }
 
     // Scenario: A git binary that is not named "git" is still recorded in the diagnostics log.
-    [Fact] public async Task A_configured_git_binary_is_still_logged()
+    [Fact]
+    public async Task A_configured_git_binary_is_still_logged()
     {
         if (OperatingSystem.IsWindows()) return; // creating a symlink needs privileges there
         await using var f = new GitFixture(); await f.Init();
@@ -150,7 +159,8 @@ public sealed class LocalGitTests
     }
 
     // Scenario: Pushing the stack publishes every layer, forcing only where the remote is not an ancestor.
-    [Fact] public async Task Pushing_the_stack_publishes_every_layer()
+    [Fact]
+    public async Task Pushing_the_stack_publishes_every_layer()
     {
         await using var f = new GitFixture(); await f.Linear(); await f.AddOrigin();
         await f.Git("push", "origin", "main", "A", "B", "C");
@@ -171,7 +181,8 @@ public sealed class LocalGitTests
     }
 
     // Scenario: Merge commits inside a layer block a restack until the user asks to preserve them.
-    [Fact] public async Task Merge_commits_are_preserved_when_the_user_asks()
+    [Fact]
+    public async Task Merge_commits_are_preserved_when_the_user_asks()
     {
         await using var f = new GitFixture(); await f.Init();
         await f.Git("checkout", "-b", "side"); await f.Write("side.txt", "s\n"); await f.Commit("side");

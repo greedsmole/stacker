@@ -55,7 +55,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
         CommandBus? commands = null, IHistoryStore? historyStore = null, IHistoryGit? historyObjects = null,
         ChangeGraphService? historyGraph = null, VersionComparisonService? historyComparisons = null, ReviewProgressService? historyProgress = null, IWorkspaceBackupService? backupService = null, IChangeIdentityService? identities = null, IDiagnosticSink? diagnostics = null)
     {
-        _backupService = backupService; _runtime.Identities=identities; _runtime.Diagnostics=diagnostics;
+        _backupService = backupService; _runtime.Identities = identities; _runtime.Diagnostics = diagnostics;
         _runtime.HistoryStore = historyStore; _runtime.HistoryObjects = historyObjects; _runtime.HistoryGraph = historyGraph; _runtime.HistoryComparisons = historyComparisons; _runtime.HistoryProgress = historyProgress;
         _syncController = new(this, _runtime);
         _workspaceController = new(this, _runtime);
@@ -86,7 +86,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     }
     partial void OnModeChanged(DiffMode value) { OnPropertyChanged(nameof(IsSingleLayer)); OnPropertyChanged(nameof(IsThroughLayer)); if (!_runtime._suppress) { CaptureWorkspace(); _ = CompareAsync(); } }
     /// <summary>Restores preferences and the last workspace once when the application starts.</summary>
-    public Task InitializeAsync()=>_navigationController.InitializeAsync();
+    public Task InitializeAsync() => _navigationController.InitializeAsync();
     [RelayCommand] public Task OpenAsync() => _navigationController.OpenAsync();
     [RelayCommand] public Task RefreshAsync() => _navigationController.RefreshAsync();
     /// <summary>Starts a new repository workspace; unlike refresh, this intentionally replaces the active repository.</summary>
@@ -113,8 +113,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     /// <summary>Removes only the selected description; refs and commits remain untouched.</summary>
     public Task DeleteSelectedStackAsync() => _navigationController.DeleteSelectedStackAsync();
     internal Task<bool> SaveStacksAsync(IReadOnlyList<StackDefinition> stacks) => _navigationController.SaveStacksAsync(stacks);
-    public Task SaveSettingsAsync()=>_navigationController.SaveSettingsAsync();
+    public Task SaveSettingsAsync() => _navigationController.SaveSettingsAsync();
     public Task SetWrapCodeAsync(bool enabled) => _navigationController.SetWrapCodeAsync(enabled);
     public void DisposeViews() => _navigationController.DisposeViews();
-    public void Dispose() { ActiveHistory?.Dispose(); ActiveHistory=null; _runtime.Session.Suspend(); _navigationController.Dispose(); }
+    public void Dispose() { ActiveHistory?.Dispose(); ActiveHistory = null; _runtime.Session.Suspend(); _navigationController.Dispose(); }
 }

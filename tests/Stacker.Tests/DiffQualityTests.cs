@@ -5,6 +5,7 @@ using Stacker.Core;
 using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
+
 [Collection(HeadlessApp.CollectionName)]
 public sealed class DiffQualityTests
 {
@@ -17,19 +18,20 @@ public sealed class DiffQualityTests
         public Task<(int Ahead, int Behind)> CountsAsync(string root, string parent, string head, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<FileChange>> FilesAsync(string root, string @base, string head, CancellationToken ct = default) => throw new NotSupportedException();
 
-    Task<Result<RepositorySnapshot>> IGitRepositoryReader.OpenAsync(string path,CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(path, ct), ProblemCodes.GitFailed);
+        Task<Result<RepositorySnapshot>> IGitRepositoryReader.OpenAsync(string path, CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(path, ct), ProblemCodes.GitFailed);
 
-    Task<Result<IReadOnlyList<string>>> IGitRepositoryReader.MergeBasesAsync(string root,string left,string right,CancellationToken ct) => Boundary.CaptureAsync(() => MergeBasesAsync(root, left, right, ct), ProblemCodes.GitFailed);
+        Task<Result<IReadOnlyList<string>>> IGitRepositoryReader.MergeBasesAsync(string root, string left, string right, CancellationToken ct) => Boundary.CaptureAsync(() => MergeBasesAsync(root, left, right, ct), ProblemCodes.GitFailed);
 
-    Task<Result<(int Ahead, int Behind)>> IGitRepositoryReader.CountsAsync(string root,string parent,string head,CancellationToken ct) => Boundary.CaptureAsync(() => CountsAsync(root, parent, head, ct), ProblemCodes.GitFailed);
+        Task<Result<(int Ahead, int Behind)>> IGitRepositoryReader.CountsAsync(string root, string parent, string head, CancellationToken ct) => Boundary.CaptureAsync(() => CountsAsync(root, parent, head, ct), ProblemCodes.GitFailed);
 
-    Task<Result<IReadOnlyList<FileChange>>> IGitRepositoryReader.FilesAsync(string root,string @base,string head,CancellationToken ct) => Boundary.CaptureAsync(() => FilesAsync(root, @base, head, ct), ProblemCodes.GitFailed);
+        Task<Result<IReadOnlyList<FileChange>>> IGitRepositoryReader.FilesAsync(string root, string @base, string head, CancellationToken ct) => Boundary.CaptureAsync(() => FilesAsync(root, @base, head, ct), ProblemCodes.GitFailed);
 
-    Task<Result<FileDiff>> IGitRepositoryReader.PatchAsync(string root,string @base,string head,FileChange file,CancellationToken ct) => Boundary.CaptureAsync(() => PatchAsync(root, @base, head, file, ct), ProblemCodes.GitFailed);
+        Task<Result<FileDiff>> IGitRepositoryReader.PatchAsync(string root, string @base, string head, FileChange file, CancellationToken ct) => Boundary.CaptureAsync(() => PatchAsync(root, @base, head, file, ct), ProblemCodes.GitFailed);
     }
 
     // Scenario: Git's submodule format is pinned, so a user's diff.submodule setting cannot change the patch shape we parse.
-    [Fact] public async Task The_diff_command_pins_the_submodule_format()
+    [Fact]
+    public async Task The_diff_command_pins_the_submodule_format()
     {
         await using var f = new GitFixture(); await f.Init();
         await f.Git("config", "diff.submodule", "diff");
@@ -41,7 +43,8 @@ public sealed class DiffQualityTests
     }
 
     // Scenario: A patch with no hunks explains itself instead of showing a blank pane.
-    [Fact] public async Task A_patch_without_hunks_explains_itself()
+    [Fact]
+    public async Task A_patch_without_hunks_explains_itself()
     {
         var file = new FileChange("old.txt", "new.txt", FileChangeKind.Renamed, 0, 0, "100644", "100644");
         var diff = new FileDiff(file, "", [], [new(DiffLineKind.Header, null, null, "diff --git a/old.txt b/new.txt")]);

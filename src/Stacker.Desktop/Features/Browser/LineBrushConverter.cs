@@ -4,6 +4,7 @@ using Avalonia.Data.Converters;
 using Avalonia.Media;
 using Stacker.Core;
 namespace Stacker.Desktop;
+
 public sealed class LineBrushConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value switch

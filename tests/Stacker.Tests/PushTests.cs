@@ -3,6 +3,7 @@ using Stacker.Core;
 using Stacker.Core.Framework;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
+
 public sealed class PushTests
 {
     private static LocalGitClient Writer(GitFixture f) => f.Writer();
@@ -21,7 +22,8 @@ public sealed class PushTests
     }
 
     // Scenario: A restacked stack is published under a lease and the remote matches the local branches.
-    [Fact] public async Task Push_publishes_restacked_layers_under_a_lease()
+    [Fact]
+    public async Task Push_publishes_restacked_layers_under_a_lease()
     {
         await using var f = new GitFixture();
         var (writer, plan) = await RestackedStack(f);
@@ -33,7 +35,8 @@ public sealed class PushTests
     }
 
     // Scenario: A branch that moved on the remote is never overwritten, and the remaining layers are left alone.
-    [Fact] public async Task Push_refuses_when_a_remote_branch_moved_after_the_preview()
+    [Fact]
+    public async Task Push_refuses_when_a_remote_branch_moved_after_the_preview()
     {
         await using var f = new GitFixture();
         var (writer, plan) = await RestackedStack(f);
@@ -48,7 +51,8 @@ public sealed class PushTests
     }
 
     // Scenario: A layer that was never published is pushed without a lease.
-    [Fact] public async Task Push_publishes_a_new_branch_without_a_lease()
+    [Fact]
+    public async Task Push_publishes_a_new_branch_without_a_lease()
     {
         await using var f = new GitFixture(); await f.Linear(); await f.AddOrigin();
         await f.Git("push", "origin", "main");
@@ -63,7 +67,8 @@ public sealed class PushTests
     }
 
     // Scenario: Without an origin the restack stays local and pushing is refused.
-    [Fact] public async Task Push_without_an_origin_is_refused()
+    [Fact]
+    public async Task Push_without_an_origin_is_refused()
     {
         await using var f = new GitFixture(); await f.Linear();
         var writer = Writer(f);

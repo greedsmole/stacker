@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Stacker.Core;
 using Stacker.Desktop.ViewModels;
 namespace Stacker.Desktop;
+
 public partial class ReviewPanel : UserControl
 {
     public ReviewPanel() => InitializeComponent();

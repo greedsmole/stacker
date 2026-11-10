@@ -72,12 +72,14 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
     public void CloseInlineEditors() { foreach (var view in _sections) foreach (var line in view.Lines) line.Editor = null; }
     public void BeginPrComment() { if (IsBusy) return; CloseInlineEditors(); _selection = null; OnPropertyChanged(nameof(HasSelection)); OnPropertyChanged(nameof(CanSuggestCodeChange)); OnPropertyChanged(nameof(SelectedCode)); SelectComposer("pr"); PanelTab = 0; }
     public void BeginReply(ReviewThread thread) { if (IsBusy) return; CloseInlineEditors(); _selection = null; OnPropertyChanged(nameof(HasSelection)); OnPropertyChanged(nameof(CanSuggestCodeChange)); OnPropertyChanged(nameof(SelectedCode)); SelectedThread = thread; SelectComposer("reply:" + thread.Id); PanelTab = 2; }
-    [RelayCommand] internal void RestoreRecoveredText()
+    [RelayCommand]
+    internal void RestoreRecoveredText()
     {
         Composer = string.IsNullOrEmpty(Composer) ? RecoveredText : Composer + "\n\n" + RecoveredText;
         _draft.RecoveredText = ""; OnPropertyChanged(nameof(RecoveredText)); OnPropertyChanged(nameof(HasRecoveredText)); QueueSave();
     }
-    [RelayCommand] internal void EditDraftComment(DraftComment comment)
+    [RelayCommand]
+    internal void EditDraftComment(DraftComment comment)
     {
         if (IsBusy) return;
         CloseInlineEditors(); _selection = comment.Anchor; SelectComposer("line:" + JsonSerializer.Serialize(comment.Anchor));
@@ -130,7 +132,7 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
         _reviewDraftController = new(this);
 
         _reviewPublicationController = new(this);
- AnchorGit = git; Session = new(store, reader); _reader = reader; _writer = writer; _store = store; Context = context; PullRequest = pr; _section = section; IsDemo = isDemo; _sections.Add(section); section.Review = this;
+        AnchorGit = git; Session = new(store, reader); _reader = reader; _writer = writer; _store = store; Context = context; PullRequest = pr; _section = section; IsDemo = isDemo; _sections.Add(section); section.Review = this;
         DraftComments.CollectionChanged += (_, _) => { OnPropertyChanged(nameof(ReviewLabel)); foreach (var view in _sections) view.ApplyThreads(); };
     }
     internal string Key => Context.Identity + "/" + PullRequest.Number;
@@ -168,7 +170,8 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
         NotifyPublicationState();
     }
     /// <summary>Prefills a standard GitHub suggestion with the selected head-side code, retaining existing prose.</summary>
-    [RelayCommand] internal void SuggestCodeChange()
+    [RelayCommand]
+    internal void SuggestCodeChange()
     {
         if (!CanSuggestCodeChange) { Message = "Select current code on the right side to suggest a replacement. Deleted lines support comments only."; return; }
         if (HasSuggestionPreview) { Message = "Edit the existing suggestion block to change the replacement."; return; }
@@ -183,7 +186,8 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
         var lines = _section.Lines.Where(l => l.Kind is DiffLineKind.Added or DiffLineKind.Context && l.NewLineNumber >= start && l.NewLineNumber <= anchor.Line).OrderBy(l => l.NewLineNumber).ToArray();
         return lines.Length == anchor.Line - start + 1 ? string.Join("\n", lines.Select(l => l.Text.TrimEnd('\r'))) : null;
     }
-    [RelayCommand] public async Task ReloadAsync(CancellationToken ct = default)
+    [RelayCommand]
+    public async Task ReloadAsync(CancellationToken ct = default)
     {
         _discussionLoad?.Cancel();
         using var load = CancellationTokenSource.CreateLinkedTokenSource(ct); _discussionLoad = load;
@@ -251,7 +255,8 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
         }
     }
     internal void ClearPublishedComposer() => _reviewPublicationController.ClearPublishedComposer();
-    [RelayCommand] internal async Task AddToDraftAsync()
+    [RelayCommand]
+    internal async Task AddToDraftAsync()
     {
         if (IsBusy) return;
         if (_selection is null || string.IsNullOrWhiteSpace(Composer)) { Message = "Select code lines and enter a comment."; return; }
@@ -260,7 +265,8 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
         var comment = new DraftComment(_selection, Composer); _draft.Comments.Add(comment); DraftComments.Add(comment); Composer = ""; QueueSave(); await _saveQueue; if (_saveError is null) Message = "Line comment saved to the local draft.";
     }
     [RelayCommand] internal void RemoveDraftComment(DraftComment comment) { if (IsBusy) return; _draft.Comments.Remove(comment); DraftComments.Remove(comment); QueueSave(); }
-    [RelayCommand] internal Task UseCurrentVersionAsync()
+    [RelayCommand]
+    internal Task UseCurrentVersionAsync()
 => _reviewRecoveryController.UseCurrentVersionAsync();
     [RelayCommand] internal Task PostCommentAsync() => _reviewPublicationController.PostCommentAsync();
     [RelayCommand] internal Task PostFileCommentAsync() => _reviewPublicationController.PostFileCommentAsync();

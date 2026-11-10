@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using Stacker.Core;
 namespace Stacker.Desktop;
+
 public partial class StackEditorWindow : Window
 {
     private readonly ObservableCollection<string> _branches = [];
@@ -44,25 +45,29 @@ public partial class StackEditorWindow : Window
         Close(true);
     }
     private void SaveClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         try
-        {
-            DeleteRequested = false;
-            var stack = new StackDefinition(_id, NameInput.Text?.Trim() ?? "", BaseInput.SelectedItem as string ?? "", _branches.ToArray());
-            StackValidation.Validate([stack]);
-            IsEnabled = false;
-            if (_save is not null && await _save(stack)) Close(true);
-            else ErrorLabel.Text = "Unable to save. Close this editor and check the main window error. Your existing file is preserved.";
-        }
-        catch (Exception ex) { ErrorLabel.Text = ex.Message; }
-        finally { IsEnabled = true; }
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    try
+    {
+        DeleteRequested = false;
+        var stack = new StackDefinition(_id, NameInput.Text?.Trim() ?? "", BaseInput.SelectedItem as string ?? "", _branches.ToArray());
+        StackValidation.Validate([stack]);
+        IsEnabled = false;
+        if (_save is not null && await _save(stack)) Close(true);
+        else ErrorLabel.Text = "Unable to save. Close this editor and check the main window error. Your existing file is preserved.";
+    }
+    catch (Exception ex) { ErrorLabel.Text = ex.Message; }
+    finally { IsEnabled = true; }
+}, message => AsyncHandler.Report(this, message));
 #pragma warning disable CS0618 // Avalonia 11 compatibility; data is internal and never interpreted as commands.
     private void LayerPointerPressed(object? sender, PointerPressedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (sender is not Control { DataContext: string branch } || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        var data = new DataObject(); data.Set("Stacker.Layer", branch);
-        try { await DragDrop.DoDragDrop(e, data, DragDropEffects.Move); }
-        catch (Exception ex) { ErrorLabel.Text = ex.Message; }
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (sender is not Control { DataContext: string branch } || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+    var data = new DataObject(); data.Set("Stacker.Layer", branch);
+    try { await DragDrop.DoDragDrop(e, data, DragDropEffects.Move); }
+    catch (Exception ex) { ErrorLabel.Text = ex.Message; }
+}, message => AsyncHandler.Report(this, message));
     private void DragOverLayer(object? sender, DragEventArgs e) { e.DragEffects = e.Data.Contains("Stacker.Layer") ? DragDropEffects.Move : DragDropEffects.None; e.Handled = true; }
     private void DropLayer(object? sender, DragEventArgs e)
     {

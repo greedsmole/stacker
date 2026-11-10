@@ -43,21 +43,21 @@ internal sealed class GitHubController(IGitHubPresentation owner, WorkspaceRunti
             }
             load.Token.ThrowIfCancellationRequested();
             var historyGraph = runtime.HistoryGraph is null ? null : await runtime.HistoryGraph.ObserveRemoteAsync(snapshot, owner.GitHubPreferences.BoundaryBranches ?? [snapshot.Context.DefaultBranch], load.Token);
-            if(runtime.Identities is not null && !background)
+            if (runtime.Identities is not null && !background)
             {
-                foreach(var pr in snapshot.PullRequests.Where(p=>p.HeadRepositoryId==snapshot.Context.RepositoryId))
+                foreach (var pr in snapshot.PullRequests.Where(p => p.HeadRepositoryId == snapshot.Context.RepositoryId))
                 {
-                    var reference="refs/heads/"+pr.HeadRef;
-                    if(runtime._repository.Refs.Any(r=>r.Name==reference&&r.Sha==pr.HeadSha))
+                    var reference = "refs/heads/" + pr.HeadRef;
+                    if (runtime._repository.Refs.Any(r => r.Name == reference && r.Sha == pr.HeadSha))
                     {
-                        var binding=await runtime.Identities.BindAsync(runtime._repository.Scope,reference,snapshot.Context,pr,load.Token);
-                        if(binding.IsFailed)owner.Error=binding.Problem!.Message;
+                        var binding = await runtime.Identities.BindAsync(runtime._repository.Scope, reference, snapshot.Context, pr, load.Token);
+                        if (binding.IsFailed) owner.Error = binding.Problem!.Message;
                     }
                 }
             }
             var changed = runtime._remoteSnapshot is null || runtime._remoteSnapshot.Context != snapshot.Context || !runtime._remoteSnapshot.PullRequests.SequenceEqual(snapshot.PullRequests) || historyGraph is not null && runtime._historyRemoteGraph is not null && !historyGraph.Edges.SequenceEqual(runtime._historyRemoteGraph.Edges);
             if (changed && runtime._remoteSnapshot is not null && owner.Sections.Count > 0 && !runtime._applyingChanges)
-            { runtime.Session.Offer(snapshot,historyGraph); owner.HasPendingChanges = true; owner.GitHubStatus = $"New changes available · checked {DateTime.Now:HH:mm}"; return; }
+            { runtime.Session.Offer(snapshot, historyGraph); owner.HasPendingChanges = true; owner.GitHubStatus = $"New changes available · checked {DateTime.Now:HH:mm}"; return; }
             runtime._remoteSnapshot = snapshot; runtime._historyRemoteGraph = historyGraph;
             (await runtime._applicationStore.WriteAsync("snapshots", root, snapshot, load.Token)).OrThrow();
             owner.GitHubPreferences.BoundaryBranches ??= new[] { snapshot.Context.DefaultBranch }.Concat(new[] { "main", "master", "develop", "test" }.Where(b => runtime._repository!.Refs.Any(r => r.Name.EndsWith('/' + b, StringComparison.Ordinal)) || snapshot.PullRequests.Any(p => p.BaseRef == b || p.HeadRef == b))).Distinct().ToList();
@@ -144,13 +144,13 @@ internal sealed class GitHubController(IGitHubPresentation owner, WorkspaceRunti
         if (owner.IsDemo)
         {
             IReadOnlyList<BranchRef> refs = prs.SelectMany(p => new[] { new BranchRef(RemoteRefs.HeadRef(p), p.HeadSha), new BranchRef(RemoteRefs.BaseRef(p), p.BaseSha) }).ToArray();
-            return runtime._repository! with{Refs=refs};
+            return runtime._repository! with { Refs = refs };
         }
-        var repository=runtime._repository??throw new StackerException("Open a local repository first.");
-        if(repository.Identity is not { } identity)throw new StackerException("Repository identity is unavailable.");
-        if(runtime._prObjects is not { } objects)throw new StackerException("PR object preparation is unavailable.");
-        (await objects.EnsureAsync(identity,runtime._remoteSnapshot!.Context,prs,ct)).OrThrow();
-        return repository with{Refs=prs.SelectMany(pr=>new[]{new BranchRef(RemoteRefs.HeadRef(pr),pr.HeadSha),new BranchRef(RemoteRefs.BaseRef(pr),pr.BaseSha)}).DistinctBy(r=>r.Name).ToArray()};
+        var repository = runtime._repository ?? throw new StackerException("Open a local repository first.");
+        if (repository.Identity is not { } identity) throw new StackerException("Repository identity is unavailable.");
+        if (runtime._prObjects is not { } objects) throw new StackerException("PR object preparation is unavailable.");
+        (await objects.EnsureAsync(identity, runtime._remoteSnapshot!.Context, prs, ct)).OrThrow();
+        return repository with { Refs = prs.SelectMany(pr => new[] { new BranchRef(RemoteRefs.HeadRef(pr), pr.HeadSha), new BranchRef(RemoteRefs.BaseRef(pr), pr.BaseSha) }).DistinctBy(r => r.Name).ToArray() };
     }
 
     public async Task SaveGitHubPreferencesAsync(RepositoryPreferences preferences)
@@ -169,7 +169,7 @@ internal sealed class GitHubController(IGitHubPresentation owner, WorkspaceRunti
     public async Task ClearGitHubCacheAsync()
     {
         if (runtime._remoteSnapshot is null || runtime._prObjects is null || owner.IsDemo) return;
-        try { runtime._comparison?.Cancel(); (await runtime._prObjects.ClearAsync(runtime._repository!.Identity!,runtime._remoteSnapshot.Context)).OrThrow(); owner.DisposeViews(); owner.Sections.Clear(); owner.GitHubStatus = "PR retention references cleared. Objects remain managed by the local Git repository."; }
+        try { runtime._comparison?.Cancel(); (await runtime._prObjects.ClearAsync(runtime._repository!.Identity!, runtime._remoteSnapshot.Context)).OrThrow(); owner.DisposeViews(); owner.Sections.Clear(); owner.GitHubStatus = "PR retention references cleared. Objects remain managed by the local Git repository."; }
         catch (Exception ex) { owner.Error = ex.Message; }
     }
 

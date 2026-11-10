@@ -125,8 +125,8 @@ internal sealed class ReviewPublicationController(ReviewViewModel owner)
 
     private void HandleCertainFailure(Exception error)
     {
-        if(owner._draft.Operation?.Phase!=PublicationPhase.Prepared && error is not StackerException { Problem.Certainty: EffectCertainty.NotStarted or EffectCertainty.Rejected }) return;
+        if (owner._draft.Operation?.Phase != PublicationPhase.Prepared && error is not StackerException { Problem.Certainty: EffectCertainty.NotStarted or EffectCertainty.Rejected }) return;
         ReviewSessionService.Transition(owner._draft, PublicationPhase.Rejected);
-        owner._draft.PendingOperation=null;owner._draft.PendingFilePath=null;owner.QueueSave();
+        owner._draft.PendingOperation = null; owner._draft.PendingFilePath = null; owner.QueueSave();
     }
 }

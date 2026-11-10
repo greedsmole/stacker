@@ -2,12 +2,14 @@
 using Stacker.Core;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
+
 public sealed class LayerCreationTests
 {
     private static LocalGitClient Writer(GitFixture f) => f.Writer();
 
     // Scenario: A layer starts at the chosen ref, is checked out, and leaves the working tree clean.
-    [Fact] public async Task A_layer_is_created_at_the_chosen_start_point_and_checked_out()
+    [Fact]
+    public async Task A_layer_is_created_at_the_chosen_start_point_and_checked_out()
     {
         await using var f = new GitFixture(); await f.Linear();
         var writer = Writer(f);
@@ -19,7 +21,8 @@ public sealed class LayerCreationTests
         Assert.Equal(await f.Git("rev-parse", "A"), await f.Git("rev-parse", "feature/new-layer"));
     }
     // Scenario: Duplicate names, invalid names, a dirty tree, and a missing start are all refused without writing.
-    [Fact] public async Task Layer_creation_refuses_duplicates_invalid_names_a_dirty_tree_and_a_missing_start()
+    [Fact]
+    public async Task Layer_creation_refuses_duplicates_invalid_names_a_dirty_tree_and_a_missing_start()
     {
         await using var f = new GitFixture(); await f.Linear();
         var writer = Writer(f);

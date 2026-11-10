@@ -4,10 +4,11 @@ using Stacker.Core.Framework;
 using Stacker.Infrastructure;
 using Stacker.Infrastructure.Framework;
 namespace Stacker.Tests;
+
 public sealed class GitFixture : IAsyncDisposable
 {
     public string Root { get; } = Path.Combine(Path.GetTempPath(), "Stacker tests ü " + Guid.NewGuid().ToString("N"));
-    public RepositoryIdentity Identity=>new(new(StableIdentity.For(Path.Combine(Root,".git"))[..32]),new(StableIdentity.For(Root)[..32]),Root,Path.Combine(Root,".git"));
+    public RepositoryIdentity Identity => new(new(StableIdentity.For(Path.Combine(Root, ".git"))[..32]), new(StableIdentity.For(Root)[..32]), Root, Path.Combine(Root, ".git"));
     public ProcessRunner Runner { get; } = new();
     public GitRepositoryReader Reader { get; }
     /// <summary>Local bare repository used as origin so push tests never touch the network.</summary>

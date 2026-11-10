@@ -8,7 +8,8 @@ namespace Stacker.Tests;
 
 public sealed class CommandExecutionTests
 {
-    [Fact] public async Task Foreground_mutations_are_single_flight_and_report_their_result()
+    [Fact]
+    public async Task Foreground_mutations_are_single_flight_and_report_their_result()
     {
         await using var f = new GitFixture();
         var journal = f.CreateJournal(); var bus = new CommandBus(new CommandRunner(journal));
@@ -27,7 +28,8 @@ public sealed class CommandExecutionTests
         Assert.Equal(StepState.Done, (journal.Recent(f.Root)).OrThrow()[0].Steps[0].State);
     }
 
-    [Fact] public async Task Closing_an_old_entry_does_not_erase_finished_steps()
+    [Fact]
+    public async Task Closing_an_old_entry_does_not_erase_finished_steps()
     {
         await using var f = new GitFixture(); var journal = f.CreateJournal();
         var original = (await journal.OpenAsync(f.Root, "test", [JournalStep.Planned("s", "write", "target")])).OrThrow();
@@ -36,7 +38,8 @@ public sealed class CommandExecutionTests
         Assert.Equal(StepState.Done, ((await journal.ByIdAsync(f.Root, original.Id)).OrThrow())!.Steps[0].State);
     }
 
-    [Fact] public async Task Production_local_client_runs_real_commands_through_the_bus()
+    [Fact]
+    public async Task Production_local_client_runs_real_commands_through_the_bus()
     {
         await using var f = new GitFixture(); await f.Init();
         var journal = f.CreateJournal(); var bus = new CommandBus(new CommandRunner(journal));
@@ -50,7 +53,8 @@ public sealed class CommandExecutionTests
         Assert.Equal(JournalPhase.Applied, (journal.Recent(f.Root)).OrThrow()[0].Phase);
     }
 
-    [Fact] public async Task Production_remote_writer_preserves_a_rejected_send_as_a_failed_attempt()
+    [Fact]
+    public async Task Production_remote_writer_preserves_a_rejected_send_as_a_failed_attempt()
     {
         await using var f = new GitFixture(); var journal = f.CreateJournal();
         var bus = new CommandBus(new CommandRunner(journal));
@@ -62,7 +66,8 @@ public sealed class CommandExecutionTests
         Assert.NotEqual(StepState.Done, entry.Steps[0].State);
     }
 
-    [Fact] public async Task A_corrupt_critical_journal_keeps_blocking_until_it_is_resolved()
+    [Fact]
+    public async Task A_corrupt_critical_journal_keeps_blocking_until_it_is_resolved()
     {
         await using var f = new GitFixture();
         var path = f.Root + " journal";
@@ -74,7 +79,8 @@ public sealed class CommandExecutionTests
         Assert.Equal("{ broken", await File.ReadAllTextAsync(store.PathFor(f.Root)));
     }
 
-    [Fact] public async Task A_late_remote_change_is_detected_before_pushing_the_first_layer()
+    [Fact]
+    public async Task A_late_remote_change_is_detected_before_pushing_the_first_layer()
     {
         await using var f = new GitFixture(); await f.Linear(); await f.AddOrigin();
         await f.Git("push", "origin", "main", "A", "B", "C");

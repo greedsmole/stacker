@@ -31,8 +31,10 @@ public partial class ReviewBodyView : UserControl
         BodyBlocks.ItemsSource = blocks;
     }
     private void CopySuggestionClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (sender is not Button { DataContext: ReviewContentBlock block } button || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
-        try { await clipboard.SetTextAsync(block.Text); button.Content = "Copied"; }
-        catch { button.Content = "Copy failed"; }
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (sender is not Button { DataContext: ReviewContentBlock block } button || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
+    try { await clipboard.SetTextAsync(block.Text); button.Content = "Copied"; }
+    catch { button.Content = "Copy failed"; }
+}, message => AsyncHandler.Report(this, message));
 }

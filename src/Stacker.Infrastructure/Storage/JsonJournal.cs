@@ -24,7 +24,7 @@ public sealed class JsonJournal(IStateStore<JournalLog> store, IClock clock) : I
         {
             var entry = new JournalEntry(JournalEntry.CurrentSchema, OperationCorrelation.Current ?? Guid.NewGuid().ToString("N"), repository, kind,
                 clock.Now, clock.Now, JournalPhase.Running, planned, null, null, null)
-                { RestackPlan = planned.FirstOrDefault(step => step.RestackPlan is not null)?.RestackPlan };
+            { RestackPlan = planned.FirstOrDefault(step => step.RestackPlan is not null)?.RestackPlan };
             await MutateAsync(repository, log =>
             {
                 if (kind == "restack" && log.Entries.Any(existing => existing.Kind == "restack" && existing.NeedsAttention))
@@ -163,19 +163,19 @@ public sealed class JsonJournal(IStateStore<JournalLog> store, IClock clock) : I
         (await store.WriteAsync(repository, log, ct)).OrThrow();
     }
 
-    Task<Result<JournalEntry>> IJournal.OpenAsync(string repository,string kind,IReadOnlyList<JournalStep> planned,CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(repository, kind, planned, ct), ProblemCodes.StoreWrite);
+    Task<Result<JournalEntry>> IJournal.OpenAsync(string repository, string kind, IReadOnlyList<JournalStep> planned, CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(repository, kind, planned, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry>> IJournal.StepAsync(JournalEntry entry,JournalStep step,CancellationToken ct) => Boundary.CaptureAsync(() => StepAsync(entry, step, ct), ProblemCodes.StoreWrite);
+    Task<Result<JournalEntry>> IJournal.StepAsync(JournalEntry entry, JournalStep step, CancellationToken ct) => Boundary.CaptureAsync(() => StepAsync(entry, step, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry>> IJournal.CloseAsync(JournalEntry entry,JournalPhase phase,string? stashRef ,string? pendingStepId ,string? message ,CancellationToken ct) => Boundary.CaptureAsync(() => CloseAsync(entry, phase, stashRef, pendingStepId, message, ct), ProblemCodes.StoreWrite);
+    Task<Result<JournalEntry>> IJournal.CloseAsync(JournalEntry entry, JournalPhase phase, string? stashRef, string? pendingStepId, string? message, CancellationToken ct) => Boundary.CaptureAsync(() => CloseAsync(entry, phase, stashRef, pendingStepId, message, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry>> IJournal.SetStashAsync(JournalEntry entry,string? stashRef,CancellationToken ct) => Boundary.CaptureAsync(() => SetStashAsync(entry, stashRef, ct), ProblemCodes.StoreWrite);
+    Task<Result<JournalEntry>> IJournal.SetStashAsync(JournalEntry entry, string? stashRef, CancellationToken ct) => Boundary.CaptureAsync(() => SetStashAsync(entry, stashRef, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry?>> IJournal.ActiveAsync(string repository,CancellationToken ct) => Boundary.CaptureAsync(() => ActiveAsync(repository, ct), ProblemCodes.StoreWrite);
+    Task<Result<JournalEntry?>> IJournal.ActiveAsync(string repository, CancellationToken ct) => Boundary.CaptureAsync(() => ActiveAsync(repository, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry?>> IJournal.UndoableAsync(string repository,CancellationToken ct) => Boundary.CaptureAsync(() => UndoableAsync(repository, ct), ProblemCodes.StoreWrite);
+    Task<Result<JournalEntry?>> IJournal.UndoableAsync(string repository, CancellationToken ct) => Boundary.CaptureAsync(() => UndoableAsync(repository, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry?>> IJournal.ByIdAsync(string repository,string id,CancellationToken ct) => Boundary.CaptureAsync(() => ByIdAsync(repository, id, ct), ProblemCodes.StoreWrite);
+    Task<Result<JournalEntry?>> IJournal.ByIdAsync(string repository, string id, CancellationToken ct) => Boundary.CaptureAsync(() => ByIdAsync(repository, id, ct), ProblemCodes.StoreWrite);
 
-    Result<IReadOnlyList<JournalEntry>> IJournal.Recent(string repository,int count ) => Boundary.Capture(() => Recent(repository, count), ProblemCodes.StoreWrite);
+    Result<IReadOnlyList<JournalEntry>> IJournal.Recent(string repository, int count) => Boundary.Capture(() => Recent(repository, count), ProblemCodes.StoreWrite);
 }

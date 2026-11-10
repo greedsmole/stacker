@@ -5,8 +5,8 @@ namespace Stacker.Desktop.ViewModels;
 
 public partial class ReviewViewModel
 {
-    public string ExportRecoveryText() => System.Text.Json.JsonSerializer.Serialize(_draft, new System.Text.Json.JsonSerializerOptions{WriteIndented=true});
-    public async Task RetrySaveAsync(){QueueSave();await FlushAsync();}
+    public string ExportRecoveryText() => System.Text.Json.JsonSerializer.Serialize(_draft, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    public async Task RetrySaveAsync() { QueueSave(); await FlushAsync(); }
     internal IGitRepositoryReader AnchorGit = null!;
     public IHistoryGit? HistoryObjects { get; set; }
     public RepositoryIdentity? HistoryRepository { get; set; }
@@ -23,8 +23,8 @@ public partial class ReviewViewModel
         IsBusy = true;
         try
         {
-            using var lease=(await HistoryObjects.AcquireAsync(HistoryRepository,Context.Identity)).OrThrow();
-            var root=lease.Root;
+            using var lease = (await HistoryObjects.AcquireAsync(HistoryRepository, Context.Identity)).OrThrow();
+            var root = lease.Root;
             var anchor = comment.Anchor;
             var candidates = _section.Result.Files.Where(f => f.NewPath == anchor.Path || f.OldPath == anchor.Path).ToArray();
             if (candidates.Length == 0)
@@ -60,7 +60,8 @@ public partial class ReviewViewModel
         catch (Exception ex) { _proposal = null; Message = ex.Message; }
         finally { IsBusy = false; OnPropertyChanged(nameof(HasAnchorProposal)); }
     }
-    [RelayCommand] private async Task ConfirmReanchorAsync()
+    [RelayCommand]
+    private async Task ConfirmReanchorAsync()
     {
         if (IsBusy || HasPendingPublication || _proposal is not { } proposal || _proposedComment is not { } old) return;
         if (proposal.Proposed.HeadSha != PullRequest.HeadSha || proposal.Proposed.BaseSha != PullRequest.BaseSha) { Message = "The proposal is stale. Generate it again."; return; }

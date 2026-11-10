@@ -8,10 +8,15 @@ namespace Stacker.Infrastructure;
 /// <summary>Application data keyed by identity; reads never throw, damaged documents are quarantined.</summary>
 public sealed class ApplicationStore : IApplicationState
 {
+    /// <summary>Root directory containing application-owned state.</summary>
     public string Root { get; }
+    /// <summary>Atomic file abstraction used to preserve documents during replacement.</summary>
     private readonly IAtomicFile _files;
+    /// <summary>Serializes writes so snapshots cannot replace one another concurrently.</summary>
     private readonly SemaphoreSlim _gate = new(1, 1);
 
+    /// <summary>Creates a store and imports the previous v2 layout when the v3 root is opened.</summary>
+    /// <param name="root">Optional application root, primarily for tests.</param><param name="files">Optional atomic file implementation.</param>
     public ApplicationStore(string? root = null, IAtomicFile? files = null)
     {
         Root = root ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Stacker", "v3");
@@ -21,6 +26,8 @@ public sealed class ApplicationStore : IApplicationState
     /// <summary>Set when a damaged document was moved aside, so the UI can mention it once.</summary>
     public string? LastProblem { get; private set; }
 
+    /// <summary>Converts an identity into the stable filename-safe key used by state stores.</summary>
+    /// <param name="identity">Repository, workspace or user identity.</param>
     public static string Key(string identity) => FileLockFactory.Hash(identity);
 
     /// <summary>Brings forward data written by the previous layout, once, without deleting the original.</summary>
@@ -50,6 +57,8 @@ public sealed class ApplicationStore : IApplicationState
         catch (Exception ex) { LastProblem = "Legacy import is incomplete and will be retried: " + ex.Message; }
     }
 
+    /// <summary>Reads one typed document, recording a problem when it is damaged or absent.</summary>
+    /// <param name="kind">State category subdirectory.</param><param name="identity">Stable owner identity.</param><param name="ct">Cancellation token.</param>
     public async Task<T?> ReadAsync<T>(string kind, string identity, CancellationToken ct = default) where T : class
     {
         await Task.CompletedTask;
@@ -58,6 +67,8 @@ public sealed class ApplicationStore : IApplicationState
         return result.Value;
     }
 
+    /// <summary>Writes one typed document under the store-wide write gate.</summary>
+    /// <param name="kind">State category subdirectory.</param><param name="identity">Stable owner identity.</param><param name="value">Snapshot to persist.</param><param name="ct">Cancellation token.</param>
     public async Task WriteAsync<T>(string kind, string identity, T value, CancellationToken ct = default) where T : class
     {
         await _gate.WaitAsync(ct);

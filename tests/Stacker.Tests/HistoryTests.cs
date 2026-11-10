@@ -8,7 +8,8 @@ namespace Stacker.Tests;
 public sealed class HistoryTests
 {
     private static string Temp() => Directory.CreateTempSubdirectory("stacker-history-test-").FullName;
-    [Fact] public async Task Versions_deduplicate_and_preserve_original_observation_after_restart()
+    [Fact]
+    public async Task Versions_deduplicate_and_preserve_original_observation_after_restart()
     {
         var root = Temp();
         try
@@ -26,7 +27,8 @@ public sealed class HistoryTests
         }
         finally { Directory.Delete(root, true); }
     }
-    [Fact] public async Task Draft_migration_is_idempotent_and_concurrent_writers_are_rejected()
+    [Fact]
+    public async Task Draft_migration_is_idempotent_and_concurrent_writers_are_rejected()
     {
         var root = Temp();
         try
@@ -45,7 +47,8 @@ public sealed class HistoryTests
         }
         finally { Directory.Delete(root, true); }
     }
-    [Fact] public async Task Malformed_legacy_draft_is_preserved_and_never_imported_as_empty()
+    [Fact]
+    public async Task Malformed_legacy_draft_is_preserved_and_never_imported_as_empty()
     {
         var root = Temp();
         try
@@ -59,7 +62,8 @@ public sealed class HistoryTests
         }
         finally { Directory.Delete(root, true); }
     }
-    [Fact] public async Task Shared_foundation_is_one_node_and_old_graph_survives_removed_definition()
+    [Fact]
+    public async Task Shared_foundation_is_one_node_and_old_graph_survives_removed_definition()
     {
         var root = Temp();
         try
@@ -75,7 +79,8 @@ public sealed class HistoryTests
         }
         finally { Directory.Delete(root, true); }
     }
-    [Fact] public async Task Rebase_normalization_keeps_own_patch_and_detects_new_edit_without_mutating_checkout()
+    [Fact]
+    public async Task Rebase_normalization_keeps_own_patch_and_detects_new_edit_without_mutating_checkout()
     {
         await using var f = new GitFixture(); await f.Init(); var root = Temp();
         try
@@ -83,28 +88,29 @@ public sealed class HistoryTests
             var basis = await f.Git("rev-parse", "HEAD");
             await f.Git("checkout", "-b", "A"); await f.Write("own.txt", "own\n"); await f.Commit("own"); var oldHead = await f.Git("rev-parse", "HEAD");
             var objects = new HistoryGit(f.Runner, new(), new ApplicationStore(root));
-            await objects.CaptureAsync(f.Identity,"scope", [basis, oldHead]);
+            await objects.CaptureAsync(f.Identity, "scope", [basis, oldHead]);
             await f.Git("checkout", "main"); await f.Write("upstream.txt", "upstream\n"); await f.Commit("upstream"); var nextBase = await f.Git("rev-parse", "HEAD");
             await f.Git("checkout", "A"); await f.Git("rebase", "main"); var nextHead = await f.Git("rev-parse", "HEAD");
-            (await objects.CaptureAsync(f.Identity,"scope", [nextBase, nextHead])).OrThrow(); var privateRoot=f.Root;
+            (await objects.CaptureAsync(f.Identity, "scope", [nextBase, nextHead])).OrThrow(); var privateRoot = f.Root;
             var service = new VersionComparisonService(f.Reader, objects);
             var old = new ChangeVersion("old", "A", basis, oldHead, basis, DateTimeOffset.UtcNow);
             var current = new ChangeVersion("current", "A", nextBase, nextHead, nextBase, DateTimeOffset.UtcNow);
             var refs = await f.Git("show-ref"); var index = await f.Git("write-tree");
-            var comparison = await service.CompareAsync(f.Identity,"scope", old, current);
+            var comparison = await service.CompareAsync(f.Identity, "scope", old, current);
             Assert.Null(comparison.Unavailable); Assert.Empty(comparison.CodeChanges); Assert.Single(comparison.BaseChanges);
             Assert.Equal(refs, await f.Git("show-ref")); Assert.Equal(index, await f.Git("write-tree")); Assert.Equal("", await f.Git("status", "--porcelain"));
             await f.Write("own.txt", "own\nfix\n"); await f.Commit("fix"); var fixedHead = await f.Git("rev-parse", "HEAD");
-            (await objects.CaptureAsync(f.Identity,"scope", [fixedHead])).OrThrow();
-            var fixedComparison = await service.CompareAsync(f.Identity,"scope", old, current with { HeadSha = fixedHead });
+            (await objects.CaptureAsync(f.Identity, "scope", [fixedHead])).OrThrow();
+            var fixedComparison = await service.CompareAsync(f.Identity, "scope", old, current with { HeadSha = fixedHead });
             Assert.Equal("own.txt", Assert.Single(fixedComparison.CodeChanges).NewPath);
             // A force-updated local ref cannot destroy captured historical objects.
             await f.Git("update-ref", "refs/heads/A", nextBase);
-            Assert.Contains("/"+oldHead, await f.GitAt(privateRoot,"show-ref"));
+            Assert.Contains("/" + oldHead, await f.GitAt(privateRoot, "show-ref"));
         }
         finally { Directory.Delete(root, true); }
     }
-    [Fact] public async Task Conflicting_replay_is_explicitly_unavailable_and_trial_merge_lists_paths()
+    [Fact]
+    public async Task Conflicting_replay_is_explicitly_unavailable_and_trial_merge_lists_paths()
     {
         await using var f = new GitFixture(); await f.Init(); var root = Temp();
         try
@@ -113,16 +119,17 @@ public sealed class HistoryTests
             await f.Git("checkout", "-b", "A"); await f.Write("base.txt", "left\n"); await f.Commit("left"); var head = await f.Git("rev-parse", "HEAD");
             await f.Git("checkout", "main"); await f.Write("base.txt", "right\n"); await f.Commit("right"); var next = await f.Git("rev-parse", "HEAD");
             var objects = new HistoryGit(f.Runner, new(), new ApplicationStore(root));
-            (await objects.CaptureAsync(f.Identity,"scope", [basis, head, next])).OrThrow(); var cache=f.Root;
-            var comparison = await new VersionComparisonService(f.Reader, objects).CompareAsync(f.Identity,"scope",
+            (await objects.CaptureAsync(f.Identity, "scope", [basis, head, next])).OrThrow(); var cache = f.Root;
+            var comparison = await new VersionComparisonService(f.Reader, objects).CompareAsync(f.Identity, "scope",
                 new("old", "A", basis, head, basis, DateTimeOffset.UtcNow), new("new", "A", next, next, next, DateTimeOffset.UtcNow));
             Assert.False(comparison.IsReliable); Assert.Contains("conflicts", comparison.Unavailable);
             Assert.Contains("base.txt", (await objects.MergeAsync(f.Identity, head, next)).OrThrow());
-            Assert.Null((await objects.TransplantAsync(f.Identity,basis,head,next)).OrThrow());
+            Assert.Null((await objects.TransplantAsync(f.Identity, basis, head, next)).OrThrow());
         }
         finally { Directory.Delete(root, true); }
     }
-    [Fact] public void Anchor_mapping_requires_unique_context_and_explicit_new_anchor()
+    [Fact]
+    public void Anchor_mapping_requires_unique_context_and_explicit_new_anchor()
     {
         var anchor = new ReviewAnchor(1, "old", "base", "a.cs", "RIGHT", 3);
         var pr = new PullRequest(1, "A", 1, "main", "newbase", 1, "A", "newhead", false, "");
@@ -132,7 +139,8 @@ public sealed class HistoryTests
         Assert.Null(AnchorMapping.Propose(anchor, pr, "a.cs", old, old + "\n" + old));
         Assert.Null(AnchorMapping.Propose(anchor, pr, "a.cs", old, "changed"));
     }
-    [Fact] public void Publication_payload_is_immutable_and_transitions_reject_resend()
+    [Fact]
+    public void Publication_payload_is_immutable_and_transitions_reject_resend()
     {
         var draft = new ReviewDraft { PendingBody = "first" };
         var context = new GitHubRepositoryContext("host", 1, "owner", "repo", "", "user", "main");

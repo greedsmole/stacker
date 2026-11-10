@@ -7,7 +7,8 @@ namespace Stacker.Tests;
 [Collection(HeadlessApp.CollectionName)]
 public sealed class SessionLifecycleTests
 {
-    [AvaloniaFact] public async Task Review_eviction_keeps_the_recent_session_and_flushes_the_actual_oldest()
+    [AvaloniaFact]
+    public async Task Review_eviction_keeps_the_recent_session_and_flushes_the_actual_oldest()
     {
         await using var f = new GitFixture(); var github = new FakeGitHub();
         var state = new MemoryApplicationState();
@@ -16,7 +17,7 @@ public sealed class SessionLifecycleTests
             applicationStore: state);
         var sections = Enumerable.Range(1, 13).Select(number => new DiffSectionViewModel(f.Reader, f.Root,
             new("feature", "main", github.Current.BaseSha, github.Current.HeadSha, null, []))
-            { AssociatedPr = github.Current with { Number = number }, GitHubContext = FakeGitHub.Context, IsPrSnapshot = true }).ToArray();
+        { AssociatedPr = github.Current with { Number = number }, GitHubContext = FakeGitHub.Context, IsPrSnapshot = true }).ToArray();
         try
         {
             var sessions = new List<ReviewViewModel>();

@@ -4,6 +4,7 @@ using Stacker.Core.Framework;
 using Stacker.Infrastructure;
 using Stacker.Infrastructure.Framework;
 namespace Stacker.Tests;
+
 public sealed class RestackTests
 {
     private static LocalGitClient Writer(GitFixture f) => f.Writer();
@@ -15,7 +16,8 @@ public sealed class RestackTests
     }
 
     // Scenario: A moved base rewrites every layer, keeps each layer's own change, and returns the user to their branch.
-    [Fact] public async Task Restack_rebases_every_layer_and_keeps_its_content()
+    [Fact]
+    public async Task Restack_rebases_every_layer_and_keeps_its_content()
     {
         await using var f = new GitFixture(); await f.Linear();
         var before = new Dictionary<string, string>();
@@ -47,7 +49,8 @@ public sealed class RestackTests
     }
 
     // Scenario: Undo restores every branch, including the one the user has checked out.
-    [Fact] public async Task Undo_restores_every_branch_even_the_checked_out_one()
+    [Fact]
+    public async Task Undo_restores_every_branch_even_the_checked_out_one()
     {
         await using var f = new GitFixture(); await f.Linear();
         var before = new Dictionary<string, string>();
@@ -70,7 +73,8 @@ public sealed class RestackTests
     }
 
     // Scenario: A user working on the top layer is returned there, on the rewritten commit.
-    [Fact] public async Task Restack_returns_to_a_rewritten_layer_branch()
+    [Fact]
+    public async Task Restack_returns_to_a_rewritten_layer_branch()
     {
         await using var f = new GitFixture(); await f.Linear(); await MoveBase(f);
         await f.Git("checkout", "C");
@@ -98,7 +102,8 @@ public sealed class RestackTests
     }
 
     // Scenario: A conflict stops the restack, keeps the rebase, and is finished from the app after resolving.
-    [Fact] public async Task A_conflicting_layer_stops_for_the_user_to_resolve()
+    [Fact]
+    public async Task A_conflicting_layer_stops_for_the_user_to_resolve()
     {
         await using var f = new GitFixture();
         var (before, stack) = await Conflicting(f);
@@ -135,7 +140,8 @@ public sealed class RestackTests
     }
 
     // Scenario: Aborting a conflicted restack restores every branch the interrupted run moved.
-    [Fact] public async Task Aborting_a_conflicted_restack_restores_every_branch()
+    [Fact]
+    public async Task Aborting_a_conflicted_restack_restores_every_branch()
     {
         await using var f = new GitFixture();
         var (before, stack) = await Conflicting(f);
@@ -154,7 +160,8 @@ public sealed class RestackTests
     }
 
     // Scenario: Skipping the conflicting commit drops it and keeps the rest of the stack.
-    [Fact] public async Task Skipping_the_conflicting_commit_resumes_the_rebase()
+    [Fact]
+    public async Task Skipping_the_conflicting_commit_resumes_the_rebase()
     {
         await using var f = new GitFixture();
         var (_, stack) = await Conflicting(f);
@@ -168,7 +175,8 @@ public sealed class RestackTests
     }
 
     // Scenario: A layer with no commits of its own follows its parent instead of being left behind.
-    [Fact] public async Task An_empty_layer_follows_its_parent()
+    [Fact]
+    public async Task An_empty_layer_follows_its_parent()
     {
         await using var f = new GitFixture(); await f.Init();
         await f.Git("checkout", "-b", "A"); await f.Write("A.txt", "A\n"); await f.Commit("A");
@@ -183,7 +191,8 @@ public sealed class RestackTests
     }
 
     // Scenario: The generated demo is a real playground: its own workspace files never block a restack.
-    [Fact] public async Task Demo_repository_can_be_restacked()
+    [Fact]
+    public async Task Demo_repository_can_be_restacked()
     {
         await using var f = new GitFixture();
         var applicationStore = new ApplicationStore(f.Root + " app");
@@ -202,7 +211,8 @@ public sealed class RestackTests
     }
 
     // Scenario: The subject of a branch's newest commit is offered as a pull-request title.
-    [Fact] public async Task The_newest_commit_subject_is_available_for_a_pull_request_title()
+    [Fact]
+    public async Task The_newest_commit_subject_is_available_for_a_pull_request_title()
     {
         await using var f = new GitFixture(); await f.Linear();
         var writer = Writer(f);
@@ -211,7 +221,8 @@ public sealed class RestackTests
     }
 
     // Scenario: Every write is visible in the Git command log the diagnostics tab shows.
-    [Fact] public async Task Restack_commands_appear_in_the_git_log()
+    [Fact]
+    public async Task Restack_commands_appear_in_the_git_log()
     {
         await using var f = new GitFixture(); await f.Linear(); await MoveBase(f);
         var log = new GitCommandLog();
@@ -224,7 +235,8 @@ public sealed class RestackTests
     }
 
     // Scenario: An untracked scratch file no longer blocks a restack, while a tracked edit still does.
-    [Fact] public async Task Untracked_files_are_allowed_but_tracked_changes_block()
+    [Fact]
+    public async Task Untracked_files_are_allowed_but_tracked_changes_block()
     {
         await using var f = new GitFixture(); await f.Linear(); await MoveBase(f);
         var writer = Writer(f);
@@ -246,7 +258,8 @@ public sealed class RestackTests
     }
 
     // Scenario: A stale preview or an unsafe repository state is refused before anything moves.
-    [Fact] public async Task Dirty_tree_and_an_unfinished_rebase_refuse_to_plan()
+    [Fact]
+    public async Task Dirty_tree_and_an_unfinished_rebase_refuse_to_plan()
     {
         await using var f = new GitFixture(); await f.Linear();
         var writer = Writer(f);

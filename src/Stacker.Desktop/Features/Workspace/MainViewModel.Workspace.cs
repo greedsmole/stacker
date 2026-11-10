@@ -24,7 +24,7 @@ public sealed partial class MainViewModel
     /// <summary>Refreshes remote metadata in the background while retaining the currently displayed snapshot.</summary>
     public Task PollAsync(CancellationToken ct = default) => _workspaceController.PollAsync(ct);
     [RelayCommand] public Task RefreshAllAsync() => _workspaceController.RefreshAllAsync();
-    [RelayCommand] public async Task UpdateChangesAsync() { var reopen=ActiveHistory is not null; await _workspaceController.UpdateChangesAsync(); if(reopen) await ShowHistoryAsync(); }
+    [RelayCommand] public async Task UpdateChangesAsync() { var reopen = ActiveHistory is not null; await _workspaceController.UpdateChangesAsync(); if (reopen) await ShowHistoryAsync(); }
     // A separate state key per repository and stack prevents one stack's file/filter/scroll choices leaking into another.
     internal void CaptureWorkspace() => _workspaceController.CaptureWorkspace();
     /// <summary>Persists the active selection and per-stack view state in the application data directory.</summary>

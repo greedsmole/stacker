@@ -10,11 +10,17 @@ namespace Stacker.Desktop.ViewModels;
 
 public sealed partial class MainViewModel
 {
+    /// <summary>Repository-specific GitHub connection and publication preferences.</summary>
     public RepositoryPreferences GitHubPreferences { get; set; } = new();
+    /// <summary>Discovered remote pull-request groups.</summary>
     public ObservableCollection<StackGroupViewModel> RemoteGroups { get; } = [];
+    /// <summary>Remote groups that cannot be merged into a shared stack.</summary>
     public ObservableCollection<StackGroupViewModel> OtherGroups { get; } = [];
+    /// <summary>Current connection or refresh status.</summary>
     [ObservableProperty] internal string _gitHubStatus = "Not connected";
+    /// <summary>True while GitHub data or remote objects are loading.</summary>
     [ObservableProperty] internal bool _gitHubBusy;
+    /// <summary>Whether the current workspace is the offline demo and cannot publish.</summary>
     [ObservableProperty] internal bool _isDemo;
     public bool HasRemoteGroups => RemoteGroups.Count > 0;
     public bool HasOtherGroups => OtherGroups.Count > 0;
@@ -22,6 +28,8 @@ public sealed partial class MainViewModel
     [RelayCommand] public Task RefreshGitHubAsync() => _gitHubController.RefreshGitHubAsync();
     public Task RefreshGitHubCoreAsync(CancellationToken ct, bool background) => _gitHubController.RefreshGitHubCoreAsync(ct, background);
     public void BuildDiscoveredGroups() => _gitHubController.BuildDiscoveredGroups();
+    /// <summary>Projects pull requests into a display group with synthetic local ref snapshots.</summary>
+    /// <param name="id">Stable group identity.</param><param name="name">Display name.</param><param name="prs">Pull requests in layer order.</param><param name="shared">Whether their base is shared.</param>
     internal static StackGroupViewModel RemoteGroup(string id, string name, IReadOnlyList<PullRequest> prs, bool shared)
     {
         var definition = new StackDefinition(id, name, RemoteRefs.BaseRef(prs[0]), prs.Select(RemoteRefs.HeadRef).ToArray());

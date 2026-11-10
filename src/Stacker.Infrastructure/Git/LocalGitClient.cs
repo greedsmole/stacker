@@ -98,41 +98,41 @@ public sealed class LocalGitClient : IGitBranchWriter
     }
     private static Task<Result<Unit>> CaptureUnit(Func<Task> effect) => Capture(async () => { await effect(); return Unit.Value; });
 
-    Task<Result<RestackPlan>> IGitBranchWriter.PlanAsync(RepositorySnapshot repository,StackDefinition stack,bool preserveMerges ,CancellationToken ct) => Boundary.CaptureAsync(() => PlanAsync(repository, stack, preserveMerges, ct), ProblemCodes.GitFailed);
+    Task<Result<RestackPlan>> IGitBranchWriter.PlanAsync(RepositorySnapshot repository, StackDefinition stack, bool preserveMerges, CancellationToken ct) => Boundary.CaptureAsync(() => PlanAsync(repository, stack, preserveMerges, ct), ProblemCodes.GitFailed);
 
-    Task<Result<RestackOutcome>> IGitBranchWriter.RestackAsync(RestackPlan plan,IProgress<string>? progress ,CancellationToken ct) => Boundary.CaptureAsync(() => RestackAsync(plan, progress, ct), ProblemCodes.GitFailed);
+    Task<Result<RestackOutcome>> IGitBranchWriter.RestackAsync(RestackPlan plan, IProgress<string>? progress, CancellationToken ct) => Boundary.CaptureAsync(() => RestackAsync(plan, progress, ct), ProblemCodes.GitFailed);
 
-    Task<Result<IReadOnlyList<string>>> IGitBranchWriter.PushAsync(RestackPlan plan,CancellationToken ct) => Boundary.CaptureAsync(() => PushAsync(plan, ct), ProblemCodes.GitFailed);
+    Task<Result<IReadOnlyList<string>>> IGitBranchWriter.PushAsync(RestackPlan plan, CancellationToken ct) => Boundary.CaptureAsync(() => PushAsync(plan, ct), ProblemCodes.GitFailed);
 
-    Task<Result<JournalEntry?>> IGitBranchWriter.LastJournalAsync(string root,CancellationToken ct) => Boundary.CaptureAsync(() => LastJournalAsync(root, ct), ProblemCodes.GitFailed);
+    Task<Result<JournalEntry?>> IGitBranchWriter.LastJournalAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => LastJournalAsync(root, ct), ProblemCodes.GitFailed);
 
-    Task<Result<RestackOutcome>> IGitBranchWriter.UndoLastAsync(string root,CancellationToken ct) => Boundary.CaptureAsync(() => UndoLastAsync(root, ct), ProblemCodes.GitFailed);
+    Task<Result<RestackOutcome>> IGitBranchWriter.UndoLastAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => UndoLastAsync(root, ct), ProblemCodes.GitFailed);
 
-    Task<Result<string?>> IGitBranchWriter.LastCommitSubjectAsync(string root,string branch,CancellationToken ct) => Boundary.CaptureAsync(() => LastCommitSubjectAsync(root, branch, ct), ProblemCodes.GitFailed);
+    Task<Result<string?>> IGitBranchWriter.LastCommitSubjectAsync(string root, string branch, CancellationToken ct) => Boundary.CaptureAsync(() => LastCommitSubjectAsync(root, branch, ct), ProblemCodes.GitFailed);
 
-    Task<Result<string>> IGitBranchWriter.CreateLayerAsync(string root,string branchName,string startRef,CancellationToken ct) => Boundary.CaptureAsync(() => CreateLayerAsync(root, branchName, startRef, ct), ProblemCodes.GitFailed);
+    Task<Result<string>> IGitBranchWriter.CreateLayerAsync(string root, string branchName, string startRef, CancellationToken ct) => Boundary.CaptureAsync(() => CreateLayerAsync(root, branchName, startRef, ct), ProblemCodes.GitFailed);
 
-    Task<Result<IReadOnlyList<string>>> IGitBranchWriter.PushStackAsync(RestackPlan plan,CancellationToken ct) => Boundary.CaptureAsync(() => PushStackAsync(plan, ct), ProblemCodes.GitFailed);
+    Task<Result<IReadOnlyList<string>>> IGitBranchWriter.PushStackAsync(RestackPlan plan, CancellationToken ct) => Boundary.CaptureAsync(() => PushStackAsync(plan, ct), ProblemCodes.GitFailed);
 
-    Task<Result<WorkingTreeState>> IGitBranchWriter.StateAsync(string root,CancellationToken ct) => Boundary.CaptureAsync(() => StateAsync(root, ct), ProblemCodes.GitFailed);
+    Task<Result<WorkingTreeState>> IGitBranchWriter.StateAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => StateAsync(root, ct), ProblemCodes.GitFailed);
 
-    Task<Result<IReadOnlyList<string>>> IGitBranchWriter.StageAsync(string root,IReadOnlyList<string> paths,CancellationToken ct) => Boundary.CaptureAsync(() => StageAsync(root, paths, ct), ProblemCodes.GitFailed);
+    Task<Result<IReadOnlyList<string>>> IGitBranchWriter.StageAsync(string root, IReadOnlyList<string> paths, CancellationToken ct) => Boundary.CaptureAsync(() => StageAsync(root, paths, ct), ProblemCodes.GitFailed);
 
-    Task<Result<string>> IGitBranchWriter.CommitAsync(string root,string message,bool stageAll,CancellationToken ct) => Boundary.CaptureAsync(() => CommitAsync(root, message, stageAll, ct), ProblemCodes.GitFailed);
+    Task<Result<string>> IGitBranchWriter.CommitAsync(string root, string message, bool stageAll, CancellationToken ct) => Boundary.CaptureAsync(() => CommitAsync(root, message, stageAll, ct), ProblemCodes.GitFailed);
 
-    Task<Result<string?>> IGitBranchWriter.StashAsync(string root,string message,CancellationToken ct) => Boundary.CaptureAsync(() => StashAsync(root, message, ct), ProblemCodes.GitFailed);
+    Task<Result<string?>> IGitBranchWriter.StashAsync(string root, string message, CancellationToken ct) => Boundary.CaptureAsync(() => StashAsync(root, message, ct), ProblemCodes.GitFailed);
 
-    Task<Result<WorkingTreeState>> IGitBranchWriter.RestoreStashAsync(string root,CancellationToken ct) => Boundary.CaptureAsync(() => RestoreStashAsync(root, ct), ProblemCodes.GitFailed);
+    Task<Result<WorkingTreeState>> IGitBranchWriter.RestoreStashAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => RestoreStashAsync(root, ct), ProblemCodes.GitFailed);
 
-    Task<Result<Unit>> IGitBranchWriter.SwitchAsync(string root,string branch,CancellationToken ct) => Boundary.CaptureAsync(() => SwitchAsync(root, branch, ct), ProblemCodes.GitFailed);
+    Task<Result<Unit>> IGitBranchWriter.SwitchAsync(string root, string branch, CancellationToken ct) => Boundary.CaptureAsync(() => SwitchAsync(root, branch, ct), ProblemCodes.GitFailed);
 
-    Task<Result<RestackOutcome>> IGitBranchWriter.ContinueAsync(string root,string? editorCommand,CancellationToken ct) => Boundary.CaptureAsync(() => ContinueAsync(root, editorCommand, ct), ProblemCodes.GitFailed);
+    Task<Result<RestackOutcome>> IGitBranchWriter.ContinueAsync(string root, string? editorCommand, CancellationToken ct) => Boundary.CaptureAsync(() => ContinueAsync(root, editorCommand, ct), ProblemCodes.GitFailed);
 
-    Task<Result<RestackOutcome>> IGitBranchWriter.SkipAsync(string root,CancellationToken ct) => Boundary.CaptureAsync(() => SkipAsync(root, ct), ProblemCodes.GitFailed);
+    Task<Result<RestackOutcome>> IGitBranchWriter.SkipAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => SkipAsync(root, ct), ProblemCodes.GitFailed);
 
-    Task<Result<RestackOutcome>> IGitBranchWriter.AbortAsync(string root,CancellationToken ct) => Boundary.CaptureAsync(() => AbortAsync(root, ct), ProblemCodes.GitFailed);
+    Task<Result<RestackOutcome>> IGitBranchWriter.AbortAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => AbortAsync(root, ct), ProblemCodes.GitFailed);
 
-    Task<Result<JournalEntry?>> IGitBranchWriter.ActiveJournalAsync(string root,CancellationToken ct) => Boundary.CaptureAsync(() => ActiveJournalAsync(root, ct), ProblemCodes.GitFailed);
+    Task<Result<JournalEntry?>> IGitBranchWriter.ActiveJournalAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => ActiveJournalAsync(root, ct), ProblemCodes.GitFailed);
 
-    Task<Result<Unit>> IGitBranchWriter.DismissAsync(string root,CancellationToken ct) => Boundary.CaptureAsync(() => DismissAsync(root, ct), ProblemCodes.GitFailed);
+    Task<Result<Unit>> IGitBranchWriter.DismissAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => DismissAsync(root, ct), ProblemCodes.GitFailed);
 }

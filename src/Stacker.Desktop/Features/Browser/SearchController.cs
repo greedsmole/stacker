@@ -5,16 +5,24 @@ using CommunityToolkit.Mvvm.Input;
 using Stacker.Core;
 namespace Stacker.Desktop.ViewModels;
 
+/// <summary>Executes bounded searches across the currently loaded comparison.</summary>
+/// <remarks>The controller owns cancellation and one shared time budget. Text search examines only added and removed lines,
+/// skips binary and submodule files, caps results, and reports unavailable files without failing the entire search.</remarks>
 internal sealed class SearchController(ISearchPresentation owner, WorkspaceRuntime runtime)
 {
+    /// <summary>Opens search in the requested scope and hides the Git log.</summary>
+    /// <param name="scope">Supported presentation scope, such as Files or Changed lines.</param>
     public void OpenSearch(string scope)
     { owner.IsGitLogOpen = false; owner.SearchScope = scope; owner.IsSearchOpen = true; }
 
+    /// <summary>Cancels active work and closes the search panel.</summary>
     public void CloseSearch() { runtime._searchLoad?.Cancel(); owner.IsSearchOpen = false; }
 
+    /// <summary>Cancels active work, removes results and restores the initial status message.</summary>
     public void ResetSearch()
     { runtime._searchLoad?.Cancel(); owner.SearchResults.Clear(); owner.SearchStatus = "Search files by name or added/removed code across this comparison."; }
 
+    /// <summary>Searches until cancellation, timeout or the result cap is reached.</summary>
     public async Task SearchAsync()
     {
         runtime._searchLoad?.Cancel();
@@ -88,6 +96,8 @@ internal sealed class SearchController(ISearchPresentation owner, WorkspaceRunti
         finally { if (ReferenceEquals(runtime._searchLoad, load)) { runtime._searchLoad = null; owner.IsSearchBusy = false; } }
     }
 
+    /// <summary>Expands and loads the section and file represented by a search result.</summary>
+    /// <param name="hit">Result whose comparison location should become selected.</param>
     public async Task OpenSearchHitAsync(ChangeSearchHit hit)
     {
         if (!owner.Sections.Contains(hit.Section)) return;

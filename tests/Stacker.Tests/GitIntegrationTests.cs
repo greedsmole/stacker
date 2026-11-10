@@ -1,6 +1,7 @@
 // Purpose: Real-Git behavior checks for diff modes, ancestry edge cases, paths, and patch parsing.
 using Stacker.Core;
 namespace Stacker.Tests;
+
 public sealed class GitIntegrationTests
 {
     // Scenario: Linear modes use exact commit boundaries and preserve original parent.

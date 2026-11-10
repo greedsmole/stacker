@@ -106,7 +106,8 @@ internal sealed class SyncController(ISyncPresentation owner, WorkspaceRuntime r
             (await runtime._github.VerifyAccessAsync(context)).OrThrow();
             var snapshot = (await runtime._github.SnapshotAsync(context)).OrThrow();
             var plan = PullRequestPlanner.Plan(group.Definition, snapshot.PullRequests, context.RepositoryId)
-                with { ContextIdentity = context.Identity, RepositoryRoot = runtime._repository.Root };
+                with
+            { ContextIdentity = context.Identity, RepositoryRoot = runtime._repository.Root };
             var message = plan.Blockers.Count > 0 ? string.Join(" ", plan.Blockers)
                 : plan.PendingCount == 0 ? "Every layer already has an open pull request into its parent."
                 : $"{plan.Steps.Count(step => step.Action == PullRequestAction.Create)} to create, {plan.Steps.Count(step => step.Action == PullRequestAction.UpdateBase)} to retarget.";

@@ -11,7 +11,8 @@ namespace Stacker.Tests;
 [Collection(HeadlessApp.CollectionName)]
 public sealed class HistorySafetyTests
 {
-    [Fact] public async Task Closed_parent_is_retained_and_explicit_edges_survive_refresh()
+    [Fact]
+    public async Task Closed_parent_is_retained_and_explicit_edges_survive_refresh()
     {
         var root = Directory.CreateTempSubdirectory("graph-safety-").FullName;
         try
@@ -33,7 +34,8 @@ public sealed class HistorySafetyTests
         }
         finally { GitFixture.DeleteDirectory(root); }
     }
-    [Fact] public async Task Rebinding_local_ref_preserves_identity_and_rejects_independent_history()
+    [Fact]
+    public async Task Rebinding_local_ref_preserves_identity_and_rejects_independent_history()
     {
         var root = Directory.CreateTempSubdirectory("rename-history-").FullName;
         try
@@ -47,7 +49,8 @@ public sealed class HistorySafetyTests
         }
         finally { GitFixture.DeleteDirectory(root); }
     }
-    [Fact] public async Task Future_schema_is_not_downgraded_or_replaced()
+    [Fact]
+    public async Task Future_schema_is_not_downgraded_or_replaced()
     {
         var root = Directory.CreateTempSubdirectory("future-history-").FullName;
         try
@@ -61,7 +64,8 @@ public sealed class HistorySafetyTests
         }
         finally { SqliteConnection.ClearAllPools(); Directory.Delete(root, true); }
     }
-    [AvaloniaFact] public async Task Offline_demo_contains_a_reviewed_older_version_and_no_publication()
+    [AvaloniaFact]
+    public async Task Offline_demo_contains_a_reviewed_older_version_and_no_publication()
     {
         var root = Directory.CreateTempSubdirectory("history-demo-").FullName;
         try

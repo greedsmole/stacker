@@ -9,7 +9,8 @@ public sealed partial class HistoryWorkspaceViewModel
 {
     [ObservableProperty] private HistoryAttentionItem? _selectedAttention;
     [ObservableProperty] private string _concernText = "";
-    [RelayCommand] private async Task OpenAttentionAsync()
+    [RelayCommand]
+    private async Task OpenAttentionAsync()
     {
         if (SelectedAttention is not { } item || IsBusy) return;
         SelectedNode = Nodes.FirstOrDefault(n => n.Id == item.ChangeId);
@@ -17,7 +18,8 @@ public sealed partial class HistoryWorkspaceViewModel
         if (SelectedFile is null) { Preview = item.Label; Message = "This question refers to a file no longer changed by the current layer. It remains blocking until explicitly cleared."; }
         else await ShowCurrentAsync();
     }
-    [RelayCommand] private async Task ClearQueuedBlockerAsync()
+    [RelayCommand]
+    private async Task ClearQueuedBlockerAsync()
     {
         if (SelectedAttention is not { HasConcern: true } item) return;
         await ExecuteAsync(async () =>

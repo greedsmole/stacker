@@ -1,5 +1,6 @@
 // Generated presentation boundary; application state lives in WorkspaceRuntime/WorkspaceSession.
 namespace Stacker.Desktop.ViewModels;
+
 internal interface ISyncPresentation
 {
     global::System.String Error { get; set; }

@@ -88,5 +88,5 @@ public sealed class TextMateSyntaxHighlighter : ISyntaxHighlighter
         finally { _gate.Release(); }
     }
 
-    Task<Result<IReadOnlyDictionary<int, IReadOnlyList<SyntaxSpan>>>> ISyntaxHighlighter.HighlightAsync(string blobId,string path,string text,string theme,CancellationToken ct) => Boundary.CaptureAsync(() => HighlightAsync(blobId, path, text, theme, ct), ProblemCodes.GitFailed);
+    Task<Result<IReadOnlyDictionary<int, IReadOnlyList<SyntaxSpan>>>> ISyntaxHighlighter.HighlightAsync(string blobId, string path, string text, string theme, CancellationToken ct) => Boundary.CaptureAsync(() => HighlightAsync(blobId, path, text, theme, ct), ProblemCodes.GitFailed);
 }

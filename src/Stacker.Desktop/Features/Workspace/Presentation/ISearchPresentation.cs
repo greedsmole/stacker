@@ -1,5 +1,6 @@
 // Generated presentation boundary; application state lives in WorkspaceRuntime/WorkspaceSession.
 namespace Stacker.Desktop.ViewModels;
+
 internal interface ISearchPresentation
 {
     global::System.Boolean IsGitLogOpen { get; set; }

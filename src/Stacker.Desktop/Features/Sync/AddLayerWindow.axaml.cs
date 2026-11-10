@@ -28,18 +28,20 @@ public partial class AddLayerWindow : Window
         NameInput.Focus();
     }
     private void CreateClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (_stack is null || _create is null) return;
-        if (StartInput.SelectedItem is not LayerStart start) { ErrorLabel.Text = "Choose a start point."; return; }
-        var name = NameInput.Text?.Trim() ?? "";
-        if (name.Length == 0) { ErrorLabel.Text = "Enter a branch name for the new layer."; return; }
-        IsEnabled = false; ErrorLabel.Text = "";
-        try
-        {
-            var (ok, message) = await _create(_stack.Id, name, start.Reference);
-            if (ok) Close(true); else ErrorLabel.Text = message;
-        }
-        catch (Exception ex) { ErrorLabel.Text = ex.Message; }
-        finally { IsEnabled = true; }
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (_stack is null || _create is null) return;
+    if (StartInput.SelectedItem is not LayerStart start) { ErrorLabel.Text = "Choose a start point."; return; }
+    var name = NameInput.Text?.Trim() ?? "";
+    if (name.Length == 0) { ErrorLabel.Text = "Enter a branch name for the new layer."; return; }
+    IsEnabled = false; ErrorLabel.Text = "";
+    try
+    {
+        var (ok, message) = await _create(_stack.Id, name, start.Reference);
+        if (ok) Close(true); else ErrorLabel.Text = message;
+    }
+    catch (Exception ex) { ErrorLabel.Text = ex.Message; }
+    finally { IsEnabled = true; }
+}, message => AsyncHandler.Report(this, message));
     private void CancelClick(object? sender, RoutedEventArgs e) => Close(false);
 }

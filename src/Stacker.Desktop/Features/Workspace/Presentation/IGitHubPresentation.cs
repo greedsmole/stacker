@@ -1,5 +1,6 @@
 // Generated presentation boundary; application state lives in WorkspaceRuntime/WorkspaceSession.
 namespace Stacker.Desktop.ViewModels;
+
 internal interface IGitHubPresentation
 {
     global::System.String BaseLabel { get; }
@@ -29,6 +30,6 @@ internal interface IGitHubPresentation
     global::System.Collections.ObjectModel.ObservableCollection<global::Stacker.Desktop.ViewModels.DiffSectionViewModel> Sections { get; }
     global::Stacker.Core.PullRequest? SelectedPrForDiscussion { get; }
     global::Stacker.Core.StackDefinition? SelectedStack { get; set; }
-    global::System.Threading.Tasks.Task SelectLayerAsync(global::Stacker.Desktop.ViewModels.LayerViewModel @layer,global::System.Boolean @toggle);
+    global::System.Threading.Tasks.Task SelectLayerAsync(global::Stacker.Desktop.ViewModels.LayerViewModel @layer, global::System.Boolean @toggle);
     void SetActiveGroup(global::Stacker.Desktop.ViewModels.StackGroupViewModel @group);
 }

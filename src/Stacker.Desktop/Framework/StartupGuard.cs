@@ -5,6 +5,8 @@ namespace Stacker.Desktop;
 /// <summary>Checks display-link availability before Avalonia initializes its non-reentrant native backend.</summary>
 public static class StartupGuard
 {
+    /// <summary>Retries a display probe until success or the positive attempt limit is exhausted.</summary>
+    /// <param name="probe">Probe returning zero on success.</param><param name="attempts">Positive maximum probe count.</param><param name="wait">Delay between failed probes.</param>
     public static int WaitForDisplay(Func<int> probe, int attempts, Action wait)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(attempts, 1);
@@ -15,6 +17,8 @@ public static class StartupGuard
             wait();
         }
     }
+    /// <summary>Runs startup and records a diagnostic crash report when native initialization fails.</summary>
+    /// <param name="dataRoot">Application data directory.</param><param name="start">Startup action.</param><param name="display">Optional display probe.</param><param name="wait">Optional retry delay.</param>
     public static int Run(string dataRoot, Action start, Func<int>? display = null, Action? wait = null)
     {
         try
@@ -33,6 +37,8 @@ public static class StartupGuard
             return 1;
         }
     }
+    /// <summary>Writes a timestamped startup failure to stderr and the diagnostics directory.</summary>
+    /// <param name="dataRoot">Application data directory.</param><param name="error">Failure to record.</param>
     public static void Record(string dataRoot, Exception error)
     {
         var text = $"{DateTimeOffset.UtcNow:O}\nStacker {typeof(StartupGuard).Assembly.GetName().Version}\n{error}\n";
@@ -46,6 +52,7 @@ public static class StartupGuard
         { Console.Error.WriteLine("Cannot save crash report: " + logError.Message); }
     }
     [SupportedOSPlatform("macos")]
+    /// <summary>Returns CoreVideo's active-display probe status on macOS.</summary>
     public static int ProbeMacDisplay()
     {
         var result = CVDisplayLinkCreateWithActiveCGDisplays(out var link);

@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Stacker.Core;
 namespace Stacker.Desktop;
+
 public partial class SyncPreviewWindow : Window
 {
     private readonly ISyncActions? _sync;
@@ -112,63 +113,74 @@ public partial class SyncPreviewWindow : Window
         finally { IsEnabled = true; }
     }
     private void RestackClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (_plan is null || _sync is null) return;
-        IsEnabled = false;
-        _pushed = false;
-        RestackButton.IsEnabled = false; RestackButton.Content = "Restacking…"; MessageLabel.Text = "";
-        try
+=> AsyncHandler.Run(async () =>
+{
+    if (_plan is null || _sync is null) return;
+    IsEnabled = false;
+    _pushed = false;
+    RestackButton.IsEnabled = false; RestackButton.Content = "Restacking…"; MessageLabel.Text = "";
+    try
+    {
+        var outcome = await _sync.RestackAsync(_plan, new Progress<string>(text => MessageLabel.Text = text));
+        MessageLabel.Text = outcome is null ? "The restack did not start." : outcome.Message;
+        if (outcome is { Applied: true } or { Conflicted: true })
         {
-            var outcome = await _sync.RestackAsync(_plan, new Progress<string>(text => MessageLabel.Text = text));
-            MessageLabel.Text = outcome is null ? "The restack did not start." : outcome.Message;
-            if (outcome is { Applied: true } or { Conflicted: true })
-            {
-                _restacked = outcome.Applied;
-                RestackButton.Content = outcome.Applied ? "Restacked" : "Restack (local)";
-                RestackButton.IsEnabled = !outcome.Applied;
-                UndoButton.IsVisible = outcome.Applied && outcome.Steps.Count > 0;
-                UndoButton.IsEnabled = true;
-            }
-            else { RestackButton.Content = "Restack (local)"; RestackButton.IsEnabled = true; }
+            _restacked = outcome.Applied;
+            RestackButton.Content = outcome.Applied ? "Restacked" : "Restack (local)";
+            RestackButton.IsEnabled = !outcome.Applied;
+            UndoButton.IsVisible = outcome.Applied && outcome.Steps.Count > 0;
+            UndoButton.IsEnabled = true;
         }
-        catch (Exception ex) { MessageLabel.Text = ex.Message; RestackButton.Content = "Restack (local)"; RestackButton.IsEnabled = true; }
-        finally
-        {
-            try { await RefreshPreviewAsync(); }
-            finally { IsEnabled = true; }
-        }
- }, message => AsyncHandler.Report(this, message));
+        else { RestackButton.Content = "Restack (local)"; RestackButton.IsEnabled = true; }
+    }
+    catch (Exception ex) { MessageLabel.Text = ex.Message; RestackButton.Content = "Restack (local)"; RestackButton.IsEnabled = true; }
+    finally
+    {
+        try { await RefreshPreviewAsync(); }
+        finally { IsEnabled = true; }
+    }
+}, message => AsyncHandler.Report(this, message));
     private void PushClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (_plan is null || _sync is null) return;
-        PushButton.IsEnabled = false; MessageLabel.Text = "Publishing the branches…";
-        try
-        {
-            var (ok, message) = await _sync.PushAsync(_plan, wholeStack: true);
-            MessageLabel.Text = message;
-            if (ok) { _pushed = true; PushButton.IsVisible = false; } else PushButton.IsEnabled = true;
-            InvalidatePublication();
-        }
-        catch (Exception ex) { MessageLabel.Text = ex.Message; PushButton.IsEnabled = true; }
- }, message => AsyncHandler.Report(this, message));
-    private void ResolveClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await RunAsync(() => _sync!.OpenConflictsInEditorAsync()); }, message => AsyncHandler.Report(this, message));
-    private void StageClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await RunAsync(() => _sync!.StageConflictsAsync()); }, message => AsyncHandler.Report(this, message));
-    private void ContinueClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await RunAsync(() => _sync!.ContinueOperationAsync()); }, message => AsyncHandler.Report(this, message));
-    private void SkipClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await RunAsync(() => _sync!.SkipCommitAsync()); }, message => AsyncHandler.Report(this, message));
-    private void AbortClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await RunAsync(() => _sync!.AbortOperationAsync()); }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (_plan is null || _sync is null) return;
+    PushButton.IsEnabled = false; MessageLabel.Text = "Publishing the branches…";
+    try
+    {
+        var (ok, message) = await _sync.PushAsync(_plan, wholeStack: true);
+        MessageLabel.Text = message;
+        if (ok) { _pushed = true; PushButton.IsVisible = false; } else PushButton.IsEnabled = true;
+        InvalidatePublication();
+    }
+    catch (Exception ex) { MessageLabel.Text = ex.Message; PushButton.IsEnabled = true; }
+}, message => AsyncHandler.Report(this, message));
+    private void ResolveClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await RunAsync(() => _sync!.OpenConflictsInEditorAsync()); }, message => AsyncHandler.Report(this, message));
+    private void StageClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await RunAsync(() => _sync!.StageConflictsAsync()); }, message => AsyncHandler.Report(this, message));
+    private void ContinueClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await RunAsync(() => _sync!.ContinueOperationAsync()); }, message => AsyncHandler.Report(this, message));
+    private void SkipClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await RunAsync(() => _sync!.SkipCommitAsync()); }, message => AsyncHandler.Report(this, message));
+    private void AbortClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await RunAsync(() => _sync!.AbortOperationAsync()); }, message => AsyncHandler.Report(this, message));
     private void StashClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (_plan is null || _sync is null) return;
-        await RunAsync(async () =>
-        {
-            var result = await _sync.StashAndRestackAsync(_plan);
-            if (result.Ok) _restacked = true;
-            return result;
-        });
- }, message => AsyncHandler.Report(this, message));
-    private void RestoreClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await RunAsync(() => StashInput.SelectedItem is Stacker.Core.Framework.SavedStash stash
-        ? _sync!.RestoreStashAsync(stash.Sha) : _sync!.RestoreStashAsync()); }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (_plan is null || _sync is null) return;
+    await RunAsync(async () =>
+    {
+        var result = await _sync.StashAndRestackAsync(_plan);
+        if (result.Ok) _restacked = true;
+        return result;
+    });
+}, message => AsyncHandler.Report(this, message));
+    private void RestoreClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () =>
+    {
+        await RunAsync(() => StashInput.SelectedItem is Stacker.Core.Framework.SavedStash stash
+        ? _sync!.RestoreStashAsync(stash.Sha) : _sync!.RestoreStashAsync());
+    }, message => AsyncHandler.Report(this, message));
     private void SwitchClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (_sync is null || BranchInput.SelectedItem is not string branch) { MessageLabel.Text = "Choose a branch to switch to."; return; }
-        await RunAsync(() => _sync.SwitchToBranchAsync("refs/heads/" + branch));
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (_sync is null || BranchInput.SelectedItem is not string branch) { MessageLabel.Text = "Choose a branch to switch to."; return; }
+    await RunAsync(() => _sync.SwitchToBranchAsync("refs/heads/" + branch));
+}, message => AsyncHandler.Report(this, message));
     private async Task RunAsync(Func<Task<(bool Ok, string Message)>> action)
     {
         if (_sync is null) return;
@@ -183,36 +195,40 @@ public partial class SyncPreviewWindow : Window
         }
     }
     private void CheckPrsClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (_plan is null || _sync is null) return;
-        CheckPrsButton.IsEnabled = false; MessageLabel.Text = "Reading the open pull requests…";
-        try
-        {
-            var (publication, message) = await _sync.CheckPullRequestsAsync(_plan.StackId);
-            MessageLabel.Text = message;
-            if (publication is null) { PublishButton.IsVisible = false; PullRequestList.IsVisible = false; return; }
-            _publication = publication;
-            PullRequestList.ItemsSource = publication.Steps;
-            PullRequestList.IsVisible = true;
-            PublishButton.IsVisible = true;
-            PublishButton.IsEnabled = publication.CanPublish;
-            PublishButton.Content = publication.CanPublish ? $"Publish {publication.PendingCount} pull request(s)" : "Nothing to publish";
-        }
-        catch (Exception ex) { MessageLabel.Text = ex.Message; }
-        finally { CheckPrsButton.IsEnabled = true; }
- }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (_plan is null || _sync is null) return;
+    CheckPrsButton.IsEnabled = false; MessageLabel.Text = "Reading the open pull requests…";
+    try
+    {
+        var (publication, message) = await _sync.CheckPullRequestsAsync(_plan.StackId);
+        MessageLabel.Text = message;
+        if (publication is null) { PublishButton.IsVisible = false; PullRequestList.IsVisible = false; return; }
+        _publication = publication;
+        PullRequestList.ItemsSource = publication.Steps;
+        PullRequestList.IsVisible = true;
+        PublishButton.IsVisible = true;
+        PublishButton.IsEnabled = publication.CanPublish;
+        PublishButton.Content = publication.CanPublish ? $"Publish {publication.PendingCount} pull request(s)" : "Nothing to publish";
+    }
+    catch (Exception ex) { MessageLabel.Text = ex.Message; }
+    finally { CheckPrsButton.IsEnabled = true; }
+}, message => AsyncHandler.Report(this, message));
     private void PublishClick(object? sender, RoutedEventArgs e)
-=>AsyncHandler.Run(async () => {         if (_sync is null || _publication is null) return;
-        PublishButton.IsEnabled = false; CheckPrsButton.IsEnabled = false; MessageLabel.Text = "Publishing pull requests…";
-        try
-        {
-            var (ok, message) = await _sync.PublishPullRequestsAsync(_publication);
-            MessageLabel.Text = message;
-            if (ok) { PublishButton.IsVisible = false; PullRequestList.IsVisible = false; _publication = null; }
-            else PublishButton.IsEnabled = true;
-        }
-        catch (Exception ex) { MessageLabel.Text = ex.Message; PublishButton.IsEnabled = true; }
-        finally { CheckPrsButton.IsEnabled = true; }
- }, message => AsyncHandler.Report(this, message));
-    private void UndoClick(object? sender, RoutedEventArgs e) =>AsyncHandler.Run(async () => { await RunAsync(() => _sync!.UndoAsync()); }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (_sync is null || _publication is null) return;
+    PublishButton.IsEnabled = false; CheckPrsButton.IsEnabled = false; MessageLabel.Text = "Publishing pull requests…";
+    try
+    {
+        var (ok, message) = await _sync.PublishPullRequestsAsync(_publication);
+        MessageLabel.Text = message;
+        if (ok) { PublishButton.IsVisible = false; PullRequestList.IsVisible = false; _publication = null; }
+        else PublishButton.IsEnabled = true;
+    }
+    catch (Exception ex) { MessageLabel.Text = ex.Message; PublishButton.IsEnabled = true; }
+    finally { CheckPrsButton.IsEnabled = true; }
+}, message => AsyncHandler.Report(this, message));
+    private void UndoClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await RunAsync(() => _sync!.UndoAsync()); }, message => AsyncHandler.Report(this, message));
     private void CloseClick(object? sender, RoutedEventArgs e) => Close();
 }

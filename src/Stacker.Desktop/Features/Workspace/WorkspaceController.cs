@@ -52,9 +52,9 @@ internal sealed class WorkspaceController(IWorkspaceActionsPresentation owner, W
             if (runtime._pendingLocal) { runtime._pendingLocal = false; await owner.RefreshAsync(); if (owner.HasError) runtime._pendingLocal = true; }
             if (runtime._pendingRemote is { } snapshot)
             {
-                var graph=runtime.Session.Pending?.Graph;
+                var graph = runtime.Session.Pending?.Graph;
                 if (runtime.HistoryGraph is not null) graph = await runtime.HistoryGraph.ObserveRemoteAsync(snapshot, owner.GitHubPreferences.BoundaryBranches ?? [], default);
-                runtime.Session.Offer(snapshot,graph);runtime.Session.ApplyPending();
+                runtime.Session.Offer(snapshot, graph); runtime.Session.ApplyPending();
                 owner.BuildDiscoveredGroups();
                 if (runtime._activeGroup is not null) await owner.CompareAsync();
                 if (owner.HasError) runtime._pendingRemote = snapshot;
@@ -145,7 +145,7 @@ internal sealed class WorkspaceController(IWorkspaceActionsPresentation owner, W
                     stale.PropertyChanged -= ReviewChanged; stale.Dispose();
                     runtime._reviews.Remove(staleKey); runtime._reviewOrder.Remove(staleKey);
                 }
-                session = new(runtime._github, runtime._writer, runtime._applicationStore, runtime._git, context, pr, section, owner.IsDemo) { HistoryObjects = runtime.HistoryObjects, HistoryRepository=runtime._repository?.Identity };
+                session = new(runtime._github, runtime._writer, runtime._applicationStore, runtime._git, context, pr, section, owner.IsDemo) { HistoryObjects = runtime.HistoryObjects, HistoryRepository = runtime._repository?.Identity };
                 try
                 {
                     await session.InitializeAsync(ct: ct); ct.ThrowIfCancellationRequested();

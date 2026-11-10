@@ -6,8 +6,11 @@ namespace Stacker.Desktop.ViewModels;
 
 public sealed partial class MainViewModel
 {
+    /// <summary>Recorded stashes available for restoration.</summary>
     public IReadOnlyList<SavedStash> SavedStashes { get; set; } = [];
+    /// <summary>Latest immutable working-tree snapshot.</summary>
     [ObservableProperty] internal WorkingTreeState? _workingTree;
+    /// <summary>Whether Git has an unfinished operation requiring attention.</summary>
 
     /// <summary>Shown in the main window whenever an operation or a conflict needs the user.</summary>
     public bool HasOperation => WorkingTree is { NeedsAttention: true };
@@ -60,6 +63,7 @@ public sealed partial class MainViewModel
     /// <summary>Pops the stash the last restack recorded, reporting a conflicting pop as conflicts to resolve.</summary>
     public Task<(bool Ok, string Message)> RestoreStashAsync() => _workingTreeController.RestoreStashAsync();
 
+    /// <summary>Restores the specifically recorded stash identified by its SHA.</summary>
     public Task<(bool Ok, string Message)> RestoreStashAsync(string sha) => _workingTreeController.RestoreStashAsync(sha);
 
     /// <summary>Restores what an interrupted run moved, from the entry the banner is showing.</summary>

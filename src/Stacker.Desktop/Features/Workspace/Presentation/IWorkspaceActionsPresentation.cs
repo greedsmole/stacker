@@ -1,5 +1,6 @@
 // Generated presentation boundary; application state lives in WorkspaceRuntime/WorkspaceSession.
 namespace Stacker.Desktop.ViewModels;
+
 internal interface IWorkspaceActionsPresentation
 {
     global::Stacker.Desktop.ViewModels.ReviewViewModel? ActiveReview { get; set; }
@@ -18,7 +19,7 @@ internal interface IWorkspaceActionsPresentation
     void Notify(global::System.String @name);
     global::System.Collections.ObjectModel.ObservableCollection<global::Stacker.Desktop.ViewModels.StackGroupViewModel> OtherGroups { get; }
     global::System.Threading.Tasks.Task RefreshAsync();
-    global::System.Threading.Tasks.Task RefreshGitHubCoreAsync(global::System.Threading.CancellationToken @ct,global::System.Boolean @background);
+    global::System.Threading.Tasks.Task RefreshGitHubCoreAsync(global::System.Threading.CancellationToken @ct, global::System.Boolean @background);
     global::System.Collections.ObjectModel.ObservableCollection<global::Stacker.Desktop.ViewModels.StackGroupViewModel> RemoteGroups { get; }
     global::System.String ReviewLabel { get; }
     global::System.Threading.Tasks.Task SaveSettingsAsync();

@@ -4,6 +4,7 @@ using Stacker.Core.Framework;
 using Stacker.Infrastructure;
 using Stacker.Infrastructure.Framework;
 namespace Stacker.Tests;
+
 public sealed class RecoveryTests
 {
     /// <summary>A journal that fails one step, standing in for any error between an effect and its record.</summary>
@@ -25,21 +26,21 @@ public sealed class RecoveryTests
         public Task<JournalEntry?> ByIdAsync(string repository, string id, CancellationToken ct = default) => Boundary.UnwrapAsync(inner.ByIdAsync(repository, id, ct));
         public IReadOnlyList<JournalEntry> Recent(string repository, int count = 20) => (inner.Recent(repository, count)).OrThrow();
 
-    Task<Result<JournalEntry>> IJournal.OpenAsync(string repository,string kind,IReadOnlyList<JournalStep> planned,CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(repository, kind, planned, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry>> IJournal.OpenAsync(string repository, string kind, IReadOnlyList<JournalStep> planned, CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(repository, kind, planned, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry>> IJournal.StepAsync(JournalEntry entry,JournalStep step,CancellationToken ct) => Boundary.CaptureAsync(() => StepAsync(entry, step, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry>> IJournal.StepAsync(JournalEntry entry, JournalStep step, CancellationToken ct) => Boundary.CaptureAsync(() => StepAsync(entry, step, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry>> IJournal.CloseAsync(JournalEntry entry,JournalPhase phase,string? stashRef ,string? pendingStepId ,string? message ,CancellationToken ct) => Boundary.CaptureAsync(() => CloseAsync(entry, phase, stashRef, pendingStepId, message, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry>> IJournal.CloseAsync(JournalEntry entry, JournalPhase phase, string? stashRef, string? pendingStepId, string? message, CancellationToken ct) => Boundary.CaptureAsync(() => CloseAsync(entry, phase, stashRef, pendingStepId, message, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry>> IJournal.SetStashAsync(JournalEntry entry,string? stashRef,CancellationToken ct) => Boundary.CaptureAsync(() => SetStashAsync(entry, stashRef, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry>> IJournal.SetStashAsync(JournalEntry entry, string? stashRef, CancellationToken ct) => Boundary.CaptureAsync(() => SetStashAsync(entry, stashRef, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry?>> IJournal.ActiveAsync(string repository,CancellationToken ct) => Boundary.CaptureAsync(() => ActiveAsync(repository, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry?>> IJournal.ActiveAsync(string repository, CancellationToken ct) => Boundary.CaptureAsync(() => ActiveAsync(repository, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry?>> IJournal.UndoableAsync(string repository,CancellationToken ct) => Boundary.CaptureAsync(() => UndoableAsync(repository, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry?>> IJournal.UndoableAsync(string repository, CancellationToken ct) => Boundary.CaptureAsync(() => UndoableAsync(repository, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<JournalEntry?>> IJournal.ByIdAsync(string repository,string id,CancellationToken ct) => Boundary.CaptureAsync(() => ByIdAsync(repository, id, ct), ProblemCodes.StoreWrite);
+        Task<Result<JournalEntry?>> IJournal.ByIdAsync(string repository, string id, CancellationToken ct) => Boundary.CaptureAsync(() => ByIdAsync(repository, id, ct), ProblemCodes.StoreWrite);
 
-    Result<IReadOnlyList<JournalEntry>> IJournal.Recent(string repository,int count ) => Boundary.Capture(() => Recent(repository, count), ProblemCodes.StoreWrite);
+        Result<IReadOnlyList<JournalEntry>> IJournal.Recent(string repository, int count) => Boundary.Capture(() => Recent(repository, count), ProblemCodes.StoreWrite);
     }
 
     /// <summary>main ← A ← B where main and A both touch conflict.txt, so A conflicts on the replay.</summary>
@@ -53,7 +54,8 @@ public sealed class RecoveryTests
     }
 
     // Given a cascade that conflicted, when the user resolves and continues, then undo restores every touched branch.
-    [Fact] public async Task A_resolved_conflict_is_still_fully_undoable()
+    [Fact]
+    public async Task A_resolved_conflict_is_still_fully_undoable()
     {
         await using var f = new GitFixture();
         var stack = await Conflicting(f);
@@ -82,7 +84,8 @@ public sealed class RecoveryTests
     }
 
     // Given a restack was applied, when a stash is taken afterwards, then undo is still offered and still works.
-    [Fact] public async Task A_stash_never_hides_undo()
+    [Fact]
+    public async Task A_stash_never_hides_undo()
     {
         await using var f = new GitFixture(); await f.Linear();
         await f.Git("checkout", "main"); await f.Write("main2.txt", "moved\n"); await f.Commit("base moved");
@@ -103,7 +106,8 @@ public sealed class RecoveryTests
     }
 
     // Given an effect fails after the first layer moved, when the restack returns, then every branch is restored.
-    [Fact] public async Task A_failure_mid_cascade_restores_every_branch()
+    [Fact]
+    public async Task A_failure_mid_cascade_restores_every_branch()
     {
         await using var f = new GitFixture(); await f.Linear();
         var journal = f.CreateJournal();
@@ -122,7 +126,8 @@ public sealed class RecoveryTests
     }
 
     // Given a crash left an entry running with one branch already moved, when recovery runs, then that branch is restored.
-    [Fact] public async Task A_running_entry_from_a_crash_is_recoverable()
+    [Fact]
+    public async Task A_running_entry_from_a_crash_is_recoverable()
     {
         await using var f = new GitFixture(); await f.Linear();
         var journal = f.CreateJournal();

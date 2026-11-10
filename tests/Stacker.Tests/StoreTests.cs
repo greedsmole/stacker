@@ -4,6 +4,7 @@ using Stacker.Core.Framework;
 using Stacker.Infrastructure;
 using Stacker.Infrastructure.Framework;
 namespace Stacker.Tests;
+
 public sealed class StoreTests
 {
     private static string Temp()
@@ -14,7 +15,8 @@ public sealed class StoreTests
     }
 
     // Scenario: A write leaves no temporary files and verifies what landed.
-    [Fact] public async Task A_write_leaves_no_temporary_files()
+    [Fact]
+    public async Task A_write_leaves_no_temporary_files()
     {
         var directory = Temp();
         var file = Path.Combine(directory, "state.json");
@@ -29,7 +31,8 @@ public sealed class StoreTests
     }
 
     // Scenario: A lock left on disk by a killed process does not block the next run (it is a held handle, not a marker).
-    [Fact] public async Task A_lock_left_on_disk_does_not_block_the_next_run()
+    [Fact]
+    public async Task A_lock_left_on_disk_does_not_block_the_next_run()
     {
         var directory = Temp();
         var factory = new FileLockFactory(directory);
@@ -45,7 +48,8 @@ public sealed class StoreTests
     }
 
     // Scenario: Only one instance may own application data at a time.
-    [Fact] public void Only_one_instance_owns_the_application_data()
+    [Fact]
+    public void Only_one_instance_owns_the_application_data()
     {
         var directory = Temp();
         using var first = new SingleInstanceLock(directory);
@@ -58,7 +62,8 @@ public sealed class StoreTests
     }
 
     // Scenario: Data written by the previous layout is brought forward instead of silently abandoned.
-    [Fact] public async Task Data_from_the_previous_layout_is_imported_once()
+    [Fact]
+    public async Task Data_from_the_previous_layout_is_imported_once()
     {
         var parent = Temp();
         var legacy = Path.Combine(parent, "v2", "workspace");
@@ -73,7 +78,8 @@ public sealed class StoreTests
     private sealed class ImportedState { public string? ActiveGroup { get; set; } }
 
     // Scenario: A damaged document is quarantined, defaults are used, and the original is kept.
-    [Fact] public async Task A_damaged_document_is_quarantined_and_defaults_are_used()
+    [Fact]
+    public async Task A_damaged_document_is_quarantined_and_defaults_are_used()
     {
         var directory = Temp();
         var store = new JsonStateStore<JournalLog>(new AtomicFile(), directory);
@@ -89,7 +95,8 @@ public sealed class StoreTests
     }
 
     // Scenario: The journal is written before the effect, records each step, and offers recovery afterwards.
-    [Fact] public async Task The_journal_records_the_effect_before_it_happens()
+    [Fact]
+    public async Task The_journal_records_the_effect_before_it_happens()
     {
         var directory = Temp();
         var journal = new JsonJournal(new JsonStateStore<JournalLog>(new AtomicFile(), directory), new SystemClock());
@@ -109,7 +116,8 @@ public sealed class StoreTests
     }
 
     // Scenario: The stack file saves without leaving anything inside the repository.
-    [Fact] public async Task The_stack_file_saves_without_touching_the_repository()
+    [Fact]
+    public async Task The_stack_file_saves_without_touching_the_repository()
     {
         await using var f = new GitFixture(); await f.Init();
         var store = new YamlStackStore(new AtomicFile(), new FileLockFactory(Temp()));
@@ -126,7 +134,8 @@ public sealed class StoreTests
     }
 
     // Scenario: Settings survive a damaged file, and an unknown theme falls back instead of poisoning the UI.
-    [Fact] public async Task Settings_survive_a_damaged_file_and_an_unknown_theme()
+    [Fact]
+    public async Task Settings_survive_a_damaged_file_and_an_unknown_theme()
     {
         var directory = Temp();
         var store = new JsonSettingsStore(directory);

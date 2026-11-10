@@ -45,7 +45,7 @@ internal sealed class NavigationController(INavigationPresentation owner, Worksp
             string? stateNotice = null;
             if (!sameRepo)
             {
-                var loaded = await runtime._workspacePersistence.LoadAsync(repo.WorkspaceKey, refresh.Token,repo.Root);
+                var loaded = await runtime._workspacePersistence.LoadAsync(repo.WorkspaceKey, refresh.Token, repo.Root);
                 if (loaded.IsFailed && loaded.Problem!.Code == ProblemCodes.StoreCorrupt)
                 { workspace = new(); stateNotice = loaded.Problem.Message; }
                 else workspace = loaded.OrThrow() ?? new();
@@ -185,7 +185,7 @@ internal sealed class NavigationController(INavigationPresentation owner, Worksp
                     stack = new(stack.Id, stack.Name, RemoteRefs.BaseRef(pr), [RemoteRefs.HeadRef(pr)]); positions = [0];
                 }
             }
-            var key = WorkspaceRuntime.ComparisonKey(comparisonRepository, stack, mode, positions) + "|" + owner.Settings.Theme + (group.IsRemote?"|"+runtime._remoteSnapshot?.Context.Identity:"");
+            var key = WorkspaceRuntime.ComparisonKey(comparisonRepository, stack, mode, positions) + "|" + owner.Settings.Theme + (group.IsRemote ? "|" + runtime._remoteSnapshot?.Context.Identity : "");
             if (!runtime._views.TryGetValue(key, out var sections))
             {
                 var results = await runtime._diff.CompareAsync(new(comparisonRepository, stack, mode, positions), compare.Token);
@@ -196,8 +196,8 @@ internal sealed class NavigationController(INavigationPresentation owner, Worksp
                     return new DiffSectionViewModel(runtime._git, comparisonRepository.Root, result, runtime._highlighter, owner.Settings.Theme)
                     { AssociatedPr = pr, GitHubContext = runtime._remoteSnapshot?.Context, IsPrSnapshot = group.IsRemote && mode == DiffMode.Layer, IsDemo = owner.IsDemo, WrapCode = owner.Settings.WrapCode };
                 }).ToList();
-                if(group.IsRemote && runtime._prObjects is not null && !owner.IsDemo)
-                    foreach(var section in sections)section.ContentLease=(await runtime._prObjects.AcquireAsync(repo.Identity!,compare.Token)).OrThrow();
+                if (group.IsRemote && runtime._prObjects is not null && !owner.IsDemo)
+                    foreach (var section in sections) section.ContentLease = (await runtime._prObjects.AcquireAsync(repo.Identity!, compare.Token)).OrThrow();
                 // Carry file/filter/scroll state across a changed snapshot of the same comparison.
                 foreach (var section in sections)
                 {

@@ -2,6 +2,7 @@
 using Stacker.Core;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
+
 public sealed class StorageTests
 {
     // Scenario: Roundtrip preserves order ids and missing refs.

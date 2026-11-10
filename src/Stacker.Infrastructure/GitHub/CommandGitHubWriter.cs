@@ -42,19 +42,19 @@ public sealed class CommandGitHubWriter(GitHubCli client, CommandBus bus) : IGit
         catch (Exception ex) { return Result<T>.Fail(Boundary.Problem(ex, ProblemCodes.GitHubRequest)); }
     }
 
-    Task<Result<Unit>> IGitHubWriter.CommentAsync(GitHubRepositoryContext context,long number,string body,CancellationToken ct) => Boundary.CaptureAsync(() => CommentAsync(context, number, body, ct), ProblemCodes.GitHubRequest);
+    Task<Result<Unit>> IGitHubWriter.CommentAsync(GitHubRepositoryContext context, long number, string body, CancellationToken ct) => Boundary.CaptureAsync(() => CommentAsync(context, number, body, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<Unit>> IGitHubWriter.FileCommentAsync(GitHubRepositoryContext context,PullRequest pr,string path,string body,CancellationToken ct) => Boundary.CaptureAsync(() => FileCommentAsync(context, pr, path, body, ct), ProblemCodes.GitHubRequest);
+    Task<Result<Unit>> IGitHubWriter.FileCommentAsync(GitHubRepositoryContext context, PullRequest pr, string path, string body, CancellationToken ct) => Boundary.CaptureAsync(() => FileCommentAsync(context, pr, path, body, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<Unit>> IGitHubWriter.InlineCommentAsync(GitHubRepositoryContext context,DraftComment comment,CancellationToken ct) => Boundary.CaptureAsync(() => InlineCommentAsync(context, comment, ct), ProblemCodes.GitHubRequest);
+    Task<Result<Unit>> IGitHubWriter.InlineCommentAsync(GitHubRepositoryContext context, DraftComment comment, CancellationToken ct) => Boundary.CaptureAsync(() => InlineCommentAsync(context, comment, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<Unit>> IGitHubWriter.ReplyAsync(GitHubRepositoryContext context,long number,string commentId,string body,CancellationToken ct) => Boundary.CaptureAsync(() => ReplyAsync(context, number, commentId, body, ct), ProblemCodes.GitHubRequest);
+    Task<Result<Unit>> IGitHubWriter.ReplyAsync(GitHubRepositoryContext context, long number, string commentId, string body, CancellationToken ct) => Boundary.CaptureAsync(() => ReplyAsync(context, number, commentId, body, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<Unit>> IGitHubWriter.ResolveAsync(GitHubRepositoryContext context,string threadId,bool resolved,CancellationToken ct) => Boundary.CaptureAsync(() => ResolveAsync(context, threadId, resolved, ct), ProblemCodes.GitHubRequest);
+    Task<Result<Unit>> IGitHubWriter.ResolveAsync(GitHubRepositoryContext context, string threadId, bool resolved, CancellationToken ct) => Boundary.CaptureAsync(() => ResolveAsync(context, threadId, resolved, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<Unit>> IGitHubWriter.SubmitReviewAsync(GitHubRepositoryContext context,ReviewDraft draft,CancellationToken ct) => Boundary.CaptureAsync(() => SubmitReviewAsync(context, draft, ct), ProblemCodes.GitHubRequest);
+    Task<Result<Unit>> IGitHubWriter.SubmitReviewAsync(GitHubRepositoryContext context, ReviewDraft draft, CancellationToken ct) => Boundary.CaptureAsync(() => SubmitReviewAsync(context, draft, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<PullRequest>> IGitHubPullRequestWriter.CreatePullRequestAsync(GitHubRepositoryContext context,string headBranch,string baseBranch,        string title,string body,bool draft,CancellationToken ct) => Boundary.CaptureAsync(() => CreatePullRequestAsync(context, headBranch, baseBranch, title, body, draft, ct), ProblemCodes.GitHubRequest);
+    Task<Result<PullRequest>> IGitHubPullRequestWriter.CreatePullRequestAsync(GitHubRepositoryContext context, string headBranch, string baseBranch, string title, string body, bool draft, CancellationToken ct) => Boundary.CaptureAsync(() => CreatePullRequestAsync(context, headBranch, baseBranch, title, body, draft, ct), ProblemCodes.GitHubRequest);
 
-    Task<Result<PullRequest>> IGitHubPullRequestWriter.UpdatePullRequestBaseAsync(GitHubRepositoryContext context,long number,string baseBranch,CancellationToken ct) => Boundary.CaptureAsync(() => UpdatePullRequestBaseAsync(context, number, baseBranch, ct), ProblemCodes.GitHubRequest);
+    Task<Result<PullRequest>> IGitHubPullRequestWriter.UpdatePullRequestBaseAsync(GitHubRepositoryContext context, long number, string baseBranch, CancellationToken ct) => Boundary.CaptureAsync(() => UpdatePullRequestBaseAsync(context, number, baseBranch, ct), ProblemCodes.GitHubRequest);
 }

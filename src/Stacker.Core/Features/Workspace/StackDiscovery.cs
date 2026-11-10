@@ -1,10 +1,43 @@
 namespace Stacker.Core;
 
 /// <summary>Groups open pull requests into stacks using exact repository and branch relationships.</summary>
+/// <remarks>This is the evidence-only fallback for a snapshot that has no stored change graph. Parent edges come
+/// from the head and base refs the server reported, never from titles or dates, and the projection deliberately
+/// matches <see cref="GraphDiscovery"/>: the same stack ids, names and shared-prefix flag, so the navigation tree keeps
+/// its shape when a stored graph becomes available.
+/// <para>The caller supplies the configured boundary branches, or the repository default branch when none are
+/// configured, and surfaces any warning as a message instead of silently dropping pull requests.</para></remarks>
 public static class StackDiscovery
 {
     /// <summary>Finds PR parent edges, cuts edges at configured boundary branches, and reports ambiguous or cyclic paths.</summary>
-    /// <remarks>Titles, timestamps, and commit similarity are deliberately ignored: they are not reliable evidence of stacking.</remarks>
+    /// <param name="prs">Snapshot of open pull requests. An empty list yields no stacks, no others and no warnings.</param>
+    /// <param name="boundaries">Base branch names that may not be crossed. A pull request whose base is one of these is
+    /// the bottom of a stack and never gets a parent. The comparison is ordinal, so the names must match the reported
+    /// base refs exactly; no prefix or case normalization is applied.</param>
+    /// <returns>Complete stacks of two or more layers in base-first order, the pull requests that belong to none, and
+    /// the ambiguity and cycle warnings, deduplicated.</returns>
+    /// <remarks>Parent detection is an exact match: the parent is the one open pull request whose head repository id
+    /// equals this pull request's base repository id and whose head ref equals its base ref. Ids rather than names keep
+    /// a fork's same-named branch from linking to the upstream's stack. Titles, timestamps, and commit similarity are
+    /// deliberately ignored: they are not reliable evidence of stacking. Zero candidates means the stack starts here;
+    /// more than one means the base branch is ambiguous, and that pull request is blocked with a warning asking for a
+    /// manual link, because guessing a parent would silently reorder someone's work. A base that matches a boundary
+    /// skips the scan entirely, which is how a service branch is kept from becoming a layer.
+    /// <para>Cycles are found by walking parent links from every pull request while remembering the numbers already
+    /// visited, so mutually referencing pull requests terminate instead of looping. Every pull request on a revisited
+    /// chain is blocked and each starting point adds a warning; the message names that pull request, so warnings from
+    /// different starting points are distinct, and the final list is deduplicated. Blocked pull requests and the pull
+    /// requests naming a blocked parent have their edge removed, so a path never runs through ambiguous or cyclic
+    /// evidence.</para>
+    /// <para>Each remaining leaf, meaning a pull request that nothing names as a parent, is walked down to its bottom
+    /// and reversed into base-first order. A path shorter than two layers is a single pull request and is reported in
+    /// <see cref="DiscoveryResult.Other"/> rather than as a one-layer stack, as is a pull request whose parent closed
+    /// and disappeared from the snapshot. Stacks sharing a lower layer are not merged: every leaf keeps its own path
+    /// and the shared layers are flagged through <see cref="DiscoveredStack.SharedPrefix"/>. The stack id is built from
+    /// the top pull request's number and its title becomes the name, so a stack keeps its identity while its lower
+    /// layers change.</para>
+    /// <para>The parent search is quadratic in the snapshot size because every pull request whose base is not a
+    /// boundary scans the whole list, which is why the boundary skip is also a cost saving.</para></remarks>
     public static DiscoveryResult Discover(IReadOnlyList<PullRequest> prs, IReadOnlyCollection<string> boundaries)
     {
         var warnings = new List<string>();

@@ -12,6 +12,7 @@ namespace Stacker.Tests;
 [Collection(HeadlessApp.CollectionName)]
 public sealed class WindowInteractionTests
 {
+    /// <summary>Ensures the picker guard prevents duplicate dialogs and is released after cancellation.</summary>
     [AvaloniaFact]
     public async Task Folder_picker_closes_repository_popup_and_ignores_duplicate_clicks()
     {
@@ -52,6 +53,7 @@ public sealed class WindowInteractionTests
     }
 
     [AvaloniaFact]
+    /// <summary>Ensures a selected folder opens in the existing shell window.</summary>
     public async Task Folder_selection_opens_repository_in_existing_main_window()
     {
         await using var fixture = new GitFixture();
@@ -78,6 +80,7 @@ public sealed class WindowInteractionTests
     }
 
     [AvaloniaFact]
+    /// <summary>Ensures recent selection bypasses the native picker and closes its flyout.</summary>
     public async Task Recent_repository_selection_closes_popup_without_opening_native_picker()
     {
         await using var fixture = new GitFixture();
@@ -102,6 +105,7 @@ public sealed class WindowInteractionTests
     }
 
     [AvaloniaFact]
+    /// <summary>Ensures picker failures remain visible while the window stays retryable.</summary>
     public async Task Picker_failure_leaves_window_usable_and_allows_retry()
     {
         await using var fixture = new GitFixture();
@@ -128,6 +132,7 @@ public sealed class WindowInteractionTests
     }
 
     [AvaloniaFact]
+    /// <summary>Ensures a late picker result cannot reopen a closed window's repository.</summary>
     public async Task Late_picker_result_after_window_close_does_not_open_repository()
     {
         await using var fixture = new GitFixture();
@@ -143,21 +148,27 @@ public sealed class WindowInteractionTests
         Assert.Null(vm.Repository);
     }
 
+    /// <summary>Builds the real view model with test-local persistent state.</summary>
     private static MainViewModel CreateVm(GitFixture fixture) => new(fixture.Reader, new YamlStackStore(),
         new JsonSettingsStore(Path.Combine(fixture.Root, "settings")), new GitExecutable(), new(fixture.Reader), new(fixture.Reader),
         applicationStore: new ApplicationStore(Path.Combine(fixture.Root, "app-data")));
 
+    /// <summary>Raises the routed click used by the folder button.</summary>
     private static void ClickOpen(MainWindow window) => window.FindControl<Button>("OpenFolderButton")!
         .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
+    /// <summary>Lets queued Avalonia work complete before assertions inspect state.</summary>
     private static async Task DrainUiAsync() => await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
 
+    /// <summary>Waits for asynchronous UI state with a ten-second test deadline.</summary>
+    /// <param name="condition">State predicate that ends the wait.</param>
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         while (!condition()) await Task.Delay(10, timeout.Token);
     }
 
+    /// <summary>Replaces only the native folder picker while retaining real window behavior.</summary>
     private sealed class PickerWindow : MainWindow
     {
         public TaskCompletionSource<string?> Selection { get; set; } = new();

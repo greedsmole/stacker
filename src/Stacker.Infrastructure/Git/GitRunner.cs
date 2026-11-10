@@ -13,8 +13,12 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
     internal static readonly TimeSpan NetworkTimeout = TimeSpan.FromMinutes(3);
     internal static readonly IReadOnlyDictionary<string, string> WriteEnvironment = new Dictionary<string, string>
     {
-        ["GIT_TERMINAL_PROMPT"] = "0", ["GCM_INTERACTIVE"] = "Never", ["GIT_PAGER"] = "cat",
-        ["GIT_EDITOR"] = "true", ["GIT_SEQUENCE_EDITOR"] = "true", ["LC_ALL"] = "C"
+        ["GIT_TERMINAL_PROMPT"] = "0",
+        ["GCM_INTERACTIVE"] = "Never",
+        ["GIT_PAGER"] = "cat",
+        ["GIT_EDITOR"] = "true",
+        ["GIT_SEQUENCE_EDITOR"] = "true",
+        ["LC_ALL"] = "C"
     };
     public readonly SemaphoreSlim Gate = new(1, 1);
 

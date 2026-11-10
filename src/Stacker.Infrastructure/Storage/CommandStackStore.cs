@@ -20,7 +20,7 @@ public sealed class CommandStackStore(YamlStackStore store, CommandBus bus) : IS
         return command.Value is { } value ? value.OrThrow() : throw new StackerException(outcome.Message);
     }
 
-    Task<Result<StackDocument>> IStackStore.LoadAsync(string root,CancellationToken ct) => Boundary.CaptureAsync(() => LoadAsync(root, ct), ProblemCodes.StoreWrite);
+    Task<Result<StackDocument>> IStackStore.LoadAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => LoadAsync(root, ct), ProblemCodes.StoreWrite);
 
-    Task<Result<StackDocument>> IStackStore.SaveAsync(string root,IReadOnlyList<StackDefinition> stacks,string? expectedRevision,CancellationToken ct) => Boundary.CaptureAsync(() => SaveAsync(root, stacks, expectedRevision, ct), ProblemCodes.StoreWrite);
+    Task<Result<StackDocument>> IStackStore.SaveAsync(string root, IReadOnlyList<StackDefinition> stacks, string? expectedRevision, CancellationToken ct) => Boundary.CaptureAsync(() => SaveAsync(root, stacks, expectedRevision, ct), ProblemCodes.StoreWrite);
 }

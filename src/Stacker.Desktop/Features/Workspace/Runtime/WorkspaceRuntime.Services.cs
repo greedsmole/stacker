@@ -1,6 +1,7 @@
 using Stacker.Core;
 using Stacker.Core.Framework;
 namespace Stacker.Desktop.ViewModels;
+
 internal sealed partial class WorkspaceRuntime
 {
     internal IChangeIdentityService? Identities;
@@ -13,7 +14,7 @@ internal sealed partial class WorkspaceRuntime
     internal DiffService _diff = default!;
     internal ISyntaxHighlighter? _highlighter = default!;
     internal StackDocument? _document = default!;
-    internal RepositorySnapshot? _repository { get => Session.Displayed.Repository; set { if(value is not null) Session.Open(value); } }
+    internal RepositorySnapshot? _repository { get => Session.Displayed.Repository; set { if (value is not null) Session.Open(value); } }
     internal CancellationTokenSource? _refresh = default!;
     internal CancellationTokenSource? _comparison = default!;
     internal bool _suppress = default!;

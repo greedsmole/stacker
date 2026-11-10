@@ -78,9 +78,9 @@ public sealed class YamlStackStore(IAtomicFile? files = null, IFileLockFactory? 
         public List<string>? Branches { get; set; }
     }
 
-    Task<Result<StackDocument>> IStackStore.LoadAsync(string root,CancellationToken ct) => Boundary.CaptureAsync(() => LoadAsync(root, ct), ProblemCodes.StoreRead);
+    Task<Result<StackDocument>> IStackStore.LoadAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => LoadAsync(root, ct), ProblemCodes.StoreRead);
 
-    Task<Result<StackDocument>> IStackStore.SaveAsync(string root,IReadOnlyList<StackDefinition> stacks,string? expectedRevision,CancellationToken ct) => Boundary.CaptureAsync(() => SaveAsync(root, stacks, expectedRevision, ct), ProblemCodes.StoreWrite);
+    Task<Result<StackDocument>> IStackStore.SaveAsync(string root, IReadOnlyList<StackDefinition> stacks, string? expectedRevision, CancellationToken ct) => Boundary.CaptureAsync(() => SaveAsync(root, stacks, expectedRevision, ct), ProblemCodes.StoreWrite);
 }
 
 /// <summary>Per-user preferences; a damaged file is moved aside and defaults are used instead.</summary>
@@ -149,5 +149,5 @@ public sealed class JsonSettingsStore(string? directory = null, IAtomicFile? fil
 
     Task<Result<AppSettings>> ISettingsStore.LoadAsync(CancellationToken ct) => Boundary.CaptureAsync(() => LoadAsync(ct), ProblemCodes.StoreRead);
 
-    Task<Result<Unit>> ISettingsStore.SaveAsync(AppSettings settings,CancellationToken ct) => Boundary.CaptureAsync(() => SaveAsync(settings, ct), ProblemCodes.StoreWrite);
+    Task<Result<Unit>> ISettingsStore.SaveAsync(AppSettings settings, CancellationToken ct) => Boundary.CaptureAsync(() => SaveAsync(settings, ct), ProblemCodes.StoreWrite);
 }

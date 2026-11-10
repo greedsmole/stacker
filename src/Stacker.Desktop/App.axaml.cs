@@ -9,6 +9,7 @@ using Stacker.Infrastructure;
 using Stacker.Infrastructure.Framework;
 using Stacker.Desktop.ViewModels;
 namespace Stacker.Desktop;
+
 public partial class App : Application
 {
     /// <summary>Everything Stacker owns lives here: drafts, snapshots, journals, locks.</summary>

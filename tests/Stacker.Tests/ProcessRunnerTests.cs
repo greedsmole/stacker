@@ -2,6 +2,7 @@
 using Stacker.Core;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
+
 public sealed class ProcessRunnerTests
 {
     private static ProcessRequest Probe(string mode, params string[] args) => new("dotnet", [typeof(ProcessProbe).Assembly.Location, mode, .. args]);
@@ -36,7 +37,7 @@ public sealed class ProcessRunnerTests
     [Fact]
     public async Task Environment_removal_is_limited_to_child_process()
     {
-        var request = Probe("env", "STACKER_TEST_TOKEN") with { Environment = new Dictionary<string,string> { ["STACKER_TEST_TOKEN"] = "test-value" } };
+        var request = Probe("env", "STACKER_TEST_TOKEN") with { Environment = new Dictionary<string, string> { ["STACKER_TEST_TOKEN"] = "test-value" } };
         var runner = new ProcessRunner();
         Assert.Equal("test-value", (await runner.RunAsync(request)).StdOut);
         Assert.Equal("absent", (await runner.RunAsync(request with { UnsetEnvironment = ["STACKER_TEST_TOKEN"] })).StdOut);

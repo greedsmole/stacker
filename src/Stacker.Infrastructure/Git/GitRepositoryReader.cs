@@ -13,8 +13,12 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
     // These per-process settings keep interactive prompts, pagers, optional index writes, and locale-dependent parsing out of reads.
     private static readonly IReadOnlyDictionary<string, string> EnvironmentOverrides = new Dictionary<string, string>
     {
-        ["GIT_TERMINAL_PROMPT"] = "0", ["GCM_INTERACTIVE"] = "Never", ["GIT_PAGER"] = "cat",
-        ["GIT_OPTIONAL_LOCKS"] = "0", ["GIT_NO_LAZY_FETCH"] = "1", ["GIT_LITERAL_PATHSPECS"] = "1",
+        ["GIT_TERMINAL_PROMPT"] = "0",
+        ["GCM_INTERACTIVE"] = "Never",
+        ["GIT_PAGER"] = "cat",
+        ["GIT_OPTIONAL_LOCKS"] = "0",
+        ["GIT_NO_LAZY_FETCH"] = "1",
+        ["GIT_LITERAL_PATHSPECS"] = "1",
         ["LC_ALL"] = "C"
     };
     // Reads on a large repository or a network mount routinely exceed the process default; give them a real budget.
@@ -48,13 +52,13 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
             if (status[i][0] is 'R' or 'C' || status[i][1] is 'R' or 'C') i++;
         }
         RepositoryIdentity identity;
-        if(identities is not null)identity=(await identities.RegisterAsync(root,ct)).OrThrow();
+        if (identities is not null) identity = (await identities.RegisterAsync(root, ct)).OrThrow();
         else
         {
-            var common=(await Run(root,["rev-parse","--path-format=absolute","--git-common-dir"],ct)).StdOut.TrimEnd('\r','\n');
-            identity=new(new(StableIdentity.For(common)[..32]),new(StableIdentity.For(root)[..32]),root,common);
+            var common = (await Run(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"], ct)).StdOut.TrimEnd('\r', '\n');
+            identity = new(new(StableIdentity.For(common)[..32]), new(StableIdentity.For(root)[..32]), root, common);
         }
-        return new RepositorySnapshot(root, refs, changed) { Identity=identity, IsDemo = File.Exists(Path.Combine(root, ".stacker-demo.json")) };
+        return new RepositorySnapshot(root, refs, changed) { Identity = identity, IsDemo = File.Exists(Path.Combine(root, ".stacker-demo.json")) };
     }
     /// <summary>Returns all merge bases because more than one best ancestor makes the comparison ambiguous.</summary>
     public async Task<IReadOnlyList<string>> MergeBasesAsync(string root, string left, string right, CancellationToken ct = default)
@@ -133,8 +137,15 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
         foreach (var c in path)
             quoted.Append(c switch
             {
-                '"' => "\\\"", '\\' => "\\\\", '\a' => "\\a", '\b' => "\\b", '\t' => "\\t",
-                '\n' => "\\n", '\v' => "\\v", '\f' => "\\f", '\r' => "\\r",
+                '"' => "\\\"",
+                '\\' => "\\\\",
+                '\a' => "\\a",
+                '\b' => "\\b",
+                '\t' => "\\t",
+                '\n' => "\\n",
+                '\v' => "\\v",
+                '\f' => "\\f",
+                '\r' => "\\r",
                 < (char)32 or (char)127 => "\\" + Convert.ToString(c, 8).PadLeft(3, '0'),
                 _ => c.ToString()
             });
@@ -146,17 +157,17 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
         if (!Regex.IsMatch(value, "\\A(?:[0-9a-f]{40}|[0-9a-f]{64})\\z")) throw new StackerException("Invalid commit ID. Refresh the repository.");
     }
 
-    Task<Result<RepositorySnapshot>> IGitRepositoryReader.OpenAsync(string path,CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(path, ct), ProblemCodes.GitFailed);
+    Task<Result<RepositorySnapshot>> IGitRepositoryReader.OpenAsync(string path, CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(path, ct), ProblemCodes.GitFailed);
 
-    Task<Result<IReadOnlyList<string>>> IGitRepositoryReader.MergeBasesAsync(string root,string left,string right,CancellationToken ct) => Boundary.CaptureAsync(() => MergeBasesAsync(root, left, right, ct), ProblemCodes.GitFailed);
+    Task<Result<IReadOnlyList<string>>> IGitRepositoryReader.MergeBasesAsync(string root, string left, string right, CancellationToken ct) => Boundary.CaptureAsync(() => MergeBasesAsync(root, left, right, ct), ProblemCodes.GitFailed);
 
-    Task<Result<(int Ahead, int Behind)>> IGitRepositoryReader.CountsAsync(string root,string parent,string head,CancellationToken ct) => Boundary.CaptureAsync(() => CountsAsync(root, parent, head, ct), ProblemCodes.GitFailed);
+    Task<Result<(int Ahead, int Behind)>> IGitRepositoryReader.CountsAsync(string root, string parent, string head, CancellationToken ct) => Boundary.CaptureAsync(() => CountsAsync(root, parent, head, ct), ProblemCodes.GitFailed);
 
-    Task<Result<IReadOnlyList<FileChange>>> IGitRepositoryReader.FilesAsync(string root,string @base,string head,CancellationToken ct) => Boundary.CaptureAsync(() => FilesAsync(root, @base, head, ct), ProblemCodes.GitFailed);
+    Task<Result<IReadOnlyList<FileChange>>> IGitRepositoryReader.FilesAsync(string root, string @base, string head, CancellationToken ct) => Boundary.CaptureAsync(() => FilesAsync(root, @base, head, ct), ProblemCodes.GitFailed);
 
-    Task<Result<FileDiff>> IGitRepositoryReader.PatchAsync(string root,string @base,string head,FileChange file,CancellationToken ct) => Boundary.CaptureAsync(() => PatchAsync(root, @base, head, file, ct), ProblemCodes.GitFailed);
+    Task<Result<FileDiff>> IGitRepositoryReader.PatchAsync(string root, string @base, string head, FileChange file, CancellationToken ct) => Boundary.CaptureAsync(() => PatchAsync(root, @base, head, file, ct), ProblemCodes.GitFailed);
 
-    Task<Result<BlobContent?>> IBlobReader.ReadBlobAsync(string root,string commit,string path,CancellationToken ct) => Boundary.CaptureAsync(() => ReadBlobAsync(root, commit, path, ct), ProblemCodes.GitFailed);
+    Task<Result<BlobContent?>> IBlobReader.ReadBlobAsync(string root, string commit, string path, CancellationToken ct) => Boundary.CaptureAsync(() => ReadBlobAsync(root, commit, path, ct), ProblemCodes.GitFailed);
 
-    Task<Result<GitHubSnapshot?>> IDemoSnapshotReader.ReadDemoSnapshotAsync(string root,CancellationToken ct) => Boundary.CaptureAsync(() => ReadDemoSnapshotAsync(root, ct), ProblemCodes.GitFailed);
+    Task<Result<GitHubSnapshot?>> IDemoSnapshotReader.ReadDemoSnapshotAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => ReadDemoSnapshotAsync(root, ct), ProblemCodes.GitFailed);
 }

@@ -1,8 +1,24 @@
 namespace Stacker.Core;
 
 /// <summary>Projects the active part of the stored graph into navigation paths; closed nodes remain in graph history.</summary>
+/// <remarks>Unlike <see cref="StackDiscovery"/>, which re-derives parent edges from the live pull request set on every refresh,
+/// this projects the edges that were already accepted into a graph revision — including manual ones. Only nodes whose pull
+/// request is still in the open snapshot participate, so a merged or closed parent disappears from navigation while the stored
+/// revision keeps it for the historical view. A child with several parents is ambiguous and gets no parent at all: it becomes
+/// the root of a shorter path, so the chain above the ambiguity is never guessed and only the part below it stays navigable.</remarks>
 public static class GraphDiscovery
 {
+    /// <summary>Builds stacks, paths and leftover changes from one graph revision and one open snapshot.</summary>
+    /// <remarks>Edges are filtered to nodes that survive the open-snapshot test, then only children with exactly one incoming
+    /// edge get a parent; the rest keep no parent and are therefore roots. Every node that is never a parent is treated as a leaf,
+    /// walked up to its root with a visited set that stops a stored cycle, and reversed into base-to-tip order. Paths with a
+    /// single layer are discarded because one pull request is not a stack, and their changes reappear in the leftover list.
+    /// Occurrences are counted across all kept paths: a pull request seen more than once means two stacks share a foundation,
+    /// which is what <see cref="DiscoveredStack.SharedPrefix"/> reports. A stack's identity is built from its topmost pull request
+    /// number and its name from that pull request's title, so re-observing the same shape keeps the same navigation keys.</remarks>
+    /// <param name="snapshot">Current open pull requests and their titles; supplies both the filter and the displayed objects.</param>
+    /// <param name="graph">Stored revision whose nodes, edges and warnings are projected.</param>
+    /// <returns>Discovered paths, the snapshot changes not used by any path, and the revision's warnings passed through unchanged.</returns>
     public static DiscoveryResult Discover(GitHubSnapshot snapshot, GraphSnapshot graph)
     {
         var active = snapshot.PullRequests.ToDictionary(p => p.Number);

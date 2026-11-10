@@ -117,7 +117,9 @@ keep sending blocked until the user explicitly resolves uncertainty; unreadable 
 ## Fitness and evidence
 
 `ArchitectureTests` enforce Core's OS boundary, Result-returning ports, feature isolation, the UI event boundary,
-registered services, nonempty command reachability, catalogued problems and a 300-line product-source limit.
+registered services, nonempty command reachability, catalogued problems and a 300-code-line product-source limit
+(XML documentation lines are excluded). The three product projects generate assembly XML documentation; a public
+type or member without a `///` comment is a build error, and internal/private members are documented as well.
 Behavioral tests additionally run real commands through the production bus; a source scan alone does not prove
 that the app uses an architecture.
 

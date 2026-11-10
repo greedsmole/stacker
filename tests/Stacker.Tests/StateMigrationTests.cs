@@ -24,14 +24,19 @@ public sealed class StateMigrationTests
         }
     }
 
-    [Fact] public async Task Legacy_workspace_import_preserves_views_and_only_rewrites_the_changed_stack()
+    [Fact]
+    public async Task Legacy_workspace_import_preserves_views_and_only_rewrites_the_changed_stack()
     {
         var store = new RecordingState();
-        var legacy = new WorkspaceState { ActiveGroup = "A", Stacks = new()
+        var legacy = new WorkspaceState
         {
-            ["A"] = new() { Branches = ["refs/heads/A"], Comparisons = new() { ["Layer:A"] = [new("A", "one.cs", "one", 0, 123, true)] } },
-            ["B"] = new() { Expanded = false }
-        } };
+            ActiveGroup = "A",
+            Stacks = new()
+            {
+                ["A"] = new() { Branches = ["refs/heads/A"], Comparisons = new() { ["Layer:A"] = [new("A", "one.cs", "one", 0, 123, true)] } },
+                ["B"] = new() { Expanded = false }
+            }
+        };
         (await store.WriteAsync("workspace", "repo", legacy)).OrThrow();
         var persistence = new WorkspacePersistence(store);
         var state = (await persistence.LoadAsync("repo")).OrThrow();
@@ -52,7 +57,8 @@ public sealed class StateMigrationTests
         Assert.False(saved.Stacks["A"].Expanded); // The queued snapshot cannot change underneath the save.
     }
 
-    [Fact] public async Task A_failed_stack_write_keeps_the_previous_workspace_index_and_remains_retryable()
+    [Fact]
+    public async Task A_failed_stack_write_keeps_the_previous_workspace_index_and_remains_retryable()
     {
         var store = new RecordingState(); var persistence = new WorkspacePersistence(store);
         var state = new WorkspaceState { Stacks = new() { ["A"] = new() } };
@@ -67,7 +73,8 @@ public sealed class StateMigrationTests
         Assert.Equal(2, (await new WorkspacePersistence(store).LoadAsync("repo")).OrThrow().Stacks.Count);
     }
 
-    [Fact] public async Task Saved_stashes_can_be_restored_by_identity_in_either_order_after_restart()
+    [Fact]
+    public async Task Saved_stashes_can_be_restored_by_identity_in_either_order_after_restart()
     {
         await using var f = new GitFixture(); await f.Linear();
         var root = await f.ResolvedRoot(); IGitBranchWriter writer = f.Writer();
@@ -86,7 +93,8 @@ public sealed class StateMigrationTests
         Assert.Empty((await writer.SavedStashesAsync(root)).OrThrow());
     }
 
-    [Fact] public async Task Future_settings_are_not_overwritten_by_shutdown_defaults()
+    [Fact]
+    public async Task Future_settings_are_not_overwritten_by_shutdown_defaults()
     {
         await using var f = new GitFixture(); var path = Path.Combine(f.Root, "settings.json");
         await File.WriteAllTextAsync(path, "{\"SchemaVersion\":999,\"FutureValue\":\"preserve\"}");
@@ -96,7 +104,8 @@ public sealed class StateMigrationTests
         Assert.Equal(before, await File.ReadAllTextAsync(path));
     }
 
-    [Fact] public async Task A_valid_json_journal_with_an_unsupported_schema_is_preserved_and_blocks_writes()
+    [Fact]
+    public async Task A_valid_json_journal_with_an_unsupported_schema_is_preserved_and_blocks_writes()
     {
         await using var f = new GitFixture(); var files = new AtomicFile();
         var store = new JsonStateStore<JournalLog>(files, f.Root + " journal", quarantineCorrupt: false);

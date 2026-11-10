@@ -15,16 +15,17 @@ public sealed class WorkspaceV3Tests
 {
     private static MainViewModel Create(GitFixture f, ApplicationStore store, FakeGitHub? hub = null) =>
         new(f.Reader, new YamlStackStore(), new JsonSettingsStore(Path.Combine(f.Root, "settings")), new GitExecutable(), new(f.Reader), new(f.Reader), hub, hub, new SeededCache(f.Root), store);
-    private sealed class SeededCache(string root):IPullRequestObjects
+    private sealed class SeededCache(string root) : IPullRequestObjects
     {
-        public List<long[]> Requests { get; }=[];
-        public Task<Result<RepositoryObjectStorage>> InspectAsync(RepositoryIdentity repository,CancellationToken ct=default)=>Task.FromResult(Result<RepositoryObjectStorage>.Ok(new(repository.CommonDirectory,0)));
-        public Task<Result<Unit>> EnsureAsync(RepositoryIdentity repository,GitHubRepositoryContext context,IReadOnlyList<PullRequest> prs,CancellationToken ct=default)
-        {Assert.True(Directory.Exists(root));Requests.Add(prs.Select(pr=>pr.Number).ToArray());return Task.FromResult(Result.Ok);}
-        public Task<Result<ObjectSnapshotLease>> AcquireAsync(RepositoryIdentity repository,CancellationToken ct=default)=>Task.FromResult(Result<ObjectSnapshotLease>.Ok(new(repository.Root,()=>{})));
-        public Task<Result<Unit>> ClearAsync(RepositoryIdentity repository,GitHubRepositoryContext context,CancellationToken ct=default)=>Task.FromResult(Result.Ok);
+        public List<long[]> Requests { get; } = [];
+        public Task<Result<RepositoryObjectStorage>> InspectAsync(RepositoryIdentity repository, CancellationToken ct = default) => Task.FromResult(Result<RepositoryObjectStorage>.Ok(new(repository.CommonDirectory, 0)));
+        public Task<Result<Unit>> EnsureAsync(RepositoryIdentity repository, GitHubRepositoryContext context, IReadOnlyList<PullRequest> prs, CancellationToken ct = default)
+        { Assert.True(Directory.Exists(root)); Requests.Add(prs.Select(pr => pr.Number).ToArray()); return Task.FromResult(Result.Ok); }
+        public Task<Result<ObjectSnapshotLease>> AcquireAsync(RepositoryIdentity repository, CancellationToken ct = default) => Task.FromResult(Result<ObjectSnapshotLease>.Ok(new(repository.Root, () => { })));
+        public Task<Result<Unit>> ClearAsync(RepositoryIdentity repository, GitHubRepositoryContext context, CancellationToken ct = default) => Task.FromResult(Result.Ok);
     }
-    [AvaloniaFact] public async Task Clean_diff_preserves_patch_numbers_and_newline_annotation()
+    [AvaloniaFact]
+    public async Task Clean_diff_preserves_patch_numbers_and_newline_annotation()
     {
         await using var f = new GitFixture(); await f.Linear();
         var a = await f.Git("rev-parse", "A"); var b = await f.Git("rev-parse", "B");
@@ -38,7 +39,8 @@ public sealed class WorkspaceV3Tests
         var h = Assert.Single(parsed.Hunks); Assert.Equal(1, h.OldStart); Assert.Equal(2, h.OldCount); Assert.Equal(2, h.NewStart); Assert.Equal(3, h.NewCount); Assert.Equal("method", h.Context);
         Assert.Contains(h.Lines, l => l.Kind == DiffLineKind.Notice);
     }
-    [AvaloniaFact] public async Task Workspace_restores_selection_file_filter_and_scroll_across_restart()
+    [AvaloniaFact]
+    public async Task Workspace_restores_selection_file_filter_and_scroll_across_restart()
     {
         await using var f = new GitFixture(); await f.Linear(); var store = new ApplicationStore(Path.Combine(f.Root, "app"));
         await new YamlStackStore().SaveAsync(f.Root, [f.Stack], null);
@@ -53,7 +55,8 @@ public sealed class WorkspaceV3Tests
         var restored = Assert.Single(next.Sections); Assert.Equal("B", restored.Filter); Assert.Equal("B.txt", restored.SelectedFile?.NewPath); Assert.Equal(123, restored.ScrollY);
         await next.SelectOverviewAsync(next.LocalGroups[0]); Assert.Equal(DiffMode.FullStack, next.Mode);
     }
-    [AvaloniaFact] public async Task Background_changes_wait_for_explicit_application_and_no_change_keeps_sections()
+    [AvaloniaFact]
+    public async Task Background_changes_wait_for_explicit_application_and_no_change_keeps_sections()
     {
         await using var f = new GitFixture(); await f.Linear();
         var hub = new FakeGitHub { Current = DiscoveryTests.Pr(42, "main", "A") with { BaseSha = await f.Git("rev-parse", "main"), HeadSha = await f.Git("rev-parse", "A") } };
@@ -68,7 +71,8 @@ public sealed class WorkspaceV3Tests
         Assert.Equal("Keep the review", vm.ActiveReview!.Summary); Assert.True(vm.ActiveReview.HasStaleDraft);
         await vm.FlushReviewsAsync();
     }
-    [AvaloniaFact] public async Task Line_editors_are_separate_from_PR_and_drafts_are_visible_inline()
+    [AvaloniaFact]
+    public async Task Line_editors_are_separate_from_PR_and_drafts_are_visible_inline()
     {
         await using var f = new GitFixture(); await f.Linear();
         var hub = new FakeGitHub { Current = DiscoveryTests.Pr(42, "main", "A") with { BaseSha = await f.Git("rev-parse", "main"), HeadSha = await f.Git("rev-parse", "A") } };
@@ -84,7 +88,8 @@ public sealed class WorkspaceV3Tests
         review.Summary = "Please improve this"; await review.SubmitReviewCommand.ExecuteAsync(null); Assert.Equal(1, hub.Writes); Assert.Empty(line.Drafts);
         review.BeginPrComment(); Assert.Equal("PR draft", review.Composer); await review.FlushAsync();
     }
-    [AvaloniaFact] public async Task Discussion_refresh_keeps_unchanged_objects_and_unsent_reply()
+    [AvaloniaFact]
+    public async Task Discussion_refresh_keeps_unchanged_objects_and_unsent_reply()
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub(); var store = new ApplicationStore(f.Root);
         hub.Published.Add(new("1", "alice", "Existing comment", "", DateTimeOffset.UtcNow));
@@ -95,7 +100,8 @@ public sealed class WorkspaceV3Tests
         hub.Published.Add(new("2", "bob", "New comment", "", DateTimeOffset.UtcNow)); await review.RefreshDiscussionAsync();
         Assert.Same(original, review.Comments[0]); Assert.Equal(2, review.Comments.Count); Assert.Equal("Unsent", review.Composer); await review.FlushAsync();
     }
-    [AvaloniaFact] public async Task Main_window_embeds_review_and_exposes_contextual_actions()
+    [AvaloniaFact]
+    public async Task Main_window_embeds_review_and_exposes_contextual_actions()
     {
         await using var f = new GitFixture(); await f.Linear();
         var hub = new FakeGitHub { Current = DiscoveryTests.Pr(42, "main", "A") with { BaseSha = await f.Git("rev-parse", "main"), HeadSha = await f.Git("rev-parse", "A") } };
@@ -119,7 +125,8 @@ public sealed class WorkspaceV3Tests
         await vm.FlushReviewsAsync(); window.Close();
     }
     // Scenario: Coordinator delays on activation pauses and backs off without overlapping.
-    [Fact] public async Task Coordinator_delays_on_activation_pauses_and_backs_off_without_overlapping()
+    [Fact]
+    public async Task Coordinator_delays_on_activation_pauses_and_backs_off_without_overlapping()
     {
         var clock = new ManualClock(); var calls = 0;
         using var coordinator = new RefreshCoordinator(_ => { calls++; throw new StackerException("network unavailable"); }, clock);
@@ -129,7 +136,8 @@ public sealed class WorkspaceV3Tests
         coordinator.SetActive(true); Assert.Equal(1, calls); clock.Advance(TimeSpan.FromMinutes(2)); await Task.Delay(10); Assert.Equal(2, calls);
     }
     // Scenario: Coordinator suspends auth errors until reset.
-    [Fact] public async Task Coordinator_suspends_auth_errors_until_reset()
+    [Fact]
+    public async Task Coordinator_suspends_auth_errors_until_reset()
     {
         var clock = new ManualClock(); var calls = 0;
         using var coordinator = new RefreshCoordinator(_ => { calls++; throw new GitHubAuthenticationException("Sign in"); }, clock);
@@ -137,7 +145,8 @@ public sealed class WorkspaceV3Tests
         coordinator.SetActive(true); clock.Advance(TimeSpan.FromHours(1)); Assert.Equal(1, calls);
         coordinator.Reset(); coordinator.SetActive(true); clock.Advance(TimeSpan.FromMinutes(1)); await Task.Delay(10); Assert.Equal(2, calls);
     }
-    [AvaloniaFact] public async Task Quiet_discussion_read_does_not_disable_editor_or_lose_typing()
+    [AvaloniaFact]
+    public async Task Quiet_discussion_read_does_not_disable_editor_or_lose_typing()
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub();
         using var section = new DiffSectionViewModel(f.Reader, f.Root, new("feature", "main", hub.Current.BaseSha, hub.Current.HeadSha, null, []));
@@ -148,7 +157,8 @@ public sealed class WorkspaceV3Tests
         hub.DiscussionGate.SetResult(new([], [], [])); await read;
         Assert.Equal("Typed while loading", review.Composer); await review.FlushAsync();
     }
-    [AvaloniaFact] public async Task Old_composer_is_recovered_without_guessing_its_destination()
+    [AvaloniaFact]
+    public async Task Old_composer_is_recovered_without_guessing_its_destination()
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub(); var store = new ApplicationStore(f.Root);
         await store.WriteAsync("drafts", FakeGitHub.Context.Identity + "/42", new ReviewDraft { HeadSha = hub.Current.HeadSha, BaseSha = hub.Current.BaseSha, Composer = "Old ambiguous text" });
@@ -157,7 +167,8 @@ public sealed class WorkspaceV3Tests
         Assert.True(review.HasRecoveredText); Assert.Equal("", review.Composer); Assert.Equal("Old ambiguous text", review.RecoveredText);
         review.RestoreRecoveredTextCommand.Execute(null); Assert.Equal("Old ambiguous text", review.Composer); Assert.False(review.HasRecoveredText); await review.FlushAsync();
     }
-    [AvaloniaFact] public async Task Reconciliation_preserves_text_written_after_an_uncertain_review()
+    [AvaloniaFact]
+    public async Task Reconciliation_preserves_text_written_after_an_uncertain_review()
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub { FailAfterSend = true };
         using var section = new DiffSectionViewModel(f.Reader, f.Root, new("feature", "main", hub.Current.BaseSha, hub.Current.HeadSha, null, []));
@@ -166,7 +177,8 @@ public sealed class WorkspaceV3Tests
         review.Summary = "New unsent summary"; await review.ReloadAsync();
         Assert.False(review.HasPendingPublication); Assert.Equal("New unsent summary", review.Summary); Assert.Equal(1, hub.Writes); await review.FlushAsync();
     }
-    [AvaloniaFact] public async Task Left_side_range_rejects_context_and_added_lines_before_creating_a_draft()
+    [AvaloniaFact]
+    public async Task Left_side_range_rejects_context_and_added_lines_before_creating_a_draft()
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub();
         var file = new FileChange("old.cs", "new.cs", FileChangeKind.Renamed, 1, 1, "100644", "100644");
@@ -184,7 +196,8 @@ public sealed class WorkspaceV3Tests
         await review.PostInlineCommand.ExecuteAsync(null); Assert.Equal(0, hub.Writes);
         review.SetSelection([removed, new(new(DiffLineKind.Added, null, 2, "+new"))]); Assert.False(review.HasSelection); await review.FlushAsync();
     }
-    [AvaloniaFact] public async Task Canceled_initialization_does_not_overwrite_an_existing_draft()
+    [AvaloniaFact]
+    public async Task Canceled_initialization_does_not_overwrite_an_existing_draft()
     {
         await using var f = new GitFixture(); var hub = new FakeGitHub(); var store = new ApplicationStore(f.Root);
         var key = FakeGitHub.Context.Identity + "/42";

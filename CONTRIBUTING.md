@@ -44,6 +44,28 @@ async event handlers through `AsyncHandler`, and report failures on the owning v
 background reads and retained buffers when a session/view is replaced. Keep caches bounded by both count and an
 estimated retained size where large text is stored. Save immutable snapshots of changed workspace state.
 
+## XML documentation
+
+Core, Infrastructure and Desktop build with `GenerateDocumentationFile` and treat warnings as errors, so a
+publicly visible type or member without a `///` comment fails the build. Internal and private declarations are
+documented too: the compiler writes them into the assembly XML, and they are where the non-obvious rules live.
+Write for a reader who has never opened the file.
+
+- `<summary>` states purpose and contract, not the member name. Use `<remarks>` for ordering, cancellation,
+  leases, journal phases, recovery and concurrency.
+- For every guard, say which failure it prevents. For every threshold, timeout, size cap, retry count, percentage
+  or formula, say what it bounds and what happens at the boundary. Give the reason when the code, tests or docs
+  record it; never invent history. Put the explanation on the owning member and link named constants with
+  `<see cref>`.
+- Document record positional parameters with `<param>` tags; if you tag some parameters, tag all of them.
+- Implementations and overrides use `<inheritdoc/>` when the port already states the contract; add `<remarks>`
+  for behaviour the port cannot express.
+- `<see cref>` must resolve or the build fails. Escape `<`, `>`, `&`; no `<code>`/`<example>` blocks.
+- Local functions and source-generated members are not emitted into the XML file; document the backing field or
+  handler method instead.
+- `///` lines do not count toward the 300-line fitness limit, but do not use documentation to hide a file that
+  has grown into a monolith.
+
 ## Verify
 
 ```sh
@@ -54,8 +76,8 @@ python3 scripts/package.py win-x64
 ```
 
 Architecture tests enforce the port/result boundaries, command reachability, service resolution and a maximum
-of 300 lines per product source file. Add a behavioral test when a source rule could pass without the production
-path using the mechanism.
+of 300 product-source code lines per file (XML documentation lines are excluded). Add a behavioral test when a
+source rule could pass without the production path using the mechanism.
 
 Use `GitFixture` for isolated histories, worktrees and local bare remotes. GitHub tests use doubles and recorded
 transport responses. Native Windows execution and live GitHub/GHES publication require their own validation;

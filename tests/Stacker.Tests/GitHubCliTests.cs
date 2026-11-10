@@ -4,24 +4,25 @@ using System.Text.Json;
 using Stacker.Core;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
-public sealed class ScriptedRunner(Func<ProcessRequest,ProcessResult> handler) : IProcessRunner
+
+public sealed class ScriptedRunner(Func<ProcessRequest, ProcessResult> handler) : IProcessRunner
 {
     public List<ProcessRequest> Calls { get; } = [];
-    public Task<ProcessResult> RunAsync(ProcessRequest request,CancellationToken ct=default) { ct.ThrowIfCancellationRequested(); Calls.Add(request); return Task.FromResult(handler(request)); }
+    public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default) { ct.ThrowIfCancellationRequested(); Calls.Add(request); return Task.FromResult(handler(request)); }
 
-    Task<Result<ProcessResult>> IProcessRunner.RunAsync(ProcessRequest request,CancellationToken ct) => Boundary.CaptureAsync(() => RunAsync(request, ct), ProblemCodes.GitFailed);
+    Task<Result<ProcessResult>> IProcessRunner.RunAsync(ProcessRequest request, CancellationToken ct) => Boundary.CaptureAsync(() => RunAsync(request, ct), ProblemCodes.GitFailed);
 }
 public sealed class GitHubCliTests
 {
-    private static readonly GitHubRepositoryContext Context = new("enterprise.example",1,"team","repo","https://enterprise.example/team/repo.git","alice","main");
+    private static readonly GitHubRepositoryContext Context = new("enterprise.example", 1, "team", "repo", "https://enterprise.example/team/repo.git", "alice", "main");
     // Scenario: Origin parsing supports https ssh and enterprise.
     [Theory]
-    [InlineData("https://github.com/team/repo.git","github.com")]
-    [InlineData("git@github.com:team/repo.git","github.com")]
-    [InlineData("ssh://git@enterprise.example/team/repo.git","enterprise.example")]
-    public void Origin_parsing_supports_https_ssh_and_enterprise(string url,string host)
+    [InlineData("https://github.com/team/repo.git", "github.com")]
+    [InlineData("git@github.com:team/repo.git", "github.com")]
+    [InlineData("ssh://git@enterprise.example/team/repo.git", "enterprise.example")]
+    public void Origin_parsing_supports_https_ssh_and_enterprise(string url, string host)
     {
-        var result=GitHubCli.ParseOrigin(url); Assert.Equal(host,result.Host); Assert.Equal("team",result.Owner); Assert.Equal("repo",result.Name);
+        var result = GitHubCli.ParseOrigin(url); Assert.Equal(host, result.Host); Assert.Equal("team", result.Owner); Assert.Equal("repo", result.Name);
     }
     // Scenario: Invalid origin is not guessed.
     [Theory]
@@ -30,18 +31,20 @@ public sealed class GitHubCliTests
     [InlineData("https://github.com/team/repo?not-a-repo")]
     public void Invalid_origin_is_not_guessed(string url)
     {
-        Assert.Throws<StackerException>(()=>GitHubCli.ParseOrigin(url));
+        Assert.Throws<StackerException>(() => GitHubCli.ParseOrigin(url));
     }
     // Scenario: Json auth failure with exit zero is rejected.
-    [Fact] public async Task Json_auth_failure_with_exit_zero_is_rejected()
+    [Fact]
+    public async Task Json_auth_failure_with_exit_zero_is_rejected()
     {
-        var runner=new ScriptedRunner(_=>new(0,"{\"hosts\":{\"enterprise.example\":[{\"active\":true,\"state\":\"error\",\"login\":\"alice\"}]}}",""));
-        var cli=new GitHubCli(runner,new(),new());
-        var error=await Assert.ThrowsAsync<GitHubAuthenticationException>(()=>cli.ConnectAsync(".","enterprise.example/team/repo")); Assert.Contains("gh auth login --hostname enterprise.example",error.Message);
-        Assert.Single(runner.Calls); Assert.DoesNotContain("--show-token",runner.Calls[0].Arguments);
+        var runner = new ScriptedRunner(_ => new(0, "{\"hosts\":{\"enterprise.example\":[{\"active\":true,\"state\":\"error\",\"login\":\"alice\"}]}}", ""));
+        var cli = new GitHubCli(runner, new(), new());
+        var error = await Assert.ThrowsAsync<GitHubAuthenticationException>(() => cli.ConnectAsync(".", "enterprise.example/team/repo")); Assert.Contains("gh auth login --hostname enterprise.example", error.Message);
+        Assert.Single(runner.Calls); Assert.DoesNotContain("--show-token", runner.Calls[0].Arguments);
     }
     // Scenario: Invalid environment token explains saved account override.
-    [Fact] public async Task Invalid_environment_token_explains_saved_account_override()
+    [Fact]
+    public async Task Invalid_environment_token_explains_saved_account_override()
     {
         var runner = new ScriptedRunner(_ => new(0, """{"hosts":{"github.com":[{"active":true,"state":"error","tokenSource":"GITHUB_TOKEN"}]}}""", ""));
         var error = await Assert.ThrowsAsync<GitHubAuthenticationException>(() => new GitHubCli(runner, new(), new()).ConnectAsync(".", "github.com/team/repo"));
@@ -49,7 +52,8 @@ public sealed class GitHubCliTests
         Assert.Contains("Use saved gh credentials", error.Message);
     }
     // Scenario: Saved credentials policy applies to auth and api without switching accounts.
-    [Fact] public async Task Saved_credentials_policy_applies_to_auth_and_api_without_switching_accounts()
+    [Fact]
+    public async Task Saved_credentials_policy_applies_to_auth_and_api_without_switching_accounts()
     {
         var runner = new ScriptedRunner(r => r.Arguments[0] == "auth"
             ? new(0, """{"hosts":{"enterprise.example":[{"active":true,"state":"success","login":"alice","tokenSource":"keyring"}]}}""", "")
@@ -59,28 +63,32 @@ public sealed class GitHubCliTests
         foreach (var call in runner.Calls) { Assert.Contains("GITHUB_TOKEN", call.UnsetEnvironment!); Assert.Contains("GH_ENTERPRISE_TOKEN", call.UnsetEnvironment!); Assert.DoesNotContain("switch", call.Arguments); }
     }
     // Scenario: Authenticated host still requires repository access.
-    [Fact] public async Task Authenticated_host_still_requires_repository_access()
+    [Fact]
+    public async Task Authenticated_host_still_requires_repository_access()
     {
-        var runner=new ScriptedRunner(r=>r.Arguments[0]=="auth" ? new(0,"{\"hosts\":{\"enterprise.example\":[{\"active\":true,\"state\":\"success\",\"login\":\"alice\"}]}}","") : new(1,"","HTTP 404"));
-        await Assert.ThrowsAsync<StackerException>(()=>new GitHubCli(runner,new(),new()).ConnectAsync(".","enterprise.example/team/repo")); Assert.Equal(2,runner.Calls.Count);
+        var runner = new ScriptedRunner(r => r.Arguments[0] == "auth" ? new(0, "{\"hosts\":{\"enterprise.example\":[{\"active\":true,\"state\":\"success\",\"login\":\"alice\"}]}}", "") : new(1, "", "HTTP 404"));
+        await Assert.ThrowsAsync<StackerException>(() => new GitHubCli(runner, new(), new()).ConnectAsync(".", "enterprise.example/team/repo")); Assert.Equal(2, runner.Calls.Count);
     }
     // Scenario: Snapshot flattens all pages and keeps drafts and repository ids.
-    [Fact] public async Task Snapshot_flattens_all_pages_and_keeps_drafts_and_repository_ids()
+    [Fact]
+    public async Task Snapshot_flattens_all_pages_and_keeps_drafts_and_repository_ids()
     {
-        object Pr(long n,bool draft)=>new { number=n,title="Title",@base=new {repo=new{id=1},@ref="main",sha=new string('a',40)},head=new {repo=new{id=2},@ref="feature",sha=new string('b',40)},draft,html_url="https://example.invalid"};
-        var runner=new ScriptedRunner(_=>new(0,JsonSerializer.Serialize(new[]{new[]{Pr(1,false)},new[]{Pr(2,true)}}),""));
-        var result=await new GitHubCli(runner,new(),new()).SnapshotAsync(Context); Assert.Equal(2,result.PullRequests.Count); Assert.True(result.PullRequests[1].IsDraft); Assert.Equal(2,result.PullRequests[0].HeadRepositoryId);
-        Assert.Contains("--paginate",runner.Calls[0].Arguments); Assert.Contains(Context.Host,runner.Calls[0].Arguments);
+        object Pr(long n, bool draft) => new { number = n, title = "Title", @base = new { repo = new { id = 1 }, @ref = "main", sha = new string('a', 40) }, head = new { repo = new { id = 2 }, @ref = "feature", sha = new string('b', 40) }, draft, html_url = "https://example.invalid" };
+        var runner = new ScriptedRunner(_ => new(0, JsonSerializer.Serialize(new[] { new[] { Pr(1, false) }, new[] { Pr(2, true) } }), ""));
+        var result = await new GitHubCli(runner, new(), new()).SnapshotAsync(Context); Assert.Equal(2, result.PullRequests.Count); Assert.True(result.PullRequests[1].IsDraft); Assert.Equal(2, result.PullRequests[0].HeadRepositoryId);
+        Assert.Contains("--paginate", runner.Calls[0].Arguments); Assert.Contains(Context.Host, runner.Calls[0].Arguments);
     }
     // Scenario: Inline payload uses stdin line side and ranges never position.
-    [Fact] public async Task Inline_payload_uses_stdin_line_side_and_ranges_never_position()
+    [Fact]
+    public async Task Inline_payload_uses_stdin_line_side_and_ranges_never_position()
     {
-        var runner=new ScriptedRunner(_=>new(0,"{}","")); var cli=new GitHubCli(runner,new(),new());
-        await cli.InlineCommentAsync(Context,new(new(42,new('b',40),new('a',40),"src/ü file.cs","LEFT",12,10,"LEFT"),"literal $(text)\nsecond line"));
-        var call=Assert.Single(runner.Calls); Assert.Contains("--input",call.Arguments); Assert.DoesNotContain(call.Arguments,a=>a.Contains("literal"));
-        var body=JsonDocument.Parse(call.StandardInput!).RootElement; Assert.Equal(12,body.GetProperty("line").GetInt32()); Assert.Equal(10,body.GetProperty("start_line").GetInt32()); Assert.Equal("LEFT",body.GetProperty("side").GetString()); Assert.False(body.TryGetProperty("position",out _));
+        var runner = new ScriptedRunner(_ => new(0, "{}", "")); var cli = new GitHubCli(runner, new(), new());
+        await cli.InlineCommentAsync(Context, new(new(42, new('b', 40), new('a', 40), "src/ü file.cs", "LEFT", 12, 10, "LEFT"), "literal $(text)\nsecond line"));
+        var call = Assert.Single(runner.Calls); Assert.Contains("--input", call.Arguments); Assert.DoesNotContain(call.Arguments, a => a.Contains("literal"));
+        var body = JsonDocument.Parse(call.StandardInput!).RootElement; Assert.Equal(12, body.GetProperty("line").GetInt32()); Assert.Equal(10, body.GetProperty("start_line").GetInt32()); Assert.Equal("LEFT", body.GetProperty("side").GetString()); Assert.False(body.TryGetProperty("position", out _));
     }
-    [Fact] public async Task Unchanged_context_is_reviewable_on_right_but_not_on_left()
+    [Fact]
+    public async Task Unchanged_context_is_reviewable_on_right_but_not_on_left()
     {
         var runner = new ScriptedRunner(_ => new(0, "[[{\"filename\":\"a.cs\",\"patch\":\"@@ -1,2 +1,2 @@\\n same\\n-old\\n+new\\n\"}]]", ""));
         var cli = new GitHubCli(runner, new(), new()); var pr = DiscoveryTests.Pr(1, "main", "feature");
@@ -88,11 +96,19 @@ public sealed class GitHubCliTests
         await Assert.ThrowsAsync<StackerException>(() => cli.ValidateAnchorsAsync(Context, pr, [new(1, pr.HeadSha, pr.BaseSha, "a.cs", "LEFT", 1)]));
     }
     // Scenario: Creating and retargeting pull requests pin the host, choose the method, and send text through stdin.
-    [Fact] public async Task Pull_request_writes_pin_host_choose_method_and_send_text_through_stdin()
+    [Fact]
+    public async Task Pull_request_writes_pin_host_choose_method_and_send_text_through_stdin()
     {
         static string Method(ProcessRequest request) => request.Arguments[request.Arguments.ToList().IndexOf("--method") + 1];
-        object Pr(long n, string baseRef, string headRef) => new { number = n, title = "Title", @base = new { repo = new { id = 1 }, @ref = baseRef, sha = new string('a', 40) },
-            head = new { repo = new { id = 1 }, @ref = headRef, sha = new string('b', 40) }, draft = false, html_url = "https://example.invalid/pr/" + n };
+        object Pr(long n, string baseRef, string headRef) => new
+        {
+            number = n,
+            title = "Title",
+            @base = new { repo = new { id = 1 }, @ref = baseRef, sha = new string('a', 40) },
+            head = new { repo = new { id = 1 }, @ref = headRef, sha = new string('b', 40) },
+            draft = false,
+            html_url = "https://example.invalid/pr/" + n
+        };
         var runner = new ScriptedRunner(_ => new(0, JsonSerializer.Serialize(Pr(42, "A", "B")), ""));
         var cli = new GitHubCli(runner, new(), new());
         var created = await cli.CreatePullRequestAsync(Context, "B", "A", "Title $(rm -rf)", "", false);
@@ -111,7 +127,8 @@ public sealed class GitHubCliTests
         await Assert.ThrowsAsync<StackerException>(() => cli.UpdatePullRequestBaseAsync(Context, 0, "A"));
     }
     // Scenario: gh exits non-zero when a host is unauthenticated, so the JSON payload must still be read for its diagnosis.
-    [Fact] public async Task A_non_zero_auth_exit_still_explains_an_invalid_environment_token()
+    [Fact]
+    public async Task A_non_zero_auth_exit_still_explains_an_invalid_environment_token()
     {
         var runner = new ScriptedRunner(_ => new(1, """{"hosts":{"github.com":[{"active":true,"state":"error","tokenSource":"GITHUB_TOKEN"}]}}""", "failed to authenticate"));
         var error = await Assert.ThrowsAsync<GitHubAuthenticationException>(() => new GitHubCli(runner, new(), new()).ConnectAsync(".", "github.com/team/repo"));
@@ -120,10 +137,11 @@ public sealed class GitHubCliTests
     }
 
     // Scenario: Server patch validation rejects unavailable lines.
-    [Fact] public async Task Server_patch_validation_rejects_unavailable_lines()
+    [Fact]
+    public async Task Server_patch_validation_rejects_unavailable_lines()
     {
-        var runner=new ScriptedRunner(_=>new(0,"[[{\"filename\":\"a.cs\",\"patch\":\"@@ -1 +1 @@\\n-old\\n+new\\n\"}]]","")); var cli=new GitHubCli(runner,new(),new()); var pr=DiscoveryTests.Pr(1,"main","a");
-        await cli.ValidateAnchorsAsync(Context,pr,[new(1,pr.HeadSha,pr.BaseSha,"a.cs","RIGHT",1)]);
-        await Assert.ThrowsAsync<StackerException>(()=>cli.ValidateAnchorsAsync(Context,pr,[new(1,pr.HeadSha,pr.BaseSha,"a.cs","RIGHT",2)]));
+        var runner = new ScriptedRunner(_ => new(0, "[[{\"filename\":\"a.cs\",\"patch\":\"@@ -1 +1 @@\\n-old\\n+new\\n\"}]]", "")); var cli = new GitHubCli(runner, new(), new()); var pr = DiscoveryTests.Pr(1, "main", "a");
+        await cli.ValidateAnchorsAsync(Context, pr, [new(1, pr.HeadSha, pr.BaseSha, "a.cs", "RIGHT", 1)]);
+        await Assert.ThrowsAsync<StackerException>(() => cli.ValidateAnchorsAsync(Context, pr, [new(1, pr.HeadSha, pr.BaseSha, "a.cs", "RIGHT", 2)]));
     }
 }

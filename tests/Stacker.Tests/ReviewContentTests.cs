@@ -2,8 +2,10 @@ using Stacker.Core;
 
 namespace Stacker.Tests;
 
+/// <summary>Protects suggestion parsing, formatting and review-anchor side semantics.</summary>
 public sealed class ReviewContentTests
 {
+    /// <summary>Preserves prose order, indentation and an empty suggestion as a deletion.</summary>
     [Fact]
     public void Suggestions_preserve_prose_code_order_indentation_and_empty_deletions()
     {
@@ -20,12 +22,14 @@ public sealed class ReviewContentTests
     [InlineData("````text\n```suggestion\nexample\n```\n````")]
     [InlineData("```csharp\nreturn true;\n```")]
     [InlineData("    ```suggestion\nnot a fence\n    ```")]
+    /// <summary>Rejects incomplete, nested or ordinary code fences as suggestions.</summary>
     public void Ordinary_code_examples_and_incomplete_fences_stay_plain_text(string body)
     {
         var block = Assert.Single(ReviewContent.Parse(body));
         Assert.False(block.IsSuggestion); Assert.Equal(body, block.Text);
     }
     [Fact]
+    /// <summary>Parses GitLab offsets and CRLF text without changing replacement content.</summary>
     public void GitLab_offsets_and_CRLF_are_recognized_without_losing_code()
     {
         var block = Assert.Single(ReviewContent.Parse("```suggestion:-2+3\r\n  replacement\r\n```"));
@@ -37,12 +41,14 @@ public sealed class ReviewContentTests
     [InlineData("one\n")]
     [InlineData("```suggestion\nembedded Markdown\n```")]
     [InlineData("")]
+    /// <summary>Ensures generated suggestion fences round-trip ordinary code and deletion.</summary>
     public void Generated_suggestions_round_trip_with_backticks_and_deletion(string code)
     {
         var block = Assert.Single(ReviewContent.Parse(ReviewContent.Suggestion(code)));
         Assert.True(block.IsSuggestion); Assert.Equal(code, block.Text);
     }
     [Fact]
+    /// <summary>Uses RIGHT anchors for context and LEFT anchors for deleted lines.</summary>
     public void Context_comments_use_right_side_and_deleted_comments_use_left()
     {
         var pr = DiscoveryTests.Pr(1, "main", "feature");
@@ -54,6 +60,7 @@ public sealed class ReviewContentTests
         Assert.Equal("LEFT", anchor!.Side);
     }
     [Fact]
+    /// <summary>Rejects discontinuous, mixed-side and header ranges.</summary>
     public void Invalid_gaps_headers_and_mixed_sides_cannot_be_comment_ranges()
     {
         var pr = DiscoveryTests.Pr(1, "main", "feature");

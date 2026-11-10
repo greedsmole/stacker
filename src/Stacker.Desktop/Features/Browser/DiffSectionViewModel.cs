@@ -116,16 +116,16 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
             var diff = (await _git.PatchAsync(_root, Result.BaseSha, Result.HeadSha, file, load.Token)).OrThrow();
             if (load.IsCancellationRequested || _disposed) return;
             Patch = diff.Patch;
-            var wrapping=WrapCode?TextWrapping.Wrap:TextWrapping.NoWrap;
-            var prepared=await Task.Run(()=>
+            var wrapping = WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap;
+            var prepared = await Task.Run(() =>
             {
-                var presentation=DiffView.From(diff);var rows=new RenderedDiffLine[presentation.Rows.Count];
-                for(var i=0;i<rows.Length;i++){if(i%1024==0)load.Token.ThrowIfCancellationRequested();rows[i]=new(presentation.Rows[i]){AllowComment=!IsReadOnlyComparison,TextWrapping=wrapping};}
-                return(presentation,rows);
-            },load.Token);
-            if(load.IsCancellationRequested||_disposed)return;
-            var view=prepared.presentation;
-            if(wrapping!=(WrapCode?TextWrapping.Wrap:TextWrapping.NoWrap))foreach(var row in prepared.rows)row.TextWrapping=WrapCode?TextWrapping.Wrap:TextWrapping.NoWrap;
+                var presentation = DiffView.From(diff); var rows = new RenderedDiffLine[presentation.Rows.Count];
+                for (var i = 0; i < rows.Length; i++) { if (i % 1024 == 0) load.Token.ThrowIfCancellationRequested(); rows[i] = new(presentation.Rows[i]) { AllowComment = !IsReadOnlyComparison, TextWrapping = wrapping }; }
+                return (presentation, rows);
+            }, load.Token);
+            if (load.IsCancellationRequested || _disposed) return;
+            var view = prepared.presentation;
+            if (wrapping != (WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap)) foreach (var row in prepared.rows) row.TextWrapping = WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap;
             Lines.ReplaceAll(prepared.rows);
             Message = view.EmptyReason;
             IsBusy = false; ApplyThreads();
@@ -171,13 +171,13 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
         foreach (var line in Lines)
         {
             var left = ("LEFT", line.OldLineNumber ?? -1); var right = ("RIGHT", line.NewLineNumber ?? -1);
-            if(line.InlineThreads.Count>0||threads.Contains(left)||threads.Contains(right))ReplaceIfChanged(line.InlineThreads, threads[left].Concat(threads[right]).DistinctBy(t => t.Id).ToArray());
-            if(line.Drafts.Count>0||drafts.Contains(left)||drafts.Contains(right))ReplaceIfChanged(line.Drafts, drafts[left].Concat(drafts[right]).ToArray());
+            if (line.InlineThreads.Count > 0 || threads.Contains(left) || threads.Contains(right)) ReplaceIfChanged(line.InlineThreads, threads[left].Concat(threads[right]).DistinctBy(t => t.Id).ToArray());
+            if (line.Drafts.Count > 0 || drafts.Contains(left) || drafts.Contains(right)) ReplaceIfChanged(line.Drafts, drafts[left].Concat(drafts[right]).ToArray());
         }
     }
     public void Dispose()
     {
-        Review?.Detach(this); _disposed = true; ContentLease?.Dispose();ContentLease=null; _load?.Cancel();
+        Review?.Detach(this); _disposed = true; ContentLease?.Dispose(); ContentLease = null; _load?.Cancel();
         // An evicted comparison must not keep a patch, its rows or their token tables alive.
         Lines.Clear(); Threads.Clear(); FileThreads.Clear(); Patch = "";
     }

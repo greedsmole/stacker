@@ -8,7 +8,7 @@ namespace Stacker.Desktop.ViewModels;
 
 internal sealed class ReviewRecoveryController(ReviewViewModel owner)
 {
-public void RecoverDetachedEditors()
+    public void RecoverDetachedEditors()
     {
         foreach (var (key, text) in owner._draft.ContextComposers.ToArray())
         {
@@ -23,7 +23,7 @@ public void RecoverDetachedEditors()
         owner.Notify(nameof(owner.RecoveredText)); owner.Notify(nameof(owner.HasRecoveredText)); owner.QueueSave();
     }
 
-public async Task UseCurrentVersionAsync()
+    public async Task UseCurrentVersionAsync()
     {
         if (owner._draft.Comments.Count > 0) { owner.Message = "Remove or recheck the old line comments first. Their text will not be relocated automatically."; return; }
         try
