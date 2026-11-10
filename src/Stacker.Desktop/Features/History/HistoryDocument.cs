@@ -31,7 +31,7 @@ public sealed partial class HistoryWorkspaceViewModel
         {
             var result = new DiffResult(item.Title, item.Title, item.BaseSha, item.HeadSha, null, item.Files);
             var view = new DiffSectionViewModel(_git, item.Root, result, readOnly: true);
-            if (path is not null) view.SelectedFile = view.Files.FirstOrDefault(f => f.NewPath == path) ?? view.Files.FirstOrDefault();
+            if (path is not null) view.SelectedFile = view.Files.FirstOrDefault(f => f.NewPath == path);
             DocumentSections.Add(view);
             await view.LoadAsync(view.SelectedFile);
         }
@@ -40,12 +40,12 @@ public sealed partial class HistoryWorkspaceViewModel
     private async Task SelectDocumentFileAsync(ChangeNode node, FileChange? file)
     {
         await SyncSelectionAsync(node, file);
-        if (file is null || Document is null) return;
-        if (_navigation is not null) RememberNavigation(_navigation with { Path = file.NewPath });
+        if (Document is null) return;
+        if (file is not null && _navigation is not null) RememberNavigation(_navigation with { Path = file.NewPath });
         foreach (var section in DocumentSections)
         {
-            var match = section.Files.FirstOrDefault(f => f.NewPath == file.NewPath);
-            if (match is not null) { section.SelectedFile = match; await section.LoadAsync(match); }
+            var match = section.Files.FirstOrDefault(f => f.NewPath == file?.NewPath);
+            section.SelectedFile = match; await section.LoadAsync(match);
         }
     }
     [RelayCommand(CanExecute = nameof(CanGoBack))] private async Task BackAsync() => await NavigateAsync(_back, _forward);

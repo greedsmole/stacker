@@ -83,7 +83,12 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
     }
     partial void OnSelectedNodeChanged(ChangeNode? value)
     {
-        _generation++; _current = null; SelectedFile = null; PreviousVersion = null;
+        _generation++; _current = null;
+        // Clearing the old file is local state reset, not navigation to the new layer.
+        var loadingSelection = _loadingSelection; _loadingSelection = true;
+        try { SelectedFile = null; }
+        finally { _loadingSelection = loadingSelection; }
+        PreviousVersion = null;
         Files.Clear(); Versions.Clear(); Preview = ""; ClearDocument();
         Message = value is null ? "Select a layer to load its review history." : "Select Load layer to read this layer's files and versions.";
         NotifySelectionCommands();
