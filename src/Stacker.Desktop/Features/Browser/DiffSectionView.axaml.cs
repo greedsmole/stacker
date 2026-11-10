@@ -15,7 +15,7 @@ public partial class DiffSectionView : UserControl
     private ScrollViewer? _scroll;
     private bool _restoring;
     private double _filesWidth = 220;
-    /// <summary>History already supplies a file navigator; omit the duplicate pane there.</summary>
+    /// <summary>Controls visibility of the section's file navigator.</summary>
     public bool ShowFileNavigator
     {
         get => FilesToggle.IsVisible;

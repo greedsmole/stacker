@@ -48,7 +48,10 @@ public sealed class FoundationWorkflowTests
             await vm.OpenRepositoryAsync(f.Root); await vm.ShowHistoryAsync(); var history = vm.ActiveHistory!;
             Assert.True(vm.IsHistoryOpen); await history.ShowCurrentCommand.ExecuteAsync(null);
             Assert.Equal("A.txt", Assert.Single(history.DocumentSections).SelectedFile!.NewPath);
-            history.SelectedNode = history.Nodes[1]; await history.LoadLayerCommand.ExecuteAsync(null); await history.ShowCurrentCommand.ExecuteAsync(null);
+            var selection = vm.Session.Selection;
+            history.SelectedNode = history.Nodes[1];
+            Assert.Equal(selection, vm.Session.Selection);
+            await history.LoadLayerCommand.ExecuteAsync(null); await history.ShowCurrentCommand.ExecuteAsync(null);
             Assert.Equal("B.txt", Assert.Single(vm.Sections).SelectedFile!.NewPath);
             Assert.Equal(history.SelectedNode.Id, vm.Session.Selection.ChangeId);
             await history.BackCommand.ExecuteAsync(null);
