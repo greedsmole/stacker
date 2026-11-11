@@ -5,7 +5,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>Stacker</AssemblyName>
     <!-- Single source of truth for the product version; scripts/package.py reads it and the status bar displays it. -->
-    <Version>0.6.1</Version>
+    <Version>0.7.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Stacker.Core/Stacker.Core.csproj" />
