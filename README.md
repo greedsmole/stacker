@@ -1,6 +1,6 @@
 # Stacker v0.6
 
-A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Release targets: **macOS Apple Silicon** and **Windows x64**. Linux and Intel Mac release work is deferred.
+A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Release targets: **macOS and Windows on x64 and ARM64**.
 
 ## Run
 
@@ -14,9 +14,9 @@ dotnet run --project src/Stacker.Desktop -- --demo
 dotnet run --project src/Stacker.Desktop -- /path/to/repository
 ```
 
-Build a macOS ARM64 package with `python3 scripts/package.py osx-arm64`, or a Windows x64 package with `python scripts/package.py win-x64`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe`; keep its adjacent files. No separate .NET runtime is required. Git and optional GitHub CLI are installed separately. The archive is written to `artifacts/Stacker-0.6.1-osx-arm64.tar.gz`. The `.app` is not Developer ID signed or notarized. Public distribution signing requires the publisher's Apple credentials.
+Build a package for your computer with `make publish`, or choose a target with `make publish RID=win-x64`. The direct Python command also works: `python3 scripts/package.py osx-arm64`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe`; keep its adjacent files. No separate .NET runtime is required. Git and optional GitHub CLI are installed separately. The archive is written to `artifacts/Stacker-0.7.0-osx-arm64.tar.gz`. The `.app` is not Developer ID signed or notarized. Public distribution signing requires the publisher's Apple credentials.
 
-Download the packages from [the v0.6.1 release](https://github.com/greedsmole/stacker/releases/tag/v0.6.1). Changes and migration details are in [the release notes](docs/releases/v0.6.1.md).
+Download the packages from [the v0.7.0 release](https://github.com/greedsmole/stacker/releases/tag/v0.7.0). Changes and migration details are in [the release notes](docs/releases/v0.7.0.md).
 
 ## Navigation and comparisons
 
@@ -107,7 +107,7 @@ Before publication Stacker rechecks the account, access, current PR base/head an
 
 Writes are never automatically retried. A hidden operation marker allows uncertain sends to be reconciled by subsequent discussion reads. Retry recovery controls only appear when needed; if the result is still uncertain, inspect GitHub before explicitly unlocking a retry. Draft changes made after an uncertain send are retained when it is confirmed.
 
-Not included: editing/deleting published comments, emoji reactions, GitLab, merging two branches, interactive rebase (`rebase -i`), reordering a stack and retargeting its pull requests, per-file staging with diff selection, editing pull-request titles and descriptions beyond the suggested commit subject, or CI dashboards. Linux and Intel Mac releases are deferred. A restack rewrites only the branches of the selected local stack.
+Not included: editing/deleting published comments, emoji reactions, GitLab, merging two branches, interactive rebase (`rebase -i`), reordering a stack and retargeting its pull requests, per-file staging with diff selection, editing pull-request titles and descriptions beyond the suggested commit subject, or CI dashboards. Local packaging also accepts Linux targets. A restack rewrites only the branches of the selected local stack.
 
 ## Starting and extending a stack
 
@@ -163,8 +163,15 @@ The layering, the three contract rules and the recipe for adding a feature are i
 ```sh
 dotnet build
 dotnet test -c Release
-python3 scripts/package.py osx-arm64
+make publish                       # This computer's OS and architecture
+make publish RID=linux-x64          # Cross-publish a specific desktop target
+make win-arm64                     # Shortcut for the selected target
+make publish-all                   # Build all six targets sequentially
 ```
+
+Packaging requires GNU Make, Python 3 and the .NET 10 SDK. Use `gmake` if GNU Make is installed under that name, or `make publish PYTHON=python` if your Python executable is named `python`. Run from the repository root. The direct `python3 scripts/package.py <RID>` command remains available without Make.
+
+Targets: `win-x64`, `win-arm64`, `osx-x64`, `osx-arm64`, `linux-x64`, and `linux-arm64`. Outputs go to `artifacts/<RID>/`, with versioned ZIP archives for Windows and `.tar.gz` archives for macOS/Linux. Packages include .NET; keep all adjacent files when extracting. macOS packages contain a `.app` bundle. Cross-publishing creates target binaries but does not verify that they run on the target OS. Linux still needs the desktop native libraries required by Avalonia. Signing and notarization are separate release steps.
 
 The solution has four projects: Core, Infrastructure, Desktop and Tests. GitHub Actions builds, tests and packages on macOS ARM64 and Windows x64 runners. Tests exercise real temporary Git repositories, the demo manifest, headless Avalonia windows, recorded/fake gh JSON responses, review failure/reconciliation scenarios and local object retention. A successful contract test is not a claim of live GitHub publishing verification.
 
