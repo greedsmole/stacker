@@ -46,6 +46,7 @@ public static class Composition
             .AddSingleton<IPullRequestObjects, LocalPullRequestObjects>().AddSingleton<ISyntaxHighlighter, TextMateSyntaxHighlighter>()
             .AddSingleton<DemoRepositoryGenerator>().AddSingleton<IDemoRepository>(s => s.GetRequiredService<DemoRepositoryGenerator>())
             .AddSingleton<GitRepositoryReader>()
+            .AddSingleton<ISymbolNavigation, RoslynSymbolNavigation>()
             .AddSingleton<IGitRepositoryReader>(s => new CachingGitReader(s.GetRequiredService<GitRepositoryReader>(), diagnostics: s.GetRequiredService<IDiagnosticSink>(), repositoryGit: s.GetRequiredService<RepositoryGit>()))
             .AddSingleton<IGitBranchWriter, LocalGitClient>()
             .AddSingleton(s => new YamlStackStore(s.GetRequiredService<IAtomicFile>(), s.GetRequiredService<IFileLockFactory>()))

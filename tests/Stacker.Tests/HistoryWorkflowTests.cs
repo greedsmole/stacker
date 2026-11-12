@@ -1,5 +1,10 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.VisualTree;
+using Avalonia;
 using Microsoft.Extensions.DependencyInjection;
 using Stacker.Core;
 using Stacker.Desktop;
@@ -10,6 +15,71 @@ namespace Stacker.Tests;
 [Collection(HeadlessApp.CollectionName)]
 public sealed class HistoryWorkflowTests
 {
+    [AvaloniaFact]
+    public async Task File_checkbox_updates_the_shared_checkpoint_without_changing_selection()
+    {
+        await using var fixture = new GitFixture();
+        await fixture.Linear();
+        await fixture.Write("src/extra.txt", "extra\n");
+        await fixture.Commit("second file in C");
+        await new YamlStackStore().SaveAsync(fixture.Root, [fixture.Stack], null);
+        var root = Directory.CreateTempSubdirectory("file-review-").FullName;
+        try
+        {
+            using var services = Composition.Build(root);
+            var vm = services.GetRequiredService<MainViewModel>();
+            var window = new MainWindow { DataContext = vm };
+            window.Show();
+            try
+            {
+                await vm.OpenRepositoryAsync(fixture.Root);
+                await vm.SelectLayerAsync(Assert.Single(vm.LocalGroups).Layers[2], false);
+                var section = Assert.Single(vm.Sections);
+                await section.LoadAsync(section.SelectedFile);
+                var selected = section.SelectedFile;
+                Assert.Equal("C.txt", selected?.NewPath);
+                window.UpdateLayout();
+                var checkbox = Assert.Single(window.GetVisualDescendants().OfType<CheckBox>(), control =>
+                    control.DataContext is DiffFileRow row && row.Change.NewPath == "src/extra.txt");
+                var file = Assert.IsType<DiffFileRow>(checkbox.DataContext);
+                Assert.False(file.IsReviewed);
+
+                var position = checkbox.TranslatePoint(new Point(checkbox.Bounds.Width / 2, checkbox.Bounds.Height / 2), window)!.Value;
+                window.MouseMove(position);
+                window.MouseDown(position, MouseButton.Left);
+                window.MouseUp(position, MouseButton.Left);
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                while (!file.IsReviewed) await Task.Delay(10, timeout.Token);
+                Assert.Equal(selected, section.SelectedFile);
+                Assert.True(checkbox.IsChecked);
+
+                using var history = await vm.OpenHistoryAsync();
+                Assert.NotNull(history);
+                history.SelectedNode = history.Nodes[2];
+                await history.LoadLayerCommand.ExecuteAsync(null);
+                Assert.Equal(FileReviewState.Reviewed, history.Files.Single(item => item.Change == file.Change).State);
+                await vm.SetGroupFilesByFolderAsync(true);
+                Assert.Single(section.FolderFiles, node => node.Name == "src").IsExpanded = true;
+                window.UpdateLayout();
+                var treeCheckbox = Assert.Single(window.GetVisualDescendants().OfType<CheckBox>(), control =>
+                    ReferenceEquals(control.DataContext, file) && control.IsEffectivelyVisible);
+                var treePosition = treeCheckbox.TranslatePoint(new Point(treeCheckbox.Bounds.Width / 2, treeCheckbox.Bounds.Height / 2), window)!.Value;
+                window.MouseMove(treePosition);
+                window.MouseDown(treePosition, MouseButton.Left);
+                window.MouseUp(treePosition, MouseButton.Left);
+                while (file.IsReviewed) await Task.Delay(10, timeout.Token);
+                Assert.Equal(selected, section.SelectedFile);
+            }
+            finally
+            {
+                window.Close();
+                using var closing = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                while (window.IsVisible) await Task.Delay(10, closing.Token);
+            }
+        }
+        finally { GitFixture.DeleteDirectory(root); }
+    }
+
     [Fact]
     public async Task Progress_preserves_unmodified_files_and_invalidates_base_context()
     {
@@ -79,6 +149,89 @@ public sealed class HistoryWorkflowTests
         finally { Directory.Delete(root, true); }
     }
     [AvaloniaFact]
+    public async Task History_picker_opens_base_only_files_and_restores_the_comparison_section()
+    {
+        await using var fixture = new GitFixture();
+        await fixture.Init();
+        var oldBase = await fixture.Git("rev-parse", "HEAD");
+        await fixture.Git("checkout", "-b", "A");
+        await fixture.Write("own.txt", "original\n");
+        await fixture.Commit("Original layer");
+        var oldHead = await fixture.Git("rev-parse", "HEAD");
+        await fixture.Git("checkout", "main");
+        await fixture.Write("upstream/config/upstream.txt", "base-only change\n");
+        await fixture.Commit("Upstream change");
+        var currentBase = await fixture.Git("rev-parse", "HEAD");
+        await fixture.Git("checkout", "A");
+        await fixture.Git("rebase", "main");
+        await fixture.Write("own.txt", "revised\n");
+        await fixture.Commit("Revise layer");
+        var currentHead = await fixture.Git("rev-parse", "HEAD");
+
+        var root = Directory.CreateTempSubdirectory("history-picker-").FullName;
+        try
+        {
+            const string scope = "history-picker";
+            var store = new SqliteHistoryStore(root);
+            var objects = new HistoryGit(fixture.Runner, new(), new ApplicationStore(root));
+            (await objects.CaptureAsync(fixture.Identity, scope, [oldBase, oldHead, currentBase, currentHead])).OrThrow();
+            var node = (await store.ResolveNodeAsync(scope, "refs/heads/A", "A")).OrThrow();
+            (await store.ObserveAsync(new("", node.Id, oldBase, oldHead, oldBase, DateTimeOffset.UtcNow.AddDays(-1)))).OrThrow();
+            var version = (await store.ObserveAsync(new("", node.Id, currentBase, currentHead, currentBase, DateTimeOffset.UtcNow))).OrThrow();
+            var graph = new GraphSnapshot(scope, DateTimeOffset.UtcNow, [node], [], []);
+            var comparisons = new VersionComparisonService(fixture.Reader, objects);
+            using var history = new HistoryWorkspaceViewModel(store, objects, fixture.Reader, comparisons,
+                new ReviewProgressService(store, comparisons), graph, fixture.Identity, [(node, version)]);
+            await history.InitializeAsync();
+            var panel = new HistoryPanel { DataContext = history };
+            var window = new Window { Content = panel, Width = 780, Height = 520 };
+            window.Show();
+            try
+            {
+                await history.ShowCurrentCommand.ExecuteAsync(null);
+                await history.CompareVersionsCommand.ExecuteAsync(null);
+                Assert.Equal("Own changes after replay", history.ActiveDocumentSection?.Title);
+                var baseFile = Assert.Single(history.DocumentFiles, file => file.File.NewPath == "upstream/config/upstream.txt");
+                Assert.Equal("Base changes · upstream/config/upstream.txt", baseFile.Label);
+                var picker = panel.FindControl<ComboBox>("HistoryDiffFiles")!;
+                var folders = panel.FindControl<Button>("HistoryFolderButton")!;
+                var flyout = Assert.IsType<Flyout>(folders.Flyout);
+                flyout.ShowAt(folders);
+                var tree = Assert.Single(Assert.IsType<Grid>(flyout.Content).Children.OfType<TreeView>());
+                var baseSection = Assert.Single(tree.Items.OfType<FileTreeNode>(), node => node.Name == "Base changes");
+                var folder = Assert.Single(baseSection.Children);
+                Assert.Equal("upstream", folder.Name);
+                var config = Assert.Single(folder.Children);
+                Assert.Equal("config", config.Name);
+                tree.SelectedItem = Assert.Single(config.Children);
+                tree.RaiseEvent(new KeyEventArgs { Key = Key.Enter, RoutedEvent = InputElement.KeyDownEvent });
+                Assert.False(flyout.IsOpen);
+                Assert.Equal(baseFile, picker.SelectedItem);
+                var section = Assert.IsType<DiffSectionViewModel>(history.ActiveDocumentSection);
+                Assert.Equal("upstream/config/upstream.txt", section.SelectedFile?.NewPath);
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                while (section.IsBusy) await Task.Delay(10, timeout.Token);
+                Assert.Contains("base-only change", section.Patch);
+                Assert.Null(history.SelectedFile);
+                Assert.False(history.MarkReviewedCommand.CanExecute(null));
+                Assert.True(history.ShowCurrentCommand.CanExecute(null));
+
+                await history.ShowCurrentCommand.ExecuteAsync(null);
+                Assert.Equal("own.txt", history.ActiveDocumentSection?.SelectedFile?.NewPath);
+                await history.BackCommand.ExecuteAsync(null);
+                Assert.Equal("Base changes", history.ActiveDocumentSection?.Title);
+                Assert.Equal("upstream/config/upstream.txt", history.ActiveDocumentSection?.SelectedFile?.NewPath);
+                Assert.Equal(baseFile.Label, Assert.IsType<HistoryDocumentFile>(picker.SelectedItem).Label);
+                await history.ForwardCommand.ExecuteAsync(null);
+                Assert.Equal("own.txt", history.ActiveDocumentSection?.SelectedFile?.NewPath);
+                Assert.True(history.MarkReviewedCommand.CanExecute(null));
+            }
+            finally { window.Close(); }
+        }
+        finally { GitFixture.DeleteDirectory(root); }
+    }
+
+    [AvaloniaFact]
     public async Task History_window_opens_captured_layers_marks_reviews_and_survives_restart()
     {
         await using var f = new GitFixture(); await f.Linear(); var root = Directory.CreateTempSubdirectory("history-ui-").FullName;
@@ -96,7 +249,7 @@ public sealed class HistoryWorkflowTests
                 Assert.Equal(FileReviewState.Reviewed, Assert.Single(history.Files).State);
                 await history.ShowCurrentCommand.ExecuteAsync(null); Assert.Contains(history.DocumentSections, section => section.Result.Files.Any(file => file.NewPath == "A.txt"));
                 await history.AttentionCommand.ExecuteAsync(null); Assert.Equal(2, history.Attention.Count);
-                Assert.NotNull(panel.FindControl<ListBox>("ReviewFiles"));
+                Assert.NotNull(panel.FindControl<ComboBox>("ReviewFiles"));
                 window.Close(); await vm.ShutdownAsync();
             }
             using (var services = Composition.Build(root))

@@ -4,4 +4,5 @@ namespace Stacker.Desktop.ViewModels;
 internal interface IGitLogPresentation
 {
     global::System.Collections.ObjectModel.ObservableCollection<global::Stacker.Core.GitCommandEntry> GitLogEntries { get; }
+    global::System.Collections.ObjectModel.ObservableCollection<global::Stacker.Core.GitCommandEntry> GitHubLogEntries { get; }
 }

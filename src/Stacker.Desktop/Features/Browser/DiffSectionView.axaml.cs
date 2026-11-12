@@ -14,34 +14,6 @@ public partial class DiffSectionView : UserControl
 {
     private ScrollViewer? _scroll;
     private bool _restoring;
-    private double _filesWidth = 220;
-    /// <summary>Controls visibility of the section's file navigator.</summary>
-    public bool ShowFileNavigator
-    {
-        get => FilesToggle.IsVisible;
-        set
-        {
-            FilesToggle.IsVisible = value;
-            if (!value && FilePane.IsVisible) ToggleFilesClick(null, new RoutedEventArgs());
-        }
-    }
-    private void ToggleFilesClick(object? sender, RoutedEventArgs e)
-    {
-        var column = ContentGrid.ColumnDefinitions[0];
-        if (FilePane.IsVisible)
-        {
-            _filesWidth = column.ActualWidth;
-            FilePane.IsVisible = FileSplitter.IsVisible = false;
-            column.MinWidth = 0;
-            column.Width = new GridLength(0);
-        }
-        else
-        {
-            column.MinWidth = 200;
-            column.Width = new GridLength(_filesWidth);
-            FilePane.IsVisible = FileSplitter.IsVisible = true;
-        }
-    }
     private DiffSectionViewModel? _section;
     public DiffSectionView()
     {
@@ -56,27 +28,37 @@ public partial class DiffSectionView : UserControl
             if (ShowFileNavigator && TopLevel.GetTopLevel(this) is MainWindow window && window.DataContext is MainViewModel vm)
                 ContentGrid.ColumnDefinitions[0].Width = new(vm.Settings.FilesWidth);
         };
-        Loaded += (_, _) =>
-        {
-            if (_section is not null) _section.PropertyChanged -= SectionChanged;
-            _section = DataContext as DiffSectionViewModel;
-            if (_section is not null) _section.PropertyChanged += SectionChanged;
-            RestoreScroll();
-        };
-        Unloaded += (_, _) =>
-        {
-            if (_section is not null) _section.PropertyChanged -= SectionChanged;
-            if (_scroll is not null) _scroll.ScrollChanged -= RememberScroll;
-            _section = null; _scroll = null;
-        };
+        Loaded += (_, _) => AttachSection(DataContext as DiffSectionViewModel);
+        DataContextChanged += (_, _) => { if (IsLoaded) AttachSection(DataContext as DiffSectionViewModel); };
+        Unloaded += (_, _) => AttachSection(null);
         ContentGrid.SizeChanged += (_, _) =>
         {
             if (ShowFileNavigator && FilePane.IsVisible && TopLevel.GetTopLevel(this) is MainWindow window && window.DataContext is MainViewModel vm && ContentGrid.ColumnDefinitions[0].ActualWidth >= 150)
                 vm.Settings.FilesWidth = ContentGrid.ColumnDefinitions[0].ActualWidth;
         };
     }
+    private void AttachSection(DiffSectionViewModel? section)
+    {
+        if (ReferenceEquals(_section, section)) return;
+        _symbolLoad?.Cancel();
+        _rangeStart = null;
+        if (_section is not null) _section.PropertyChanged -= SectionChanged;
+        if (_scroll is not null) _scroll.ScrollChanged -= RememberScroll;
+        _scroll = null;
+        _section = section;
+        if (section is null) return;
+        section.PropertyChanged += SectionChanged;
+        RestoreScroll();
+    }
     private void SectionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    { if (e.PropertyName == nameof(DiffSectionViewModel.IsBusy) && _section?.IsBusy == false) RestoreScroll(); }
+    {
+        if (e.PropertyName == nameof(DiffSectionViewModel.SelectedFile))
+        {
+            _symbolLoad?.Cancel();
+            _rangeStart = null;
+        }
+        if (e.PropertyName == nameof(DiffSectionViewModel.IsBusy) && _section?.IsBusy == false) RestoreScroll();
+    }
     private void RestoreScroll() => Dispatcher.UIThread.Post(() =>
     {
         if (_section is null || _section.IsBusy) return;
@@ -98,7 +80,8 @@ public partial class DiffSectionView : UserControl
         foreach (var row in _rangeRows) row.IsRangeSelected = false;
         _rangeRows.Clear();
         var selected = DiffLines.SelectedItems?.OfType<RenderedDiffLine>().Where(l => l.IsCode).ToArray() ?? [];
-        if (selected.Length > 1 && DataContext is DiffSectionViewModel { IsPrSnapshot: true, AssociatedPr: { } pr, SelectedFile: { } file } &&
+        if (selected.Length > 1 && selected.All(line => line.CanComment) &&
+            DataContext is DiffSectionViewModel { IsPrSnapshot: true, AssociatedPr: { } pr, SelectedFile: { } file } &&
             ReviewSelection.TryCreateAnchor(pr, file.NewPath, selected.Select(l => l.Source).ToArray(), null, out var anchor, out _))
         {
             foreach (var row in selected) { row.IsRangeSelected = true; _rangeRows.Add(row); }
@@ -123,7 +106,7 @@ public partial class DiffSectionView : UserControl
         SelectedRangeButton.Height = Math.Max(0, bottom - top);
         SelectedRangeButton.IsVisible = bottom > top;
     }
-    private (string? Path, int Index)? _rangeStart;
+    private RenderedDiffLine? _rangeStart;
     private bool _extendRange;
     private RenderedDiffLine? _commentLine;
     private RenderedDiffLine[]? _commentSelection;
@@ -141,6 +124,12 @@ public partial class DiffSectionView : UserControl
     private void DiffKeyDown(object? sender, KeyEventArgs e)
 => AsyncHandler.Run(async () =>
 {
+    if (e.Key == Key.Escape && _symbolLoad is { IsCancellationRequested: false } load)
+    {
+        e.Handled = true;
+        load.Cancel();
+        return;
+    }
     if (e.Key != Key.C || (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0) return;
     if (DiffLines.GetVisualDescendants().OfType<SyntaxText>().Any(t => !string.IsNullOrEmpty(t.SelectedText))) return;
     var lines = DiffLines.SelectedItems?.OfType<RenderedDiffLine>().Where(l => l.IsCode).ToHashSet();
@@ -160,6 +149,42 @@ public partial class DiffSectionView : UserControl
         var line = section.Lines.FirstOrDefault(row => row.Kind == source.Kind && row.OldLineNumber == source.OldLineNumber && row.NewLineNumber == source.NewLineNumber);
         if (line is not null) DiffLines.ScrollIntoView(line);
     }
+    private void ExpandContextClick(object? sender, RoutedEventArgs e) => RevealContext(sender, fromEnd: false);
+    private void ExpandContextUpClick(object? sender, RoutedEventArgs e) => RevealContext(sender, fromEnd: true);
+    private void RevealContext(object? sender, bool fromEnd)
+    {
+        if (sender is not Control { DataContext: RenderedDiffLine row } || DataContext is not DiffSectionViewModel section) return;
+        if (section.ExpandContext(row, fromEnd) is { } revealed) ScrollToContextRow(section, revealed);
+    }
+    private void ExpandAllContextClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () =>
+    {
+        if (DataContext is not DiffSectionViewModel section) return;
+        var anchor = FirstVisibleCodeLine();
+        if (await section.ExpandAllContextAsync())
+            ScrollToContextRow(section, anchor ?? section.Lines.FirstOrDefault(row => row.IsCode));
+    }, message => AsyncHandler.Report(this, message));
+    private void CollapseContextClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DiffSectionViewModel section) return;
+        var anchor = FirstVisibleCodeLine();
+        section.CollapseContext();
+        if (anchor is { IsExpandedContext: true, NewLineNumber: int number })
+            anchor = section.Lines.FirstOrDefault(row => row.NewLineNumber >= number) ?? section.Lines.LastOrDefault(row => row.IsCode);
+        ScrollToContextRow(section, anchor ?? section.Lines.FirstOrDefault());
+    }
+    private RenderedDiffLine? FirstVisibleCodeLine() => DiffLines.GetVisualDescendants().OfType<ListBoxItem>()
+        .Where(item => item.DataContext is RenderedDiffLine { IsCode: true })
+        .Select(item => (Item: item, Y: item.TranslatePoint(default, DiffViewport)?.Y))
+        .Where(row => row.Y is double y && y < DiffViewport.Bounds.Height && y + row.Item.Bounds.Height > 0)
+        .OrderBy(row => row.Y).FirstOrDefault().Item?.DataContext as RenderedDiffLine;
+    private void ScrollToContextRow(DiffSectionViewModel section, RenderedDiffLine? row)
+    {
+        if (row is null) return;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (ReferenceEquals(DataContext, section) && section.Lines.Contains(row)) DiffLines.ScrollIntoView(row);
+        }, DispatcherPriority.Loaded);
+    }
     private void ReviewClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
@@ -169,6 +194,14 @@ public partial class DiffSectionView : UserControl
 }, message => AsyncHandler.Report(this, message));
     private void FileCommentClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () => { if (DataContext is DiffSectionViewModel section && TopLevel.GetTopLevel(this)?.DataContext is MainViewModel main) await main.ShowReviewAsync(section, 1); }, message => AsyncHandler.Report(this, message));
+    private void FileReviewedClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox { DataContext: DiffFileRow row } check ||
+            DataContext is not DiffSectionViewModel section || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
+        e.Handled = true;
+        check.SetCurrentValue(ToggleButton.IsCheckedProperty, row.IsReviewed);
+        AsyncHandler.Run(() => main.ToggleFileReviewedAsync(section, row), message => AsyncHandler.Report(this, message));
+    }
     private void WrapCodeClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
@@ -181,6 +214,7 @@ public partial class DiffSectionView : UserControl
     if (DataContext is not DiffSectionViewModel section || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
     var selected = DiffLines.SelectedItems?.OfType<RenderedDiffLine>().Where(l => l.IsCode).ToHashSet() ?? [];
     if (selected.Count == 0) { section.Message = "Select adjacent code rows with Shift-click, then comment on the selection."; return; }
+    if (selected.Any(line => !line.CanComment)) { section.Message = "Select lines from the original diff to comment."; return; }
     var session = await main.EnsureReviewAsync(section);
     if (session is null || session.IsBusy) return;
     session.SetSelection(section.Lines.Where(selected.Contains));
@@ -201,17 +235,18 @@ public partial class DiffSectionView : UserControl
     await BeginLineAsync(line, range, selectedRows: selected is { Length: > 1 } && selected.Contains(line) ? selected : null);
 }, message => AsyncHandler.Report(this, message));
     private void LineNumberPressed(object? sender, PointerPressedEventArgs e)
-=> AsyncHandler.Run(async () => { if (sender is Control { DataContext: RenderedDiffLine line }) { e.Handled = true; await BeginLineAsync(line, e.KeyModifiers.HasFlag(KeyModifiers.Shift), Grid.GetColumn((Control)sender) == 1 ? "LEFT" : "RIGHT"); } }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () => { if (sender is Control { DataContext: RenderedDiffLine { CanComment: true } line }) { e.Handled = true; await BeginLineAsync(line, e.KeyModifiers.HasFlag(KeyModifiers.Shift), Grid.GetColumn((Control)sender) == 1 ? "LEFT" : "RIGHT"); } }, message => AsyncHandler.Report(this, message));
     private async Task BeginLineAsync(RenderedDiffLine line, bool range, string? side = null, RenderedDiffLine[]? selectedRows = null)
     {
-        if (DataContext is not DiffSectionViewModel section || !line.IsCode || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
+        if (DataContext is not DiffSectionViewModel section || !line.CanComment || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main) return;
         if (!section.IsPrSnapshot) { section.Message = section.HasPr ? "Review the PR snapshot to comment on code. Use Review PR in the file menu." : "Select a GitHub PR layer to comment on code."; return; }
         var session = await main.EnsureReviewAsync(section); if (session is null || session.IsBusy) return;
         var end = section.Lines.IndexOf(line);
+        if (end < 0 || DataContext != section) return;
         // A range is only meaningful inside one file and across commentable rows: hunk headers and notices are skipped.
-        var file = section.SelectedFile?.NewPath;
-        var start = range && _rangeStart is { } first && string.Equals(first.Path, file, StringComparison.Ordinal) ? first.Index : end;
-        _rangeStart = (file, start);
+        var start = range && _rangeStart is { } first ? section.Lines.IndexOf(first) : end;
+        if (start < 0) start = end;
+        _rangeStart = section.Lines[start];
         var selected = (selectedRows ?? section.Lines.Skip(Math.Min(start, end)).Take(Math.Abs(end - start) + 1).ToArray())
             .Where(row => row.IsCode).ToArray();
         session.SetSelection(selected, side);

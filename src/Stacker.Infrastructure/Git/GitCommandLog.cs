@@ -1,10 +1,10 @@
-// Purpose: Bounded, thread-safe log of Git invocations shown in the diagnostics tab; credentials are redacted before display.
+// Purpose: Bounded, thread-safe log of Git and GitHub CLI commands shown in the diagnostics tab.
 using System.Text.RegularExpressions;
 using Stacker.Core;
 
 namespace Stacker.Infrastructure;
 
-/// <summary>Bounded, thread-safe record of the Git invocations shown in the diagnostics tab, with credentials removed.</summary>
+/// <summary>Bounded, thread-safe record of Git and GitHub CLI invocations, with credentials removed.</summary>
 /// <remarks>One private lock guards the entry list, so a command thread can append or update while the UI takes a stable snapshot. The log
 /// is a rolling window for the current session, not an audit trail: it keeps the newest 500 entries and drops the oldest when a further
 /// command arrives, and each entry's detail text is cut at 2,048 characters. An HTTP(S) URL with embedded user information is rewritten
@@ -63,8 +63,16 @@ public sealed class GitCommandLog : IGitDiagnosticLog
     internal Guid? Begin(ProcessRequest request, DateTimeOffset started)
     {
         if (!IsGit(request)) return null;
-        var command = "git " + string.Join(' ', request.Arguments.Select(Quote));
-        var entry = new GitCommandEntry(Guid.NewGuid(), started, request.WorkingDirectory ?? "", Redact(command), TimeSpan.Zero, null, "", true);
+        return Begin("git", request.Arguments, request.WorkingDirectory ?? "", started);
+    }
+
+    internal Guid BeginGitHub(IReadOnlyList<string> arguments, DateTimeOffset started) => Begin("gh", arguments, "", started);
+
+    private Guid Begin(string tool, IReadOnlyList<string> arguments, string workingDirectory, DateTimeOffset started)
+    {
+        var command = tool + " " + string.Join(' ', arguments.Select(Quote));
+        var entry = new GitCommandEntry(Guid.NewGuid(), started, workingDirectory, Redact(command), TimeSpan.Zero, null, "", true)
+        { IsGitHub = tool == "gh" };
         lock (_sync) { _entries.Add(entry); if (_entries.Count > 500) _entries.RemoveAt(0); }
         Changed?.Invoke(entry);
         return entry.Id;
@@ -76,11 +84,12 @@ public sealed class GitCommandLog : IGitDiagnosticLog
     /// <param name="detail">Diagnostic text, normally standard error on completion or the start failure message.</param>
     /// <remarks>An id that is no longer in the list is ignored rather than appended: a long-running command can have been evicted by 500 later
     /// commands, and resurrecting it would put a stale invocation at the end of the window. Detail is cut to its first 2,048 characters with an
-    /// ellipsis appended, so a chatty command cannot grow the log without bound; redaction runs after the cut. The notification carries the
+    /// ellipsis appended after redaction, so a chatty command cannot grow the log without bound. The notification carries the
     /// finished entry and is raised outside the lock.</remarks>
-    internal void Finish(Guid? id, TimeSpan elapsed, int? exitCode, string detail)
+    internal void Finish(Guid? id, TimeSpan elapsed, int? exitCode, string detail, bool failed = false)
     {
         if (id is null) return;
+        var safe = Redact(detail);
         GitCommandEntry entry;
         lock (_sync)
         {
@@ -90,8 +99,9 @@ public sealed class GitCommandLog : IGitDiagnosticLog
             {
                 Duration = elapsed,
                 ExitCode = exitCode,
-                Detail = Redact(detail.Length > 2048 ? detail[..2048] + "…" : detail),
-                IsRunning = false
+                Detail = safe.Length > 2048 ? safe[..2048] + "…" : safe,
+                IsRunning = false,
+                IsFailure = failed || exitCode != 0
             };
             _entries[index] = entry;
         }
@@ -103,11 +113,11 @@ public sealed class GitCommandLog : IGitDiagnosticLog
     /// <remarks>This exists so the diagnostics row reads like a command line; it is never parsed back. Escaping a quote does not make a Windows
     /// or POSIX shell round-trip, and it does not need to: execution passes the arguments as separate values and never goes through a shell.</remarks>
     private static string Quote(string value) => value.Any(char.IsWhiteSpace) ? "\"" + value.Replace("\"", "\\\"") + "\"" : value;
-    /// <summary>Replaces credentials embedded in an HTTP(S) remote URL before the text is stored or shown.</summary>
-    /// <param name="value">Rendered command line or diagnostic text.</param>
-    /// <returns>The text with <c>scheme://user:password@</c> rewritten to <c>scheme://[credentials]@</c>.</returns>
-    /// <remarks>The expression matches the URL user-information form case-insensitively and leaves the rest of the text alone. It is a display
-    /// filter for the one shape Git echoes in remote URLs, not a general secret scrubber: a token passed as a separate argument or inside a
-    /// message that is not a URL is not covered.</remarks>
-    private static string Redact(string value) => Regex.Replace(value, @"(?i)(https?://)[^\s/@]+:[^\s/@]+@", "$1[credentials]@");
+    /// <summary>Removes HTTP user information and credential formats GitHub can echo in diagnostics.</summary>
+    internal static string Redact(string value)
+    {
+        value = Regex.Replace(value, @"(?i)(https?://)[^\s/@]+@", "$1[credentials]@");
+        value = Regex.Replace(value, @"(?i)(\b(?:authorization\s*[:=]\s*(?:bearer|basic)|bearer)\s+)[a-z0-9._~+/=-]+", "$1[credentials]");
+        return Regex.Replace(value, @"(?i)\b(?:gh[pousr]_|github_pat_)[a-z0-9_]+", "[credentials]");
+    }
 }

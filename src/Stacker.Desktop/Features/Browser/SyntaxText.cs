@@ -35,29 +35,35 @@ public sealed class SyntaxText : SelectableTextBlock
     private void Render()
     {
         Inlines?.Clear(); if (Line is null) return;
-        var text = Line.Text; var cursor = 0;
+        // Git splits patches on LF, leaving the CR of a CRLF line ending in the raw row.
+        var text = Line.Text;
+        if (text.EndsWith('\r')) text = text[..^1];
+        var cursor = 0;
         foreach (var span in Line.Tokens.OrderBy(s => s.Start))
         {
             var start = Math.Clamp(span.Start, cursor, text.Length); var length = Math.Clamp(span.Length, 0, text.Length - start);
             if (start > cursor) Inlines!.Add(new Run(text[cursor..start]));
-            if (length > 0) Inlines!.Add(new Run(text.Substring(start, length)) { Foreground = BrushFor(span.Color) });
+            if (length > 0)
+            {
+                var run = new Run(text.Substring(start, length));
+                if (BrushFor(span.Color) is { } brush) run.Foreground = brush;
+                Inlines!.Add(run);
+            }
             cursor = start + length;
         }
         if (cursor < text.Length) Inlines!.Add(new Run(text[cursor..]));
     }
     // Themes come from a grammar bundle, so a colour is data: parse it defensively and reuse the brush.
     /// <summary>Brushes keyed by grammar color text to avoid one allocation per span.</summary>
-    private static readonly Dictionary<string, IBrush> BrushCache = new(StringComparer.Ordinal);
-    /// <summary>Safe fallback for invalid grammar colors.</summary>
-    private static readonly IBrush FallbackBrush = new SolidColorBrush(Colors.Transparent);
+    private static readonly Dictionary<string, IBrush?> BrushCache = new(StringComparer.Ordinal);
     /// <summary>Parses and caches a grammar color, using the fallback for invalid input.</summary>
     /// <param name="colour">Color text emitted by the syntax grammar.</param>
-    private static IBrush BrushFor(string colour)
+    private static IBrush? BrushFor(string colour)
     {
         lock (BrushCache)
         {
             if (BrushCache.TryGetValue(colour, out var cached)) return cached;
-            var brush = Color.TryParse(colour, out var parsed) ? new SolidColorBrush(parsed) : FallbackBrush;
+            var brush = Color.TryParse(colour, out var parsed) ? new SolidColorBrush(parsed) : null;
             BrushCache[colour] = brush;
             return brush;
         }

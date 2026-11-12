@@ -35,12 +35,11 @@ AsyncHandler.Run(async () =>
 {
     await Vm.InitializeAsync();
     Width = Vm.Settings.WindowWidth; Height = Vm.Settings.WindowHeight;
-    Workspace.ColumnDefinitions[0].Width = new(Vm.Settings.NavigationWidth);
     ApplyTheme();
+    ApplyDiffLineHeight();
+    ApplyStacksVisibility();
     Vm.Sections.CollectionChanged += (_, _) => ResizeSections();
     SectionScroll.SizeChanged += (_, _) => ResizeSections();
-    Workspace.ColumnDefinitions[0].MinWidth = 200;
-    Workspace.ColumnDefinitions[0].MaxWidth = 500;
     _ready = true;
     var args = Environment.GetCommandLineArgs();
     if (args.Contains("--demo")) await Vm.OpenDemoAsync();
@@ -91,9 +90,10 @@ AsyncHandler.Run(async () =>
     try
     {
         if (Clipboard is { } clipboard)
-            await clipboard.SetTextAsync(string.Join("\n\n", Vm.GitLogEntries.Select(entry => entry.Summary + "\n" + entry.WorkingDirectory + "\n" + entry.Detail)));
+            await clipboard.SetTextAsync(string.Join("\n\n", Vm.VisibleGitLogEntries.Select(entry =>
+                string.Join("\n", new[] { entry.Summary, entry.WorkingDirectory, entry.Detail }.Where(line => line.Length > 0)))));
     }
-    catch (Exception ex) { Vm.Error = "Cannot copy Git logs: " + ex.Message; }
+    catch (Exception ex) { Vm.Error = "Cannot copy the command log. " + ex.Message; }
 }, message => AsyncHandler.Report(this, message));
     /// <summary>Ends popup interaction before starting a repository action on the owning main window.</summary>
     private async Task RunRepositoryActionAsync(Func<Task> action)

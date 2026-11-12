@@ -93,6 +93,12 @@ public sealed class ReviewTests
         var vm = new ReviewViewModel(hub, hub, new ApplicationStore(f.Root), f.Reader, FakeGitHub.Context, hub.Current, section, false); await vm.InitializeAsync(); vm.Composer = "Check this";
         await vm.PostCommentCommand.ExecuteAsync(null); Assert.Equal(1, hub.Writes); Assert.False(vm.CanPublish);
         await vm.PostCommentCommand.ExecuteAsync(null); Assert.Equal(1, hub.Writes);
+        var posted = Assert.Single(hub.Published);
+        hub.Published.Clear();
+        await vm.ReloadAsync();
+        Assert.Contains("still uncertain", vm.ReviewStatus);
+        Assert.Equal("Check this", vm.Composer);
+        hub.Published.Add(posted);
         await vm.ReloadAsync(); Assert.True(vm.CanPublish); Assert.Contains("confirmed", vm.Message); Assert.Equal(1, hub.Writes); await vm.FlushAsync();
     }
     [AvaloniaFact]

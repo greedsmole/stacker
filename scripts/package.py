@@ -40,10 +40,14 @@ subprocess.run([
 if not is_windows:
     (publish / "Stacker").chmod(0o755)
 if is_mac:
+    resources = publish.parent / "Resources"
+    resources.mkdir()
+    shutil.copy2(PROJECT.parent / "Assets" / "Stacker.icns", resources)
     info = {
         "CFBundleName": "Stacker", "CFBundleDisplayName": "Stacker",
         "CFBundleIdentifier": "dev.stacker.desktop", "CFBundleVersion": VERSION,
         "CFBundleShortVersionString": VERSION, "CFBundleExecutable": "Stacker",
+        "CFBundleIconFile": "Stacker.icns",
         "CFBundlePackageType": "APPL", "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "12.0"
     }

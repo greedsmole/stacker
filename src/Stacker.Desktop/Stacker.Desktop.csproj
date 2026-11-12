@@ -3,10 +3,14 @@
     <OutputType>WinExe</OutputType>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/Stacker.ico</ApplicationIcon>
     <AssemblyName>Stacker</AssemblyName>
     <!-- Single source of truth for the product version; scripts/package.py reads it and the status bar displays it. -->
-    <Version>0.7.0</Version>
+    <Version>0.8.0</Version>
   </PropertyGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/Stacker.png" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Stacker.Core/Stacker.Core.csproj" />
     <ProjectReference Include="../Stacker.Infrastructure/Stacker.Infrastructure.csproj" />
@@ -14,6 +18,6 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
   </ItemGroup>
 </Project>

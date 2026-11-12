@@ -194,7 +194,7 @@ internal sealed class NavigationController(INavigationPresentation owner, Worksp
                 {
                     var pr = group.IsRemote ? group.PullRequests.FirstOrDefault(p => RemoteRefs.HeadRef(p) == result.Layer) : owner.FindLocalPr(result.Layer);
                     return new DiffSectionViewModel(runtime._git, comparisonRepository.Root, result, runtime._highlighter, owner.Settings.Theme)
-                    { AssociatedPr = pr, GitHubContext = runtime._remoteSnapshot?.Context, IsPrSnapshot = group.IsRemote && mode == DiffMode.Layer, IsDemo = owner.IsDemo, WrapCode = owner.Settings.WrapCode };
+                    { AssociatedPr = pr, GitHubContext = runtime._remoteSnapshot?.Context, IsPrSnapshot = group.IsRemote && mode == DiffMode.Layer, IsDemo = owner.IsDemo, WrapCode = owner.Settings.WrapCode, GroupFilesByFolder = owner.Settings.GroupFilesByFolder };
                 }).ToList();
                 if (group.IsRemote && runtime._prObjects is not null && !owner.IsDemo)
                     foreach (var section in sections) section.ContentLease = (await runtime._prObjects.AcquireAsync(repo.Identity!, compare.Token)).OrThrow();
@@ -270,6 +270,14 @@ internal sealed class NavigationController(INavigationPresentation owner, Worksp
     {
         owner.Settings.WrapCode = enabled;
         foreach (var section in runtime._views.Values.SelectMany(views => views).Distinct()) section.WrapCode = enabled;
+        await SaveSettingsAsync();
+    }
+
+    public async Task SetGroupFilesByFolderAsync(bool enabled)
+    {
+        owner.Settings.GroupFilesByFolder = enabled;
+        foreach (var section in owner.Sections.Concat(runtime._views.Values.SelectMany(views => views)).Distinct())
+            section.GroupFilesByFolder = enabled;
         await SaveSettingsAsync();
     }
 

@@ -41,7 +41,8 @@ public partial class MainWindow
         if (_closing) return; _closing = true;
         try
         {
-            Vm.Settings.WindowWidth = Width; Vm.Settings.WindowHeight = Height; Vm.Settings.NavigationWidth = Workspace.ColumnDefinitions[0].ActualWidth;
+            Vm.Settings.WindowWidth = Width; Vm.Settings.WindowHeight = Height;
+            RememberStacksWidth();
             while (true)
             {
                 var problems = await Vm.PrepareCloseAsync(); if (problems.Count == 0) break;

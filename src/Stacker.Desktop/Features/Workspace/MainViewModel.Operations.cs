@@ -23,7 +23,7 @@ public sealed partial class MainViewModel
                 if (OperationItems.Any(item => item.OperationId == entry.Id)) continue;
                 OperationItems.Add(new(entry.Phase == JournalPhase.Applied ? CommandStatus.Applied : entry.NeedsAttention ? CommandStatus.NeedsUser : CommandStatus.Failed,
                     entry.Summary, null)
-                { OperationId = entry.Id, Scope = scope, Effects = entry.Steps.Select(step => step.Kind + ": " + step.State).ToArray() });
+                { OperationId = entry.Id, Scope = scope, Effects = entry.Steps.Select(step => $"{step.Kind} · {step.Target} · {step.State}").ToArray() });
             }
         }
         while (OperationItems.Count > 40) OperationItems.RemoveAt(OperationItems.Count - 1);

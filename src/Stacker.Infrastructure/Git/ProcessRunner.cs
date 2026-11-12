@@ -121,7 +121,11 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
             foreach (var key in request.UnsetEnvironment) info.Environment.Remove(key);
         using var process = new Process { StartInfo = info };
         try { process.Start(); }
-        catch (System.ComponentModel.Win32Exception ex) { throw new StackerException($"Cannot start {request.Executable}. Check its installation and path. {ex.Message}"); }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            throw new StackerException(Problem.Of(ProblemCodes.GitFailed, $"Cannot start {request.Executable}. Check its installation and path. {ex.Message}")
+                with { Certainty = EffectCertainty.NotStarted });
+        }
         async Task WriteInputAsync()
         {
             try

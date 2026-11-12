@@ -107,7 +107,7 @@ public interface IDemoSnapshotReader
     /// the missing snapshot instead of showing an empty PR list.</remarks>
     Task<Result<GitHubSnapshot?>> ReadDemoSnapshotAsync(string root, CancellationToken ct = default);
 }
-/// <summary>Bounded, thread-safe log of Git invocations behind the diagnostics tab.</summary>
+/// <summary>Bounded, thread-safe log of Git and GitHub CLI invocations behind the diagnostics tab.</summary>
 /// <remarks>The process runner appends an entry when a command starts and replaces it when it finishes; the UI
 /// mirrors the same notifications into its own list bounded the same way. It is a rolling window for the current
 /// session: the implementation keeps the newest 500 entries and drops the oldest when a further command arrives, so it
@@ -132,7 +132,7 @@ public interface IGitDiagnosticLog
     void Clear();
 }
 
-/// <summary>One Git invocation as the diagnostics tab shows it: where it ran, how long it took and how it ended.</summary>
+/// <summary>One tool invocation as the diagnostics tab shows it: where it ran, how long it took and how it ended.</summary>
 /// <remarks>Created when the process starts, while it is still running and has no exit code, and replaced on
 /// completion, which is why <see cref="Id"/> is the stable handle across both notifications. The adapter redacts
 /// embedded credentials before the entry is created, so a username and password in a remote URL never appear in the
@@ -140,7 +140,7 @@ public interface IGitDiagnosticLog
 /// <param name="Id">Identity of this invocation, used to update the same row instead of appending a second one.</param>
 /// <param name="StartedAt">When the process was started, with its offset preserved for local display.</param>
 /// <param name="WorkingDirectory">The explicit working directory the command ran in; empty when none was set.</param>
-/// <param name="Command">The rendered command line, prefixed with <c>git</c>, with arguments quoted and credentials
+/// <param name="Command">The rendered command line with its tool name, arguments quoted and credentials
 /// redacted.</param>
 /// <param name="Duration">Elapsed time from start to exit; <see cref="TimeSpan.Zero"/> while the entry is running.</param>
 /// <param name="ExitCode">The process exit code; <see langword="null"/> while running and when no code was produced
@@ -153,13 +153,22 @@ public interface IGitDiagnosticLog
 public sealed record GitCommandEntry(Guid Id, DateTimeOffset StartedAt, string WorkingDirectory, string Command,
     TimeSpan Duration, int? ExitCode, string Detail, bool IsRunning)
 {
+    public bool IsGitHub { get; init; }
+    public bool IsFailure { get; init; }
+
     /// <summary>One-line rendering for the log list and the clipboard export: time, duration, outcome and command.</summary>
     /// <remarks>The duration is formatted with one decimal place, so a sub-second command still shows a value
     /// (for example <c>0.4s</c>). While the command runs, the duration column reads <c>running</c> and the outcome
     /// column is empty, which leaves its two spaces behind. A finished entry without an exit code reads
     /// <c>failed</c>, because a process that never produced a code did not complete normally. Columns are separated
     /// by two spaces so the text stays parseable when copied out.</remarks>
-    public string Summary => $"{StartedAt.LocalDateTime:HH:mm:ss}  {(IsRunning ? "running" : Duration.TotalSeconds.ToString("0.0") + "s")}  {(IsRunning ? "" : ExitCode is { } code ? $"exit {code}" : "failed")}  {Command}";
+    public string Summary => $"{StartedAt.LocalDateTime:HH:mm:ss}  {(IsRunning ? "running" : Duration.TotalSeconds.ToString("0.0") + "s")}  {Outcome}  {Command}";
+    private string Outcome => IsRunning ? "" : ExitCode switch
+    {
+        0 when IsFailure => "API error (exit 0)",
+        int code => $"exit {code}",
+        _ => "failed"
+    };
 }
 
 /// <summary>Explicit transient state for previews/tests without an OS-owned application store.</summary>

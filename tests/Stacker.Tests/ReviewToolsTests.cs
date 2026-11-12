@@ -103,6 +103,9 @@ public sealed class ReviewToolsTests
         Assert.Equal("note.cs · RIGHT · lines 1–2", vm.ActiveReview!.SelectionLabel);
         vm.ActiveReview.Composer = "Review both lines"; await vm.ActiveReview.AddToDraftCommand.ExecuteAsync(null);
         var anchor = Assert.Single(vm.ActiveReview.DraftComments).Anchor; Assert.Equal(1, anchor.StartLine); Assert.Equal(2, anchor.Line);
+        vm.ActiveReview.SetSelection([new RenderedDiffLine(new(DiffLineKind.Context, 20, 20, " hidden context")) { IsExpandedContext = true }]);
+        Assert.False(vm.ActiveReview.HasSelection);
+        Assert.Contains("original diff", vm.ActiveReview.Message);
         await vm.FlushReviewsAsync(); window.Close();
     }
 

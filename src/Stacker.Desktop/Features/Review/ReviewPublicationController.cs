@@ -1,7 +1,4 @@
-using System.Collections.ObjectModel;
 using System.Text.Json;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using Stacker.Core;
 using Stacker.Core.Framework;
 namespace Stacker.Desktop.ViewModels;
@@ -23,7 +20,9 @@ internal sealed class ReviewPublicationController(ReviewViewModel owner)
 
     public async Task PostFileCommentAsync()
     {
-        if (!owner.CanPostFile) { owner.Message = owner.IsDemo ? "Demo is offline. Publishing is disabled." : "Select a current PR file before commenting. Reload PR changes if it is no longer available."; return; }
+        if (owner.PublicationBlockReason is { } blocked) { owner.Message = blocked; return; }
+        owner.PublicationProblem = null;
+        if (!owner.CanPostFile) { owner.Message = "Select a current PR file before commenting. Reload PR changes if it is no longer available."; return; }
         if (owner._draft.HeadSha != owner.PullRequest.HeadSha || owner._draft.BaseSha != owner.PullRequest.BaseSha) { owner.Message = "File draft belongs to an older PR version. Recheck it before adopting the current version."; return; }
         var path = owner.SelectedReviewFile!; var body = owner.FileComposer;
         await PublishAsync("file", [], marker => Boundary.UnwrapAsync(owner._writer.FileCommentAsync(owner.Context, owner.PullRequest, path, ReviewViewModel.Mark(body, marker))), path);
@@ -31,6 +30,8 @@ internal sealed class ReviewPublicationController(ReviewViewModel owner)
 
     public async Task PostInlineAsync()
     {
+        if (owner.PublicationBlockReason is { } blocked) { owner.Message = blocked; return; }
+        owner.PublicationProblem = null;
         if (owner._selection is null) { owner.Message = "Select code lines first."; return; }
         if (owner._selection.Side != "RIGHT" && owner.HasSuggestionPreview) { owner.Message = "Suggestions can only replace right-side code. Keep a normal comment on deleted lines."; return; }
         var anchor = owner._selection; var body = owner.Composer;
@@ -58,13 +59,16 @@ internal sealed class ReviewPublicationController(ReviewViewModel owner)
 
     public async Task PublishAsync(string kind, IReadOnlyList<ReviewAnchor> anchors, Func<string, Task> send, string? filePath = null)
     {
-        if (!owner.CanPublish) { owner.Message = owner.IsDemo ? "Demo is offline. Publishing is disabled." : "Resolve the pending publication before sending again."; return; }
+        if (owner.PublicationBlockReason is { } blocked) { owner.Message = blocked; return; }
+        owner.PublicationProblem = null;
         if (kind != "review" && string.IsNullOrWhiteSpace(kind == "file" ? owner.FileComposer : owner.Composer)) { owner.Message = "Enter a comment first."; return; }
         if (kind == "review" && (owner._draft.HeadSha != owner.PullRequest.HeadSha || owner._draft.BaseSha != owner.PullRequest.BaseSha)) { owner.Message = "Draft version differs from this PR snapshot."; return; }
         if (kind == "review" && owner._draft.Comments.Any(c => c.Anchor.Side != "RIGHT" && ReviewContent.Parse(c.Body).Any(b => b.IsSuggestion))) { owner.Message = "A suggestion targets deleted lines. Edit it into a normal comment before submitting."; return; }
         if (kind == "review" && owner.Decision == "REQUEST_CHANGES" && string.IsNullOrWhiteSpace(owner.Summary)) { owner.Message = "Explain the requested changes in the review summary."; return; }
         if (kind == "review" && owner.Decision != "APPROVE" && string.IsNullOrWhiteSpace(owner.Summary) && owner.DraftComments.Count == 0) { owner.Message = "Add a summary or line comments."; return; }
-        owner._discussionLoad?.Cancel(); owner.IsBusy = true;
+        BeginPublication("Publishing to GitHub…");
+        var dispatchStarted = false;
+        var confirmed = false;
         try
         {
             await VerifyAsync(anchors);
@@ -75,37 +79,48 @@ internal sealed class ReviewPublicationController(ReviewViewModel owner)
             owner.QueueSave(); await owner.FlushAsync();
             ReviewSessionService.Transition(owner._draft, PublicationPhase.Sending);
             owner.QueueSave(); await owner.FlushAsync();
-            using var dispatch = OperationCorrelation.Enter(marker);
-            await send(marker);
+            dispatchStarted = true;
+            using (OperationCorrelation.Enter(marker)) await send(marker);
+            confirmed = true;
             ReviewSessionService.Transition(owner._draft, PublicationPhase.Confirmed);
             owner._draft.PendingOperation = null; owner._draft.PendingFilePath = null;
             if (kind == "review") ClearSubmittedDraft(); else if (kind == "file" && filePath is not null) ClearPublishedFile(filePath); else ClearPublishedComposer();
-            owner.QueueSave(); await owner.FlushAsync(); owner.Message = "Published.";
-            await owner.ReloadAsync();
+            owner.QueueSave(); await owner.FlushAsync();
+            owner.Message = kind == "review" && anchors.Count > 0
+                ? $"Published the review with {anchors.Count} line {(anchors.Count == 1 ? "comment" : "comments")}."
+                : kind == "review" ? "Review published." : "Comment published.";
         }
-        catch (Exception ex) { HandleCertainFailure(ex); if (owner._draft.Operation?.Phase == PublicationPhase.Sending) { ReviewSessionService.Transition(owner._draft, PublicationPhase.Uncertain); owner.QueueSave(); } owner.Message = ex.Message + (owner._draft.PendingOperation is null ? "" : " Publication may have reached GitHub. Reload to reconcile before retrying."); }
-        finally { owner.IsBusy = false; owner.NotifyPublicationState(); }
+        catch (Exception ex) { ReportFailure(ex, dispatchStarted, confirmed); }
+        finally { owner.IsBusy = false; }
+        if (confirmed) _ = owner.ReloadAfterPublicationAsync();
     }
 
     public async Task ToggleResolvedAsync()
     {
-        if (!owner.CanPublish || owner.SelectedThread is not { CanResolve: true } thread) return;
-        owner._discussionLoad?.Cancel(); owner.IsBusy = true;
+        if (owner.PublicationBlockReason is { } blocked) { owner.Message = blocked; return; }
+        if (owner.SelectedThread is not { CanResolve: true } thread) return;
+        BeginPublication(thread.IsResolved ? "Reopening thread on GitHub…" : "Resolving thread on GitHub…");
+        var dispatchStarted = false;
+        var confirmed = false;
         try
         {
             await VerifyAsync([]); owner._draft.PendingOperation = PendingOperation.ForResolve(thread.Id, !thread.IsResolved).Encode(); ReviewSessionService.Prepare(owner._draft, Guid.NewGuid().ToString("N"), "resolve", owner.Context, owner.PullRequest);
             owner.QueueSave(); await owner.FlushAsync();
             ReviewSessionService.Transition(owner._draft, PublicationPhase.Sending); owner.QueueSave(); await owner.FlushAsync();
-            using var dispatch = OperationCorrelation.Enter(owner._draft.Operation!.Id);
-            (await owner._writer.ResolveAsync(owner.Context, thread.Id, !thread.IsResolved)).OrThrow();
+            dispatchStarted = true;
+            using (OperationCorrelation.Enter(owner._draft.Operation!.Id))
+                (await owner._writer.ResolveAsync(owner.Context, thread.Id, !thread.IsResolved)).OrThrow();
+            confirmed = true;
             ReviewSessionService.Transition(owner._draft, PublicationPhase.Confirmed);
-            owner._draft.PendingOperation = null; owner.QueueSave(); await owner.FlushAsync(); await owner.ReloadAsync();
+            owner._draft.PendingOperation = null; owner.QueueSave(); await owner.FlushAsync();
+            owner.Message = thread.IsResolved ? "Thread reopened." : "Thread resolved.";
+            await owner.ReloadAfterPublicationAsync();
         }
-        catch (Exception ex) { HandleCertainFailure(ex); if (owner._draft.Operation?.Phase == PublicationPhase.Sending) { ReviewSessionService.Transition(owner._draft, PublicationPhase.Uncertain); owner.QueueSave(); } owner.Message = ex.Message; }
+        catch (Exception ex) { ReportFailure(ex, dispatchStarted, confirmed); }
         finally { owner.IsBusy = false; }
     }
 
-    public async Task UnlockRetryAsync() { if (owner.IsBusy) return; ReviewSessionService.Transition(owner._draft, PublicationPhase.Rejected); owner._draft.PendingOperation = null; owner._draft.PendingFilePath = null; owner.QueueSave(); await owner._saveQueue; owner.NotifyPublicationState(); if (owner._saveError is null) owner.Message = "Retry unlocked after your manual GitHub check."; }
+    public async Task UnlockRetryAsync() { if (owner.IsBusy) return; ReviewSessionService.Transition(owner._draft, PublicationPhase.Rejected); owner._draft.PendingOperation = null; owner._draft.PendingFilePath = null; owner.QueueSave(); await owner._saveQueue; owner.NotifyPublicationState(); if (owner._saveError is null) { owner.PublicationProblem = null; owner.Message = "Retry unlocked after your manual GitHub check."; } }
 
     public void ClearPublishedFile(string path)
     {
@@ -123,10 +138,38 @@ internal sealed class ReviewPublicationController(ReviewViewModel owner)
         owner._draft.PendingReviewComments = null; owner._draft.PendingSummary = null;
     }
 
-    private void HandleCertainFailure(Exception error)
+    private void BeginPublication(string status)
     {
-        if (owner._draft.Operation?.Phase != PublicationPhase.Prepared && error is not StackerException { Problem.Certainty: EffectCertainty.NotStarted or EffectCertainty.Rejected }) return;
-        ReviewSessionService.Transition(owner._draft, PublicationPhase.Rejected);
-        owner._draft.PendingOperation = null; owner._draft.PendingFilePath = null; owner.QueueSave();
+        owner._discussionLoad?.Cancel();
+        owner.PublicationProblem = null;
+        owner.IsBusy = true;
+        owner.Message = status;
+    }
+
+    private void ReportFailure(Exception error, bool dispatchStarted, bool confirmed)
+    {
+        var detail = error.Message;
+        if (confirmed)
+        {
+            detail = "GitHub confirmed the action. Could not save the local confirmation. " + detail;
+        }
+        else if (!dispatchStarted || error is StackerException { Problem.Certainty: EffectCertainty.NotStarted or EffectCertainty.Rejected })
+        {
+            if (owner._draft.PendingOperation is not null)
+            {
+                ReviewSessionService.Transition(owner._draft, PublicationPhase.Rejected);
+                owner._draft.PendingOperation = null;
+                owner._draft.PendingFilePath = null;
+                owner.QueueSave();
+            }
+        }
+        else if (owner._draft.PendingOperation is not null)
+        {
+            ReviewSessionService.Transition(owner._draft, PublicationPhase.Uncertain);
+            owner.QueueSave();
+            detail += " GitHub may have received this action. Check publication status before retrying.";
+        }
+        owner.PublicationProblem = detail;
+        owner.Message = detail;
     }
 }

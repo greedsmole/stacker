@@ -111,6 +111,7 @@ public sealed class JsonSettingsStore(string? directory = null, IAtomicFile? fil
             }
             settings.RecentRepositories ??= [];
             settings.Theme = settings.Theme is "Light" or "Dark" ? settings.Theme : "Dark";
+            settings.DiffLineHeight = Math.Clamp(settings.DiffLineHeight, AppSettings.MinDiffLineHeight, AppSettings.MaxDiffLineHeight);
             settings.NavigationWidth = Clamp(settings.NavigationWidth, 200, 500, 270);
             settings.FilesWidth = Clamp(settings.FilesWidth, 200, 600, 290);
             settings.WindowWidth = Clamp(settings.WindowWidth, 1000, 4000, 1400);
