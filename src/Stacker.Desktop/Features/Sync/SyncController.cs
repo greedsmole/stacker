@@ -1,9 +1,12 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Stacker.Core;
+using Stacker.Core.Framework;
 namespace Stacker.Desktop.ViewModels;
 
 internal sealed class SyncController(ISyncPresentation owner, WorkspaceRuntime runtime)
 {
+    private enum PullRequestBatchPhase { CheckingPlan, PreparingLayer, SendingLayer, Refreshing }
+
     public async Task<RestackPlan?> BuildRestackPlanAsync(bool preserveMerges = false)
     {
         if (runtime._branchWriter is null || runtime._repository is null) { owner.Error = "Open a repository first."; return null; }
@@ -126,6 +129,8 @@ internal sealed class SyncController(ISyncPresentation owner, WorkspaceRuntime r
         if (!plan.CanPublish) return (false, plan.Blockers.Count > 0 ? plan.Blockers[0] : "Nothing to publish. Every layer is already correct.");
         owner.IsSyncing = true; owner.Error = "";
         var done = new List<string>();
+        var phase = PullRequestBatchPhase.CheckingPlan;
+        PullRequestStep? currentStep = null;
         try
         {
             var context = runtime._remoteSnapshot.Context;
@@ -143,26 +148,52 @@ internal sealed class SyncController(ISyncPresentation owner, WorkspaceRuntime r
                 return (false, "The open pull requests changed since the check. Nothing was published: check again.");
             foreach (var step in plan.Steps.Where(step => step.Action != PullRequestAction.Unchanged))
             {
+                currentStep = step;
+                phase = PullRequestBatchPhase.PreparingLayer;
                 if (step.Action == PullRequestAction.Create)
                 {
                     var subject = runtime._branchWriter is null ? null : (await runtime._branchWriter.LastCommitSubjectAsync(root, step.Branch)).OrThrow();
+                    phase = PullRequestBatchPhase.SendingLayer;
                     var created = (await runtime._pullRequestWriter.CreatePullRequestAsync(context, step.BranchName, step.ParentName,
                         string.IsNullOrWhiteSpace(subject) ? step.BranchName : subject, "", draft: false)).OrThrow();
                     done.Add($"#{created.Number} {step.BranchName} → {step.ParentName}");
                 }
                 else
                 {
+                    phase = PullRequestBatchPhase.SendingLayer;
                     var updated = (await runtime._pullRequestWriter.UpdatePullRequestBaseAsync(context, step.Number!.Value, step.ParentName)).OrThrow();
                     done.Add($"#{updated.Number} base → {step.ParentName}");
                 }
             }
-            await owner.RefreshGitHubAsync();
+            phase = PullRequestBatchPhase.Refreshing;
             var message = "Published " + string.Join(", ", done) + ".";
             owner.Status = message;
+            await owner.RefreshGitHubAfterPublicationAsync();
             return (true, message);
         }
         catch (Exception ex)
         {
+            if (phase == PullRequestBatchPhase.Refreshing)
+            {
+                owner.Error = "Could not refresh GitHub after publication. " + ex.Message;
+                return (true, owner.Status + " " + owner.Error);
+            }
+            if (phase == PullRequestBatchPhase.SendingLayer && currentStep is { } step)
+            {
+                var certainty = (ex as StackerException)?.Problem?.Certainty ?? EffectCertainty.Unknown;
+                if (certainty == EffectCertainty.Confirmed)
+                {
+                    done.Add($"{step.BranchName} → {step.ParentName}");
+                    owner.Error = "Could not record the confirmed GitHub write locally. " + ex.Message;
+                    return (false, "Published " + string.Join(", ", done) + ". " + owner.Error);
+                }
+                if (certainty == EffectCertainty.Unknown)
+                {
+                    var confirmed = done.Count == 0 ? "" : "Published " + string.Join(", ", done) + ". ";
+                    owner.Error = $"{confirmed}The publication outcome for layer {step.BranchName} is unknown. Check GitHub before retrying. {ex.Message}";
+                    return (false, owner.Error);
+                }
+            }
             owner.Error = ex.Message;
             return (false, done.Count == 0 ? "Nothing was published. " + ex.Message : "Published " + string.Join(", ", done) + ", then stopped: " + ex.Message);
         }

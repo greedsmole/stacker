@@ -107,14 +107,14 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
     {
         Sha(@base); Sha(head);
         var paths = file.OldPath == file.NewPath ? new[] { file.NewPath } : [file.OldPath, file.NewPath];
-        var patch = (await Run(root, [.. DiffArgs(@base, head), "--patch", "--unified=3", "--", .. paths], ct, 5 * 1024 * 1024)).StdOut;
+        var patch = (await Run(root, ["-c", "diff.suppressBlankEmpty=false", .. DiffArgs(@base, head), "--patch", "--unified=3", "--", .. paths], ct, 5 * 1024 * 1024)).StdOut;
         // A rename's old path may have been reused by another file. Path filtering can
         // therefore return multiple patches; retain only this exact file pair.
         var expectedHeader = $"diff --git {QuotePath("a/" + file.OldPath)} {QuotePath("b/" + file.NewPath)}";
         var sections = Regex.Split(patch, @"(?m)(?=^diff --git )");
         patch = sections.FirstOrDefault(section => section.StartsWith(expectedHeader + "\n", StringComparison.Ordinal))
             ?? throw new StackerException("Git returned an unexpected patch header. Refresh the comparison.");
-        if (patch.Count(c => c == '\n') > 50_000) throw new OutputLimitException();
+        if (patch.Count(c => c == '\n') > DiffView.DisplayLineLimit) throw new OutputLimitException();
         return PatchParser.Parse(file, patch);
     }
     /// <summary>Reads immutable blob content for syntax highlighting; absent old/new blobs are normal for add/delete.</summary>
@@ -124,11 +124,27 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
         var objectName = commit + ":" + path;
         // Missing paths are normal for added/deleted files. Nonzero lookup is not a renderer error, but the call still
         // goes through the hardened wrapper so a partial clone cannot lazily fetch or prompt while highlighting.
-        var exists = await Run(root, ["rev-parse", "--verify", objectName], ct, allowOne: true);
+        var exists = await Run(root, ["rev-parse", "--verify", "--quiet", objectName], ct, allowOne: true);
         if (exists.ExitCode != 0) return null;
         var blob = exists.StdOut.Trim(); Sha(blob);
         try { return new(blob, (await Run(root, ["cat-file", "blob", blob], ct, 2 * 1024 * 1024)).StdOut); }
         catch (OutputLimitException) { return null; }
+    }
+    internal async Task RequireCleanCheckoutAsync(string root, string commit, CancellationToken ct)
+    {
+        Sha(commit);
+        var head = (await Run(root, ["rev-parse", "--verify", "HEAD"], ct)).StdOut.Trim();
+        if (!string.Equals(head, commit, StringComparison.OrdinalIgnoreCase))
+            throw new StackerException($"C# navigation requires checking out {commit[..8]}, the commit for this side of the diff.");
+        var changes = (await Run(root, ["status", "--porcelain=v1", "-z", "--untracked-files=normal", "--ignore-submodules=none"], ct)).StdOut;
+        if (changes.Length > 0) throw new StackerException("C# navigation requires a clean checkout. Commit or stash local changes and retry.");
+    }
+
+    internal async Task<IReadOnlyList<string>> TrackedPathsAsync(string root, string commit, CancellationToken ct)
+    {
+        Sha(commit);
+        var tree = await Run(root, ["ls-tree", "-r", "--name-only", "-z", commit], ct);
+        return tree.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries);
     }
     private static string QuotePath(string path)
     {

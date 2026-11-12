@@ -99,18 +99,20 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
     /// <param name="entry">Entry holding the planned steps and the moves recorded so far.</param>
     /// <param name="progress">Optional progress sink; null on a resume that displays no per-layer line.</param>
     /// <param name="ct">Cancels between layers.</param>
+    /// <param name="resumeAttempt">The continuation's own journal record, when resuming an earlier restack.</param>
     /// <returns>Applied, Conflicted or RolledBack, with the entry reflecting what was recorded.</returns>
     /// <exception cref="OperationCanceledException">Cancellation during a layer or before the next one; restoration is
     /// attempted under the 30-second cleanup budget first.</exception>
     /// <exception cref="StackerException">Recovery refused to restore because the tree gained changes or a ref could not
     /// be proven, or a journal write failed.</exception>
-    private async Task<RestackOutcome> ExecutePlanAsync(RestackPlan plan, JournalEntry entry, IProgress<string>? progress, CancellationToken ct)
+    private async Task<RestackOutcome> ExecutePlanAsync(RestackPlan plan, JournalEntry entry, IProgress<string>? progress, CancellationToken ct, JournalEntry? resumeAttempt = null)
     {
         var root = plan.RepositoryRoot;
         var stamp = clock.Now.UtcDateTime.ToString("yyyyMMddTHHmmss", CultureInfo.InvariantCulture) + "-" + entry.Id;
         var steps = plan.Steps.Where(step => step.NeedsRebase && !step.Blocked).ToArray();
         var planned = entry.Steps.ToArray();
         var moved = entry.Moved.ToList();
+        string? layer = null;
         try
         {
             for (var index = 0; index < steps.Length; index++)
@@ -119,14 +121,15 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
                 var step = steps[index];
                 var plannedStep = planned[index + 1];
                 if (plannedStep.State == StepState.Done) continue;
+                layer = step.BranchName;
                 if (await git.ShaAsync(root, step.Branch, ct) != step.BranchTip)
                     throw new StackerException($"{step.BranchName} moved while this restack was interrupted. No further layers were changed.");
-                var expectedParent = entry.Moved.LastOrDefault(movedStep => movedStep.Target == step.ParentRef)?.NewSha ?? step.OldParentTip;
+                var expectedParent = RecoveryEffects.ExpectedParent(entry, step);
                 if (await git.ShaAsync(root, step.ParentRef, ct) != expectedParent)
                 {
-                    var message = $"{step.ParentName} moved outside this restack. No further layers were changed. Inspect the branches before recovery.";
-                    entry = (await journal.CloseAsync(entry, JournalPhase.NeedsUser, message: message, ct: ct)).OrThrow();
-                    return git.Refused(message, entry);
+                    var drift = $"{step.ParentName} moved outside this restack. No further layers were changed. Inspect the branches before recovery.";
+                    entry = (await journal.CloseAsync(entry, JournalPhase.NeedsUser, message: drift, ct: ct)).OrThrow();
+                    return git.Refused(drift, entry);
                 }
                 entry = (await journal.StepAsync(entry, plannedStep with { State = StepState.Started }, ct)).OrThrow();
                 progress?.Report($"Restacking {step.BranchName} onto {step.ParentName}");
@@ -143,44 +146,82 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
                         return new(RestackStatus.Conflicted, step.BranchName, conflicts,
                             $"{step.BranchName} does not apply cleanly onto {step.ParentName}. Resolve the conflicting files, stage them, then continue.", entry);
                     }
-                    await recovery.RestoreAsync(root, entry, plan.OriginalBranch, ct);
-                    return new(RestackStatus.RolledBack, step.BranchName, [],
-                        $"{step.BranchName} could not be rebased. Every branch was restored. {rebase.StdErr.Trim()}".Trim(), entry);
+                    throw new StackerException($"{step.BranchName} could not be rebased. {rebase.StdErr.Trim()}".Trim());
                 }
-                var newSha = await git.ShaAsync(root, step.Branch, ct) ?? throw new StackerException($"Git reported success, but {step.BranchName} cannot be resolved.");
-                var finished = plannedStep.Finished(plannedStep.OldSha, newSha, StepState.Done);
-                entry = entry with { Steps = entry.Steps.Select(s => s.Id == finished.Id ? finished : s).ToArray() };
-                entry = (await journal.StepAsync(entry, finished, ct)).OrThrow();
+                using var completion = new CancellationTokenSource(GitRunner.RecoveryTimeout);
+                var finished = await ReadFinishedRebaseAsync(root, plannedStep, completion.Token);
+                entry = WithStep(entry, finished);
+                entry = (await journal.StepAsync(entry, finished, completion.Token)).OrThrow();
+                ct.ThrowIfCancellationRequested();
                 moved.Add(finished);
                 var ancestor = await git.Run(root, ["merge-base", "--is-ancestor", step.ParentRef, step.Branch], ct, allowFailure: true);
                 if (ancestor.ExitCode != 0)
-                {
-                    await recovery.RestoreAsync(root, entry, plan.OriginalBranch, ct);
-                    return new(RestackStatus.RolledBack, step.BranchName, [],
-                        $"{step.BranchName} was rewritten but still does not contain {step.ParentName}. Every branch was restored.", entry);
-                }
-                var replayed = git.ParseCount((await git.Run(root, ["rev-list", "--count", $"{step.OldParentTip}..{newSha}"], ct)).StdOut);
+                    throw new StackerException($"{step.BranchName} was rewritten but still does not contain {step.ParentName}.");
+                var replayed = git.ParseCount((await git.Run(root, ["rev-list", "--count", $"{step.OldParentTip}..{finished.NewSha}"], ct)).StdOut);
                 if (replayed < step.CommitCount)
                     progress?.Report($"{step.BranchName}: {step.CommitCount - replayed} commit(s) were already present in {step.ParentName} and were dropped.");
             }
+            layer = null;
             await git.SwitchToAsync(root, plan.OriginalBranch, ct, required: true);
-            entry = (await journal.CloseAsync(entry, JournalPhase.Applied, plan.StashRef, message: $"{moved.Count} layer(s) restacked.", ct: ct)).OrThrow();
-            await git.PruneBackupsAsync(root, ct);
-            return new(RestackStatus.Applied, null, [], $"{moved.Count} layer(s) restacked. Backups are kept at {GitRunner.BackupRoot}/{stamp}.", entry);
+            var message = $"{moved.Count} layer(s) restacked. Backups are kept at {GitRunner.BackupRoot}/{stamp}.";
+            entry = (await journal.CloseAsync(entry, JournalPhase.Applied, plan.StashRef, message: message, ct: ct)).OrThrow();
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
-            // Anything that escapes a step must not leave the repository half-changed; the entry records the truth.
-            await recovery.RestoreAsync(root, entry, plan.OriginalBranch, ct);
-            return new(RestackStatus.RolledBack, null, [], $"The restack failed and every branch was restored. {ex.Message}", entry);
+            var stored = await RecoverFailureAsync(entry, resumeAttempt, ex is OperationCanceledException);
+            if (stored.Phase == JournalPhase.Applied) entry = stored;
+            else
+            {
+                if (stored.Phase != JournalPhase.RolledBack || ex is OperationCanceledException) throw;
+                return RestoredAfterFailure(stored, layer, ex);
+            }
         }
-        catch (OperationCanceledException)
+
+        try { await git.PruneBackupsAsync(root, ct); }
+        catch (Exception ex)
         {
-            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            await recovery.RestoreAsync(root, entry, plan.OriginalBranch, cleanup.Token);
-            throw;
+            return new(RestackStatus.Applied, null, [], $"{entry.Summary} Old backups could not be pruned: {ex.Message}", entry);
         }
+        return new(RestackStatus.Applied, null, [], entry.Summary, entry);
     }
+
+    /// <summary>Reads the durable phase before deciding whether any refs can be restored.</summary>
+    private async Task<JournalEntry> ReadEntryAsync(JournalEntry entry, CancellationToken ct) =>
+        (await journal.ByIdAsync(entry.Repository, entry.Id, ct)).OrThrow()
+        ?? throw new StackerException("The restack journal entry is missing. Inspect the repository before restoring branches.");
+
+    private async Task<JournalEntry> RecoverFailureAsync(JournalEntry entry, JournalEntry? resumeAttempt, bool cancelled)
+    {
+        using var cleanup = new CancellationTokenSource(GitRunner.RecoveryTimeout);
+        var stored = await ReadEntryAsync(entry, cleanup.Token);
+        if (stored.NeedsAttention)
+        {
+            // Keep the observed new SHA available for recovery if the write of Done failed.
+            try { await recovery.RestoreAsync(entry.Repository, entry, git.OriginalBranch(entry), cleanup.Token); }
+            catch
+            {
+                stored = await ReadEntryAsync(entry, cleanup.Token);
+                if (stored.Phase != JournalPhase.RolledBack) throw;
+            }
+            if (stored.NeedsAttention) stored = await ReadEntryAsync(entry, cleanup.Token);
+        }
+        if (cancelled && stored.Phase == JournalPhase.RolledBack && resumeAttempt is not null)
+            (await journal.CloseAsync(resumeAttempt, JournalPhase.RolledBack, message: stored.Summary, ct: cleanup.Token)).OrThrow();
+        return stored;
+    }
+
+    private async Task<JournalStep> ReadFinishedRebaseAsync(string root, JournalStep step, CancellationToken ct)
+    {
+        var sha = await git.ShaAsync(root, step.Target, ct)
+            ?? throw new StackerException($"Git reported success, but {step.Target} cannot be resolved.");
+        return step.Finished(step.OldSha, sha, StepState.Done);
+    }
+
+    private static JournalEntry WithStep(JournalEntry entry, JournalStep finished) =>
+        entry with { Steps = entry.Steps.Select(step => step.Id == finished.Id ? finished : step).ToArray() };
+
+    private static RestackOutcome RestoredAfterFailure(JournalEntry entry, string? layer, Exception error) =>
+        new(RestackStatus.RolledBack, layer, [], $"The restack failed and every branch was restored. {error.Message}", entry);
 
     /// <summary>Finishes a rebase that stopped on a conflict, after refusing while unresolved conflicts remain.</summary>
     /// <remarks>Continuing is only meaningful while a rebase is in progress, so anything else is refused rather than
@@ -191,19 +232,20 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
     /// <param name="root">Repository root holding the stopped rebase.</param>
     /// <param name="editorCommand">The user's editor command for the commit-message step, or null for the platform
     /// default supplied by the resume path.</param>
+    /// <param name="attempt">Journal record of the continuation.</param>
     /// <param name="ct">Cancels the check and the resume.</param>
-    /// <param name="target">Entry to resume, or null to use the journal's active entry.</param>
     /// <returns>A conflicted outcome while conflicts remain, otherwise whatever the resume reports.</returns>
-    public async Task<RestackOutcome> ContinueAsync(string root, string? editorCommand, CancellationToken ct = default, JournalEntry? target = null)
+    public async Task<RestackOutcome> ContinueAsync(string root, string? editorCommand, JournalEntry attempt, CancellationToken ct = default)
     {
         await git.Gate.WaitAsync(ct);
         try
         {
             var state = await git.StatusAsync(root, ct);
             if (state.Operation != WorkingOperation.Rebase) return git.Refused("There is no rebase to continue.");
+            var entry = await PendingRestackAsync(root, ct);
             if (state.HasConflicts)
-                return new(RestackStatus.Conflicted, null, state.ConflictedFiles, "Resolve and stage these files before continuing.", (await journal.ActiveAsync(root, ct)).OrThrow());
-            return await ResumeAsync(root, ["rebase", "--continue"], editorCommand, ct, target);
+                return new(RestackStatus.Conflicted, null, state.ConflictedFiles, "Resolve and stage these files before continuing.", entry);
+            return await ResumeAsync(root, entry, attempt, () => RunInteractiveRebaseAsync(root, "--continue", editorCommand, ct), ct);
         }
         finally { git.Gate.Release(); }
     }
@@ -214,18 +256,22 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
     /// conflict state for exactly the conflicted paths without touching anything else in the index. The rest of the
     /// work is the shared resume path, which records the layer and continues the plan.</remarks>
     /// <param name="root">Repository root holding the stopped rebase.</param>
+    /// <param name="attempt">Journal record of the continuation.</param>
     /// <param name="ct">Cancels the reset and the skip.</param>
-    /// <param name="target">Entry to resume, or null to use the journal's active entry.</param>
     /// <returns>A conflicted outcome when the next commit also conflicts, otherwise whatever the resume reports.</returns>
-    public async Task<RestackOutcome> SkipAsync(string root, CancellationToken ct = default, JournalEntry? target = null)
+    public async Task<RestackOutcome> SkipAsync(string root, JournalEntry attempt, CancellationToken ct = default)
     {
         await git.Gate.WaitAsync(ct);
         try
         {
             var state = await git.StatusAsync(root, ct);
             if (state.Operation != WorkingOperation.Rebase) return git.Refused("There is no rebase to skip a commit in.");
-            if (state.HasConflicts) await git.Run(root, ["reset", "--", .. state.ConflictedFiles], ct, allowFailure: true);
-            return await ResumeAsync(root, ["rebase", "--skip"], null, ct, target);
+            var entry = await PendingRestackAsync(root, ct);
+            return await ResumeAsync(root, entry, attempt, async () =>
+            {
+                if (state.HasConflicts) await git.Run(root, ["reset", "--", .. state.ConflictedFiles], ct, allowFailure: true);
+                return await RunInteractiveRebaseAsync(root, "--skip", null, ct);
+            }, ct);
         }
         finally { git.Gate.Release(); }
     }
@@ -243,37 +289,69 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
     /// a conflict resolved after the entry was truncated) closes as applied and tells the user to restack again.</para>
     /// </remarks>
     /// <param name="root">Repository root holding the stopped rebase.</param>
-    /// <param name="arguments">The rebase sub-command and its flags, already split.</param>
-    /// <param name="editorCommand">The user's editor command, or null to use the no-op editor.</param>
+    /// <param name="entry">The restack that owns the stopped rebase, when identified.</param>
+    /// <param name="attempt">Journal record of the continuation.</param>
+    /// <param name="dispatch">The Git action that continues or skips the stopped commit.</param>
     /// <param name="ct">Cancels the resume and any remaining layers.</param>
-    /// <param name="target">Entry to resume, or null to use the journal's active entry.</param>
     /// <returns>Applied, Conflicted or Refused with the entry that reflects the outcome.</returns>
-    private async Task<RestackOutcome> ResumeAsync(string root, string[] arguments, string? editorCommand, CancellationToken ct, JournalEntry? target)
+    private async Task<RestackOutcome> ResumeAsync(string root, JournalEntry? entry, JournalEntry attempt, Func<Task<ProcessResult>> dispatch, CancellationToken ct)
     {
-        var entry = target ?? (await journal.ActiveAsync(root, ct)).OrThrow();
-        var result = await git.Run(root, arguments, ct, allowFailure: true, timeout: GitRunner.InteractiveTimeout,
-            editor: string.IsNullOrWhiteSpace(editorCommand) ? "true" : ShellCommand.Parse(editorCommand).OrThrow().ForGitEditor());
-        if (result.ExitCode != 0)
+        var acknowledged = false;
+        try
         {
-            var conflicts = await git.ConflictsAsync(root, ct);
-            if (conflicts.Count > 0)
+            if (entry?.Pending is { State: StepState.Planned } legacy)
+                entry = (await journal.StepAsync(entry, legacy with { State = StepState.Started }, ct)).OrThrow();
+            var result = await dispatch();
+            if (result.ExitCode != 0) return await ResumeRefusalAsync(root, entry, result, ct);
+            acknowledged = true;
+            if (entry?.Pending is { } pending)
             {
-                if (entry is not null) entry = (await journal.CloseAsync(entry, JournalPhase.NeedsUser, pendingStepId: entry.PendingStepId, message: "The next commit does not apply cleanly either.", ct: ct)).OrThrow();
-                return new(RestackStatus.Conflicted, null, conflicts,
-                    "The next commit does not apply cleanly either. Resolve these files, stage them, then continue again.", entry);
+                using var completion = new CancellationTokenSource(GitRunner.RecoveryTimeout);
+                var finished = await ReadFinishedRebaseAsync(root, pending, completion.Token);
+                entry = WithStep(entry, finished);
+                entry = (await journal.StepAsync(entry, finished, completion.Token)).OrThrow();
+                ct.ThrowIfCancellationRequested();
             }
-            var detail = (result.StdErr.Trim() + " " + result.StdOut.Trim()).Trim();
-            return git.Refused($"Git refused to continue. {detail}", entry);
+            if (entry is { RestackPlan: null })
+            {
+                await git.SwitchToAsync(root, git.OriginalBranch(entry), ct, required: false);
+                entry = (await journal.CloseAsync(entry, JournalPhase.Applied, message: "The layer was completed.", ct: ct)).OrThrow();
+            }
         }
-        // The layer that was waiting is now rewritten: record it so undo reverses it as well.
-        if (entry?.Pending is { } pending && pending.OldSha is { } oldSha)
+        catch (Exception ex) when (entry is not null)
         {
-            var newSha = await git.ShaAsync(root, pending.Target, ct);
-            if (newSha is not null) entry = (await journal.StepAsync(entry, pending.Finished(oldSha, newSha, StepState.Done), ct)).OrThrow();
+            if (!acknowledged)
+                return git.Refused($"Rebase resolution was interrupted. Inspect the working tree before continuing. {ex.Message}", entry);
+            entry = await RecoverFailureAsync(entry, attempt, ex is OperationCanceledException);
+            if (entry.Phase == JournalPhase.RolledBack && ex is not OperationCanceledException)
+                return RestoredAfterFailure(entry, null, ex);
+            if (entry.Phase != JournalPhase.Applied) throw;
         }
-        if (entry?.RestackPlan is { } plan) return await ExecutePlanAsync(plan, entry, null, ct);
-        if (entry is not null) entry = (await journal.CloseAsync(entry, JournalPhase.Applied, message: "The layer was completed.", ct: ct)).OrThrow();
-        await git.SwitchToAsync(root, entry is null ? "" : git.OriginalBranch(entry), ct, required: false);
+        if (entry?.RestackPlan is { } plan) return await ExecutePlanAsync(plan, entry, null, ct, attempt);
         return new(RestackStatus.Applied, null, [], "The layer was completed. Press Restack again to finish any layers above it.", entry);
+    }
+
+    private Task<ProcessResult> RunInteractiveRebaseAsync(string root, string action, string? editor, CancellationToken ct) =>
+        git.Run(root, ["rebase", action], ct, allowFailure: true, timeout: GitRunner.InteractiveTimeout,
+            editor: string.IsNullOrWhiteSpace(editor) ? "true" : ShellCommand.Parse(editor).OrThrow().ForGitEditor());
+
+    private async Task<RestackOutcome> ResumeRefusalAsync(string root, JournalEntry? entry, ProcessResult result, CancellationToken ct)
+    {
+        var conflicts = await git.ConflictsAsync(root, ct);
+        if (conflicts.Count == 0)
+            return git.Refused($"Git refused to continue. {result.StdErr.Trim()} {result.StdOut.Trim()}".Trim(), entry);
+        const string message = "The next commit does not apply cleanly either. Resolve these files, stage them, then continue again.";
+        if (entry is not null)
+            entry = (await journal.CloseAsync(entry, JournalPhase.NeedsUser, pendingStepId: entry.PendingStepId, message: message, ct: ct)).OrThrow();
+        return new(RestackStatus.Conflicted, null, conflicts, message, entry);
+    }
+
+    /// <summary>Finds an unfinished restack whose pending step matches Git's stopped rebase.</summary>
+    private async Task<JournalEntry?> PendingRestackAsync(string root, CancellationToken ct)
+    {
+        var entry = (await journal.ActiveAsync(root, ct)).OrThrow();
+        if (entry is null || await recovery.FindStoppedRebaseAsync(root, entry, ct) is not { } pending) return null;
+        return entry.PendingStepId == pending.Id ? entry
+            : (await journal.CloseAsync(entry, JournalPhase.NeedsUser, pendingStepId: pending.Id, message: entry.Message, ct: ct)).OrThrow();
     }
 }

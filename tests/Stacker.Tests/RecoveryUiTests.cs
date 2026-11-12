@@ -52,6 +52,7 @@ public sealed class RecoveryUiTests
         var oldA = await f.Git("rev-parse", "A");
         // What a killed process leaves behind: the entry open, one branch already moved, nothing closed.
         var entry = (await journal.OpenAsync(root, "restack", [new JournalStep("layer:0", "rebase", "refs/heads/A", oldA, null, StepState.Planned)])).OrThrow();
+        (await journal.StepAsync(entry, entry.Steps[0] with { State = StepState.Started })).OrThrow();
         await f.Git("checkout", "A"); await f.Git("commit", "--amend", "-m", "A rewritten");
         (await journal.StepAsync(entry, entry.Steps[0].Finished(oldA, await f.Git("rev-parse", "A"), StepState.Done))).OrThrow();
         await vm.RefreshWorkingTreeAsync();
@@ -74,6 +75,7 @@ public sealed class RecoveryUiTests
         await vm.OpenRepositoryAsync(f.Root);
         var root = await f.ResolvedRoot();
         var entry = (await journal.OpenAsync(root, "restack", [new JournalStep("layer:0", "rebase", "refs/heads/A", await f.Git("rev-parse", "A"), null, StepState.Planned)])).OrThrow();
+        (await journal.StepAsync(entry, entry.Steps[0] with { State = StepState.Started })).OrThrow();
         (await journal.StepAsync(entry, entry.Steps[0].Finished(await f.Git("rev-parse", "A"), await f.Git("rev-parse", "A"), StepState.Failed))).OrThrow();
         await vm.RefreshWorkingTreeAsync();
         Assert.True(vm.HasRecovery);

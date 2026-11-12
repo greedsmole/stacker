@@ -7,38 +7,55 @@ public sealed partial class MainViewModel
 {
     [ObservableProperty] private HistoryWorkspaceViewModel? _activeHistory;
     private string? _historyGroup;
-    private bool _synchronizingHistory;
+    private int _historySelectionsInProgress;
+    private int _checkpointRevision;
     public bool IsHistoryOpen => ActiveHistory is not null;
     partial void OnActiveHistoryChanged(HistoryWorkspaceViewModel? value) => OnPropertyChanged(nameof(IsHistoryOpen));
     public async Task ShowHistoryAsync()
     {
+        var filePath = Sections.Count == 1 ? Sections[0].SelectedFile?.NewPath : null;
         var next = await OpenHistoryAsync();
         if (next is null) return;
         ActiveHistory?.Dispose(); ActiveHistory = next; _historyGroup = _runtime._activeGroup?.Definition.Id;
         next.SelectionChanged = async (node, file) =>
         {
-            if (_synchronizingHistory || _runtime._activeGroup is null) return;
-            _synchronizingHistory = true;
+            if (_runtime._activeGroup is not { } group) return;
+            var token = next.LayerLoadToken;
+            _historySelectionsInProgress++;
             try
             {
-                var layer = _runtime._activeGroup.Layers.FirstOrDefault(l => node.PullRequest is not null ? l.PullRequest?.Number == node.PullRequest : l.Snapshot.Branch == node.Reference);
-                if (layer is not null && (_runtime._selectedPositions.Length != 1 || _runtime._selectedPositions[0] != layer.Snapshot.Position)) await _navigationController.SelectLayerAsync(layer, false);
+                var layer = group.Layers.FirstOrDefault(l => node.PullRequest is not null ? l.PullRequest?.Number == node.PullRequest : l.Snapshot.Branch == node.Reference);
+                if (layer is not null && (!layer.IsSelected || _runtime._comparison is not null ||
+                    _runtime._selectedPositions.Length != 1 || _runtime._selectedPositions[0] != layer.Snapshot.Position))
+                    await _navigationController.SelectLayerAsync(layer, false, token);
+                if (token.IsCancellationRequested || ActiveHistory != next || next.SelectedNode != node || _runtime._activeGroup != group) return;
                 var section = Sections.FirstOrDefault();
                 if (section is not null && file is not null) section.SelectedFile = section.Files.FirstOrDefault(f => f.NewPath == file.NewPath);
                 _runtime.Session.Select(new(node.Id, section is null ? null : ComparisonId.For(node.Id, section.Result.BaseSha, section.Result.HeadSha).Value, file?.NewPath));
             }
-            finally { _synchronizingHistory = false; }
+            finally { _historySelectionsInProgress--; }
+        };
+        next.CheckpointChanged = async () =>
+        {
+            _checkpointRevision++;
+            foreach (var section in Sections.ToArray()) await RefreshFileReviewStatusesAsync(section);
         };
         var selected = _runtime._selectedPositions.FirstOrDefault();
-        if (selected < next.Nodes.Count) { next.SelectedNode = next.Nodes[selected]; await next.LoadLayerCommand.ExecuteAsync(null); }
+        if (selected < next.Nodes.Count)
+        {
+            next.SelectedNode = next.Nodes[selected];
+            await next.LoadCurrentDiffAsync(filePath);
+        }
     }
     [RelayCommand] private void CloseHistory() { ActiveHistory?.Dispose(); ActiveHistory = null; }
     private async Task SynchronizeHistoryAsync()
     {
-        if (ActiveHistory is null || _synchronizingHistory) return;
+        if (ActiveHistory is not { } history || _historySelectionsInProgress > 0) return;
         if (_historyGroup != _runtime._activeGroup?.Definition.Id) { await ShowHistoryAsync(); return; }
         var position = _runtime._selectedPositions.FirstOrDefault();
-        if (position < ActiveHistory.Nodes.Count) { ActiveHistory.SelectedNode = ActiveHistory.Nodes[position]; await ActiveHistory.LoadLayerCommand.ExecuteAsync(null); }
+        if (position >= history.Nodes.Count || history.SelectedNode == history.Nodes[position]) return;
+        history.SelectedNode = history.Nodes[position];
+        await history.LoadCurrentDiffAsync(Sections.Count == 1 ? Sections[0].SelectedFile?.NewPath : null);
     }
     public async Task<HistoryWorkspaceViewModel?> OpenHistoryAsync(CancellationToken ct = default)
     {
@@ -77,7 +94,7 @@ public sealed partial class MainViewModel
                     var pr = group.PullRequests.Single(p => p.Number == node.PullRequest) with { BaseSha = version.BaseSha, HeadSha = version.HeadSha };
                     return demo ? DemoReviewData.Discussion(pr) : _runtime._github is null || context is null ? null : (await _runtime._github.DiscussionAsync(context, pr, token)).OrThrow();
                 }
-            : null);
+            : null, _runtime._highlighter, Settings.Theme) { WrapCode = Settings.WrapCode };
             view.ContentLease = (await _runtime.HistoryObjects.AcquireAsync(repository, graph.Scope, ct)).OrThrow();
             try { await view.InitializeAsync(); return view; } catch { view.Dispose(); throw; }
         }
@@ -94,7 +111,44 @@ public sealed partial class MainViewModel
             remote ? section.AssociatedPr!.Number : null, ct)).OrThrow();
         var declaredBase = remote ? section.AssociatedPr!.BaseSha : _runtime._repository.Refs.FirstOrDefault(r => r.Name == section.Result.ParentRef)?.Sha ?? section.Result.BaseSha;
         (await _runtime.HistoryObjects.CaptureAsync(_runtime._repository.Identity!, scope, [declaredBase, section.Result.HeadSha], ct)).OrThrow();
-        (await _runtime.HistoryStore.ObserveAsync(new("", node.Id, declaredBase, section.Result.HeadSha, section.Result.BaseSha, DateTimeOffset.UtcNow), ct)).OrThrow();
+        section.ReviewVersion = (await _runtime.HistoryStore.ObserveAsync(new("", node.Id, declaredBase, section.Result.HeadSha, section.Result.BaseSha, DateTimeOffset.UtcNow), ct)).OrThrow();
+        section.ReviewScope = scope;
+        try { await RefreshFileReviewStatusesAsync(section, ct); }
+        catch (StackerException ex) { Error = "Cannot load file review status: " + ex.Message; }
+    }
+    private async Task RefreshFileReviewStatusesAsync(DiffSectionViewModel section, CancellationToken ct = default)
+    {
+        if (_runtime.HistoryProgress is not { } progress || _runtime._repository?.Identity is not { } repository ||
+            section.ReviewVersion is not { } version || section.ReviewScope is not { } scope) return;
+        while (true)
+        {
+            var revision = _checkpointRevision;
+            var statuses = await progress.StatusAsync(repository, scope, version, section.Result.Files, ct);
+            ct.ThrowIfCancellationRequested();
+            if (revision != _checkpointRevision) continue;
+            section.SetReviewStatuses(statuses);
+            return;
+        }
+    }
+    internal async Task ToggleFileReviewedAsync(DiffSectionViewModel section, DiffFileRow row)
+    {
+        if (!Sections.Contains(section) || !row.CanChangeReview || _runtime.HistoryStore is not { } store ||
+            section.ReviewVersion is not { } version || row.ReviewStatus is not { } status) return;
+        var remove = row.IsReviewed;
+        row.SavingReview = true;
+        try
+        {
+            (await store.SetCheckpointAsync(new(version.ChangeId, row.Change.NewPath, version.Id, DateTimeOffset.UtcNow), remove)).OrThrow();
+            _checkpointRevision++;
+            row.ReviewStatus = status with
+            {
+                State = remove ? FileReviewState.Unreviewed : FileReviewState.Reviewed,
+                CheckedVersion = remove ? null : version
+            };
+            if (ActiveHistory is { } history) await history.RefreshFileReviewStatusesAsync();
+            foreach (var active in Sections.Where(view => view != section).ToArray()) await RefreshFileReviewStatusesAsync(active);
+        }
+        finally { row.SavingReview = false; }
     }
     internal async Task ObserveHistoryMetadataAsync(CancellationToken ct)
     {

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Stacker.Core.Framework;
 namespace Stacker.Core;
 
@@ -97,7 +98,13 @@ public sealed class RepositoryPreferences
 /// <param name="StartLine">First line of a multi-line selection, or null for a single-line comment.</param>
 /// <param name="StartSide">Side of <paramref name="StartLine"/>; null when the selection is a single line.</param>
 public sealed record ReviewAnchor(long PullRequest, string HeadSha, string BaseSha, string Path, string Side,
-    int Line, int? StartLine = null, string? StartSide = null);
+    int Line, int? StartLine = null, string? StartSide = null)
+{
+    [JsonIgnore]
+    public string LocationLabel => StartLine is int start && start != Line
+        ? $"{Path}:{start}–{Line} · {Side}"
+        : $"{Path}:{Line} · {Side}";
+}
 /// <summary>One ordinary PR conversation comment, separate from review decisions and code threads.</summary>
 /// <param name="Id">Server id. For a thread comment this is the database id used as the reply target; for a conversation
 /// comment it is the issue-comment id used for display.</param>

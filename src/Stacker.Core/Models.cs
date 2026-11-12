@@ -300,6 +300,12 @@ public sealed class AppSettings
     /// <summary>Persisted "wrap code" preference for diff panes; wrapping is applied to each section as it loads.</summary>
     /// <remarks>Changing it is immediate for open sections and is saved with the other preferences. It affects presentation only.</remarks>
     public bool WrapCode { get; set; }
+    /// <summary>Displays changed files grouped by their Git paths.</summary>
+    public bool GroupFilesByFolder { get; set; }
+    public const int MinDiffLineHeight = 16;
+    public const int MaxDiffLineHeight = 26;
+    public const int DefaultDiffLineHeight = 18;
+    public int DiffLineHeight { get; set; } = DefaultDiffLineHeight;
     /// <summary>Root of the repository that was last opened, so the shell can reopen it at launch.</summary>
     /// <remarks>Null before the first successful open. A path given on the command line wins over this value; a remembered path that has disappeared is
     /// reported as an error rather than silently dropped.</remarks>
@@ -327,6 +333,7 @@ public sealed class AppSettings
     /// <remarks>Loading clamps the stored value to 200-500 and falls back to 270 when it is not a finite number, so a corrupt value cannot collapse or hide
     /// the column. The pane enforces the same limits while the user resizes it.</remarks>
     public double NavigationWidth { get; set; } = 270;
+    public bool StacksHidden { get; set; }
     /// <summary>Width of the per-comparison file column in logical pixels; default 290.</summary>
     /// <remarks>Loading clamps the stored value to 200-600 and falls back to 290 when it is not finite. The pane saves the width the user actually dragged to,
     /// which is why the stored value is re-clamped on the next load.</remarks>

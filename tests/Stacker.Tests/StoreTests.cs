@@ -103,6 +103,7 @@ public sealed class StoreTests
         var opened = await journal.OpenAsync("/repo", "restack", [JournalStep.Planned("s1", "move", "refs/heads/A")]);
         Assert.Equal(JournalPhase.Running, opened.Phase);
         Assert.True((await journal.ActiveAsync("/repo"))!.NeedsAttention);
+        await journal.StepAsync(opened, opened.Steps[0] with { State = StepState.Started });
         var stepped = await journal.StepAsync(opened, opened.Steps[0].Finished(new string('a', 40), new string('b', 40), StepState.Done));
         Assert.Equal(StepState.Done, stepped.Steps[0].State);
         await journal.CloseAsync(stepped, JournalPhase.Applied, message: "1 layer restacked");

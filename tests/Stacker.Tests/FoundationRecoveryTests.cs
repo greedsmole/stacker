@@ -82,6 +82,67 @@ public sealed class FoundationRecoveryTests
         finally { Directory.Delete(root, true); }
     }
 
+    [Theory]
+    [InlineData(JournalPhase.Applied, "sent text", "", PublicationPhase.Confirmed)]
+    [InlineData(JournalPhase.Running, "later edit", "later edit", PublicationPhase.Confirmed)]
+    [InlineData(JournalPhase.Dismissed, "sent text", "sent text", PublicationPhase.Rejected)]
+    public async Task A_restarted_publication_uses_durable_execution_evidence_and_preserves_unsent_text(
+        JournalPhase executionPhase, string composer, string expectedComposer, PublicationPhase expectedPhase)
+    {
+        var root = Temp();
+        try
+        {
+            var database = new SqliteHistoryStore(root);
+            var journal = new RoutingJournal(new JsonJournal(new JsonStateStore<JournalLog>(new AtomicFile(), Path.Combine(root, "journal")), new SystemClock()), database, new SystemClock());
+            var id = new string('e', 32);
+            var draft = new ReviewDraft { Composer = composer, PendingOperation = "comment|" + id, PendingBody = "sent text", PendingComposerKey = "pr" };
+            var pr = DiscoveryTests.Pr(42, "main", "feature");
+            ReviewSessionService.Prepare(draft, id, "comment", FakeGitHub.Context, pr);
+            (await database.SaveDraftAsync("key", draft, 0)).OrThrow();
+            ReviewSessionService.Transition(draft, PublicationPhase.Sending);
+            (await database.SaveDraftAsync("key", draft, 1)).OrThrow();
+            var sending = draft.Operation!;
+            var scope = "github:" + FakeGitHub.Context.Identity;
+            var step = JournalStep.Planned("effect", "github.comment", "42");
+            using (OperationCorrelation.Enter(id))
+            {
+                var entry = (await journal.OpenAsync(scope, "github.comment", [step])).OrThrow();
+                (await journal.StepAsync(entry, step with { State = StepState.Started })).OrThrow();
+                var completed = executionPhase == JournalPhase.Dismissed ? StepState.Failed : StepState.Done;
+                (await journal.StepAsync(entry, step with { State = completed })).OrThrow();
+                if (executionPhase != JournalPhase.Running) (await journal.CloseAsync(entry, executionPhase)).OrThrow();
+            }
+
+            var session = new ReviewSessionService(new ReviewApplicationState(new(root), database), new FakeGitHub());
+            var restored = (await session.LoadAsync("key")).OrThrow()!;
+            Assert.Null(restored.Operation);
+            Assert.Null(restored.PendingOperation);
+            Assert.Equal(expectedPhase, Assert.Single(restored.PublicationHistory).Phase);
+            Assert.Equal(expectedComposer, restored.Composer);
+            (await session.SaveAsync("key", restored)).OrThrow();
+
+            var saved = (await database.ReadDraftAsync("key")).OrThrow()!;
+            restored.Operation = sending;
+            restored.PublicationHistory.Clear();
+            var invalid = await database.SaveDraftAsync("key", restored, saved.Revision);
+            Assert.Equal(ProblemCodes.StateInvalid, invalid.Problem?.Code);
+            var after = (await database.ReadDraftAsync("key")).OrThrow()!;
+            Assert.Equal(saved.Revision, after.Revision);
+            Assert.Null(after.Draft.Operation);
+            Assert.Equal(expectedComposer, after.Draft.Composer);
+            var finalPhase = expectedPhase == PublicationPhase.Confirmed ? JournalPhase.Applied : JournalPhase.Dismissed;
+            Assert.Equal(finalPhase, Assert.Single(journal.Recent(scope).OrThrow()).Phase);
+            using var connection = new SqliteConnection("Data Source=" + Path.Combine(root, "review-history.db") + ";Pooling=False");
+            connection.Open(); using var evidence = connection.CreateCommand();
+            evidence.CommandText = "SELECT phase, json_extract(execution, '$.Phase') FROM publication_operations";
+            using var row = evidence.ExecuteReader();
+            Assert.True(row.Read());
+            Assert.Equal((int)expectedPhase, row.GetInt32(0));
+            Assert.Equal((int)finalPhase, row.GetInt32(1));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Fact]
     public async Task Prepared_but_not_dispatched_publication_does_not_block_after_restart()
     {

@@ -38,23 +38,42 @@ public partial class MainWindow
     }
     private async Task HandleCloseAsync()
     {
-        if (_closing) return; _closing = true;
         try
         {
-            Vm.Settings.WindowWidth = Width; Vm.Settings.WindowHeight = Height; Vm.Settings.NavigationWidth = Workspace.ColumnDefinitions[0].ActualWidth;
+            Vm.Settings.WindowWidth = Width; Vm.Settings.WindowHeight = Height;
+            RememberStacksWidth();
             while (true)
             {
-                var problems = await Vm.PrepareCloseAsync(); if (problems.Count == 0) break;
+                _closePhase = ClosePhase.Preparing;
+                var problems = await Vm.PrepareCloseAsync();
+                if (problems.Count == 0) break;
+                _closePhase = ClosePhase.AwaitingDecision;
                 var choice = await AskUnsavedAsync(problems);
-                if (choice == UnsavedCloseChoice.ContinueEditing) { Vm.CancelClose(); _closing = false; return; }
+                if (choice == UnsavedCloseChoice.ContinueEditing) { ResumeEditing(); return; }
                 if (choice == UnsavedCloseChoice.Retry) continue;
                 if (choice == UnsavedCloseChoice.Discard) break;
+                _closePhase = ClosePhase.SavingCopy;
                 var file = await StorageProvider.SaveFilePickerAsync(new() { Title = "Save unsent review text", SuggestedFileName = "Stacker-unsaved.txt" });
                 if (file?.TryGetLocalPath() is not { } path) continue;
-                await Vm.SaveRecoveryCopyAsync(path); break;
+                await Vm.SaveRecoveryCopyAsync(path);
+                break;
             }
-            await Vm.CommitCloseAsync(); Close();
         }
-        catch { Vm.CancelClose(); _closing = false; throw; }
+        catch { ResumeEditing(); throw; }
+
+        _closePhase = ClosePhase.Committing;
+        try { await Vm.CommitCloseAsync(); }
+        catch (Exception ex) { AsyncHandler.Report(this, ex.Message); }
+        finally
+        {
+            _closePhase = ClosePhase.ReadyToClose;
+            Close();
+        }
+    }
+
+    private void ResumeEditing()
+    {
+        _closePhase = ClosePhase.Open;
+        Vm.CancelClose();
     }
 }

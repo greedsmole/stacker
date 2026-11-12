@@ -1,5 +1,6 @@
 // Purpose: Syntax tokenizer scenarios for supported languages, unsupported files, limits, and fallback rendering.
 using Stacker.Infrastructure;
+using Stacker.Desktop.ViewModels;
 namespace Stacker.Tests;
 
 [Collection(HeadlessApp.CollectionName)]
@@ -10,12 +11,35 @@ public sealed class SyntaxTests
     public async Task TextMate_colors_multiline_comments_and_themes_without_patch_markers()
     {
         var highlighter = new TextMateSyntaxHighlighter(); var text = "public class Example\n{\n/* comment\nstill comment */\npublic string Name => \"hello\";\n}\n";
-        // Accuracy assertions use warm grammars; a cold load may legitimately hit the production time budget.
-        await highlighter.HighlightAsync("warmup-dark", "code.cs", text, "Dark");
-        await highlighter.HighlightAsync("warmup-light", "code.cs", text, "Light");
         var dark = await highlighter.HighlightAsync("blob", "code.cs", text, "Dark"); Assert.NotEmpty(dark); Assert.NotEmpty(dark[4]); Assert.True(dark[5].Select(t => t.Color).Distinct().Count() > 1);
         var light = await highlighter.HighlightAsync("blob", "code.cs", text, "Light"); Assert.NotEqual(dark[5].Select(t => t.Color), light[5].Select(t => t.Color));
         var cached = await highlighter.HighlightAsync("blob", "code.cs", text, "Dark"); Assert.Same(dark, cached);
+    }
+
+    [Fact]
+    public async Task An_absent_blob_does_not_prevent_coloring_an_added_or_deleted_file()
+    {
+        await using var fixture = new GitFixture();
+        await fixture.Init();
+        await fixture.Write("Removed.cs", "public class Removed { }\n");
+        await fixture.Commit("old code");
+        var basis = await fixture.Git("rev-parse", "HEAD");
+        File.Delete(Path.Combine(fixture.Root, "Removed.cs"));
+        await fixture.Write("Added.cs", "internal static class Added { public static string Value => \"new\"; }\n");
+        await fixture.Commit("replace code");
+        var head = await fixture.Git("rev-parse", "HEAD");
+        Assert.Null(await fixture.Reader.ReadBlobAsync(fixture.Root, basis, "Added.cs"));
+        Assert.Null(await fixture.Reader.ReadBlobAsync(fixture.Root, head, "Removed.cs"));
+
+        var files = await fixture.Reader.FilesAsync(fixture.Root, basis, head);
+        using var section = new DiffSectionViewModel(fixture.Reader, fixture.Root, new("head", "base", basis, head, null, files),
+            new TextMateSyntaxHighlighter());
+        foreach (var file in files)
+        {
+            section.SelectedFile = file;
+            await section.LoadAsync(file);
+            Assert.NotEmpty(Assert.Single(section.Lines, row => row.IsAdded || row.IsRemoved).Tokens);
+        }
     }
     // Scenario: Unknown language and oversized blobs fall back to plain text.
     [Fact]

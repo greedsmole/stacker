@@ -28,7 +28,7 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
     internal ComposerKey _composerKey = ComposerKey.Pr;
     internal bool _switchingComposer;
     public string ReviewLabel => $"Review ({DraftComments.Count})";
-    public bool HasPendingPublication => _draft.PendingOperation is not null;
+    public bool HasPendingPublication => _draft.PendingOperation is not null || _draft.Operation is not null;
     public bool HasStaleDraft => _draft.HeadSha != PullRequest.HeadSha || _draft.BaseSha != PullRequest.BaseSha;
     public bool HasRecoveredText => !string.IsNullOrEmpty(RecoveredText);
     public string RecoveredText => _draft.RecoveredText;
@@ -91,8 +91,6 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
     public bool IsInitialized => _draftLoaded;
     public bool CanEditDraft => _draftLoaded && !IsBusy;
     [RelayCommand] internal Task RetryInitializeAsync() => InitializeAsync();
-    internal bool _backgroundRead;
-    internal CancellationTokenSource? _discussionLoad;
     public void Detach(DiffSectionViewModel section) => _sections.Remove(section);
     internal bool _switchingFile;
     internal readonly HashSet<string> _reviewableFiles = new(StringComparer.Ordinal);
@@ -103,7 +101,16 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
     public GitHubRepositoryContext Context { get; }
     public PullRequest PullRequest { get; internal set; }
     public bool IsDemo { get; }
-    public bool CanPublish => _draftLoaded && !IsDemo && !IsBusy && _draft.PendingOperation is null;
+    public bool CanPublish => PublicationBlockReason is null;
+    internal string? PublicationBlockReason => IsDemo ? "Demo is offline. Publishing is disabled."
+        : !_draftLoaded ? "Load the local review draft before publishing."
+        : IsBusy ? "A review action is in progress."
+        : HasPendingPublication ? "Check the previous publication on GitHub before sending again."
+        : null;
+    public string ReviewStatus => IsBusy ? Message
+        : PublicationProblem ?? (string.IsNullOrWhiteSpace(Message) ? PublicationBlockReason ?? "" : Message);
+    public bool HasReviewStatus => ReviewStatus.Length > 0;
+    public bool HasPublicationProblem => PublicationProblem is not null;
     public bool CanPostFile => CanPublish && SelectedReviewFile is not null && _reviewableFiles.Contains(SelectedReviewFile);
     public string FileThreadsLabel => SelectedReviewFile is null ? "Select a file to read its comments." : $"{SelectedReviewFile} · {FileThreads.Count} file threads";
     public string Title => PullRequest.Label + (IsDemo ? " · Demo / offline" : "");
@@ -121,7 +128,10 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
     [ObservableProperty] internal string _summary = "";
     [ObservableProperty] internal string _decision = "COMMENT";
     [ObservableProperty] internal string _composer = "";
-    [ObservableProperty] internal string _message = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ReviewStatus), nameof(HasReviewStatus))]
+    internal string _message = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ReviewStatus), nameof(HasReviewStatus), nameof(HasPublicationProblem))]
+    internal string? _publicationProblem;
     [ObservableProperty] internal bool _isBusy;
     [ObservableProperty] internal ReviewThread? _selectedThread;
     public ReviewViewModel(IGitHubReader reader, IGitHubWriter writer, IApplicationState store, IGitRepositoryReader git,
@@ -139,7 +149,7 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
     partial void OnSummaryChanged(string value) { if (!_loading) { _draft.Summary = value; QueueSave(); } }
     partial void OnComposerChanged(string value) { OnPropertyChanged(nameof(HasSuggestionPreview)); if (!_loading && !_switchingComposer) { _draft.ContextComposers[_composerKey.Encoded] = value; if (_composerKey == ComposerKey.Pr) _draft.Composer = value; QueueSave(); } }
     partial void OnDecisionChanged(string value) { OnPropertyChanged(nameof(DecisionLabel)); if (!_loading) { _draft.Decision = value; QueueSave(); } }
-    internal void NotifyPublicationState() { OnPropertyChanged(nameof(CanPublish)); OnPropertyChanged(nameof(CanPostFile)); OnPropertyChanged(nameof(HasPendingPublication)); OnPropertyChanged(nameof(HasStaleDraft)); OnPropertyChanged(nameof(IsInitialized)); OnPropertyChanged(nameof(CanEditDraft)); OnPropertyChanged(nameof(CanSuggestCodeChange)); OnPropertyChanged(nameof(SelectedCode)); }
+    internal void NotifyPublicationState() { OnPropertyChanged(nameof(CanPublish)); OnPropertyChanged(nameof(CanPostFile)); OnPropertyChanged(nameof(HasPendingPublication)); OnPropertyChanged(nameof(HasStaleDraft)); OnPropertyChanged(nameof(IsInitialized)); OnPropertyChanged(nameof(CanEditDraft)); OnPropertyChanged(nameof(CanSuggestCodeChange)); OnPropertyChanged(nameof(SelectedCode)); OnPropertyChanged(nameof(ReviewStatus)); OnPropertyChanged(nameof(HasReviewStatus)); }
     partial void OnIsBusyChanged(bool value) => NotifyPublicationState();
     partial void OnFileComposerChanged(string value)
     {
@@ -163,6 +173,8 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
         if (IsBusy) return;
         CloseInlineEditors(); var lines = selected.ToArray(); _selection = null; OnPropertyChanged(nameof(HasSelection)); OnPropertyChanged(nameof(CanSuggestCodeChange)); OnPropertyChanged(nameof(SelectedCode));
         if (!_section.IsPrSnapshot || lines.Length == 0 || _section.SelectedFile is not { } file) { OnPropertyChanged(nameof(SelectionLabel)); return; }
+        if (lines.Any(line => line.IsExpandedContext))
+        { Message = "Select lines from the original diff to comment."; NotifyPublicationState(); return; }
         if (!ReviewSelection.TryCreateAnchor(PullRequest, file.NewPath, lines.Select(l => l.Source).ToArray(), side, out _selection, out var error))
         { Message = error!; NotifyPublicationState(); return; }
         SelectComposer("line:" + JsonSerializer.Serialize(_selection));
@@ -187,75 +199,6 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
         return lines.Length == anchor.Line - start + 1 ? string.Join("\n", lines.Select(l => l.Text.TrimEnd('\r'))) : null;
     }
     [RelayCommand]
-    public async Task ReloadAsync(CancellationToken ct = default)
-    {
-        _discussionLoad?.Cancel();
-        using var load = CancellationTokenSource.CreateLinkedTokenSource(ct); _discussionLoad = load;
-        var snapshot = PullRequest;
-        try
-        {
-            var discussion = IsDemo ? DemoReviewData.Discussion(PullRequest) : (await _reader.DiscussionAsync(Context, snapshot, load.Token)).OrThrow();
-            load.Token.ThrowIfCancellationRequested();
-            if (snapshot != PullRequest) return;
-            Sync(Comments, discussion.Comments, c => c.Id); Sync(Reviews, discussion.Reviews, r => r.Id);
-            var selectedId = SelectedThread?.Id;
-            Sync(Threads, discussion.Threads, t => t.Id);
-            SelectedThread = Threads.FirstOrDefault(t => t.Id == selectedId);
-            foreach (var view in _sections) view.SetThreads(Threads);
-            Sync(CodeThreads, Threads.Where(t => !t.IsFileLevel).ToArray(), t => t.Id);
-            DiscussionChanged?.Invoke();
-            foreach (var path in discussion.Threads.Select(t => t.Path).OfType<string>().Concat(_draft.FileComposers.Keys).Distinct())
-                if (!ReviewFiles.Contains(path)) ReviewFiles.Add(path);
-            UpdateFileThreads();
-            if (_draft.PendingOperation is { } pendingText)
-            {
-                if (!PendingOperation.TryParse(pendingText, out var pending))
-                {
-                    // A damaged marker cannot be reconciled; clearing it is better than blocking every reload.
-                    Message = "A saved publication marker is unreadable. Check GitHub, then explicitly unlock retry; the draft was preserved.";
-                    QueueSave();
-                }
-                else
-                {
-                    var marker = "<!-- stacker:" + pending.Marker + " -->";
-                    var found = pending.Kind == PendingKind.Resolve
-                        ? discussion.Threads.Any(t => t.Id == pending.ThreadId && t.IsResolved == pending.Resolved)
-                        : discussion.Comments.Any(c => c.Author == Context.User && c.Body.Contains(marker, StringComparison.Ordinal))
-                          || discussion.Reviews.Any(r => r.Author == Context.User && r.Body.Contains(marker, StringComparison.Ordinal))
-                          || discussion.Threads.SelectMany(t => t.Comments).Any(c => c.Author == Context.User && c.Body.Contains(marker, StringComparison.Ordinal));
-                    if (found)
-                    {
-                        ReviewSessionService.Transition(_draft, PublicationPhase.Confirmed);
-                        if (pending.Kind == PendingKind.Review) ClearSubmittedDraft();
-                        else if (pending.Kind == PendingKind.FileComment && _draft.PendingFilePath is { } path) ClearPublishedFile(path);
-                        else if (pending.Kind is PendingKind.Comment or PendingKind.Inline or PendingKind.Reply) ClearPublishedComposer();
-                        _draft.PendingOperation = null; _draft.PendingFilePath = null; Message = "Previous publication confirmed on GitHub."; QueueSave();
-                    }
-                    else Message = "Publication result is uncertain. Check GitHub before unlocking a retry; no automatic resend will occur.";
-                }
-            }
-            NotifyPublicationState();
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-        catch (OperationCanceledException) when (load.IsCancellationRequested) { }
-        catch (Exception ex) { Message = ex.Message; if (_backgroundRead) throw; }
-        finally { if (ReferenceEquals(_discussionLoad, load)) _discussionLoad = null; }
-    }
-    /// <summary>Reloads remote comments while retaining unsent local draft text.</summary>
-    public async Task RefreshDiscussionAsync(CancellationToken ct = default)
-    { if (IsBusy) return; _backgroundRead = true; try { await ReloadAsync(ct); } finally { _backgroundRead = false; } }
-    internal static void Sync<T>(ObservableCollection<T> target, IReadOnlyList<T> incoming, Func<T, string> key)
-    {
-        for (var i = target.Count - 1; i >= 0; i--) if (!incoming.Any(v => key(v) == key(target[i]))) target.RemoveAt(i);
-        for (var i = 0; i < incoming.Count; i++)
-        {
-            var old = target.FirstOrDefault(v => key(v) == key(incoming[i]));
-            if (old is null) target.Insert(i, incoming[i]);
-            else { var index = target.IndexOf(old); if (index != i) target.Move(index, i); if (JsonSerializer.Serialize(old) != JsonSerializer.Serialize(incoming[i])) target[i] = incoming[i]; }
-        }
-    }
-    internal void ClearPublishedComposer() => _reviewPublicationController.ClearPublishedComposer();
-    [RelayCommand]
     internal async Task AddToDraftAsync()
     {
         if (IsBusy) return;
@@ -278,8 +221,6 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
     internal Task PublishAsync(string kind, IReadOnlyList<ReviewAnchor> anchors, Func<string, Task> send, string? filePath = null) => _reviewPublicationController.PublishAsync(kind, anchors, send, filePath);
     [RelayCommand] internal Task ToggleResolvedAsync() => _reviewPublicationController.ToggleResolvedAsync();
     [RelayCommand] internal Task UnlockRetryAsync() => _reviewPublicationController.UnlockRetryAsync();
-    internal void ClearPublishedFile(string path) => _reviewPublicationController.ClearPublishedFile(path);
-    internal void ClearSubmittedDraft() => _reviewPublicationController.ClearSubmittedDraft();
     internal static string Mark(string body, string marker) => body + "\n\n<!-- stacker:" + marker + " -->";
     // Serialize saves so an older asynchronous write cannot overwrite newer text typed by the user.
     internal void QueueSave() => _reviewDraftController.QueueSave();

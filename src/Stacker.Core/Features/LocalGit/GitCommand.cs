@@ -82,7 +82,7 @@ public sealed class PushCommand(RestackPlan plan, bool wholeStack, Func<CommandC
 public sealed class UndoCommand(Func<CommandContext, CancellationToken, Task<Result<RestackOutcome>>> effect)
     : EffectCommand<RestackOutcome>("local.undo", "restack", effect);
 /// <summary>Aborts an interrupted Git operation and restores the branches recorded in the journal.</summary>
-/// <remarks>Recovery first aborts whatever operation is in progress, then refuses if the working tree now has tracked changes. It restores only refs whose current commit still equals the new SHA recorded for it; anything it cannot prove is preserved and reported instead of overwritten. The fixed target <c>restack</c> labels the entry; an entry that is not an unfinished restack is treated as absent so that an old applied record cannot be reopened accidentally.</remarks>
+/// <remarks>Recovery aborts a separate Git operation on its own. For an interrupted restack, the adapter matches Git's rebase markers and verifies the recorded refs before restoring them.</remarks>
 /// <param name="effect">Adapter that aborts and restores.</param>
 public sealed class RecoverCommand(Func<CommandContext, CancellationToken, Task<Result<RestackOutcome>>> effect)
     : EffectCommand<RestackOutcome>("local.recover", "restack", effect);

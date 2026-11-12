@@ -1,29 +1,159 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.HistoryPanel" Background="{DynamicResource CanvasBrush}">
- <Grid Margin="20,12" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
-  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-   <StackPanel Spacing="4"><TextBlock Text="Review history" FontSize="24" FontWeight="SemiBold"/><TextBlock Text="Compare versions. Keep track of what you have reviewed." Classes="muted" TextWrapping="Wrap"/></StackPanel>
-   <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"><Button Content="Check stack" Command="{Binding AnalyzeCommand}" Classes="quiet"/><Button Content="Needs attention" Command="{Binding AttentionCommand}" Classes="quiet"/></StackPanel>
-  </Grid>
-  <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="16">
-   <StackPanel Spacing="4"><TextBlock Text="Layer" Classes="section-title"/><Grid ColumnDefinitions="*,Auto" ColumnSpacing="6"><ComboBox ItemsSource="{Binding Nodes}" SelectedItem="{Binding SelectedNode}" PlaceholderText="Select a layer" AutomationProperties.Name="History layer" HorizontalAlignment="Stretch"/><Button Grid.Column="1" Content="Load layer" Command="{Binding LoadLayerCommand}"/></Grid></StackPanel>
-   <StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="Compare with" Classes="section-title"/><Grid ColumnDefinitions="*,Auto" ColumnSpacing="6"><ComboBox ItemsSource="{Binding Versions}" SelectedItem="{Binding PreviousVersion}" PlaceholderText="No earlier version captured" AutomationProperties.Name="Earlier version" HorizontalAlignment="Stretch"/><Button Grid.Column="1" Content="Compare" Command="{Binding CompareVersionsCommand}"/></Grid></StackPanel>
-  </Grid>
-  <Grid Grid.Row="2" ColumnDefinitions="220,16,*">
-   <ScrollViewer HorizontalScrollBarVisibility="Disabled"><StackPanel Spacing="12">
-    <TextBlock Text="Files in this layer" Classes="section-title"/>
-    <TextBlock IsVisible="{Binding !Files.Count}" Text="{Binding EmptyFilesMessage}" Classes="muted" TextWrapping="Wrap"/>
-    <ListBox x:Name="ReviewFiles" Classes="file-list" ItemsSource="{Binding Files}" SelectedItem="{Binding SelectedFile}" Background="Transparent" BorderThickness="0" MaxHeight="220"><ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" TextWrapping="Wrap" Margin="0,2"/></DataTemplate></ListBox.ItemTemplate></ListBox>
-    <Expander Header="Compare and navigate" HorizontalAlignment="Stretch"><StackPanel Spacing="6">
-     <Button Content="Since my review" Command="{Binding SinceReviewedCommand}"/><Button Content="Current diff" Command="{Binding ShowCurrentCommand}"/><Button Content="Previous diff" Command="{Binding ShowPreviousCommand}"/><Button Content="File through stack" Command="{Binding EvolutionCommand}"/><Button Content="Undo reviewed" Command="{Binding UnmarkReviewedCommand}"/>
-    </StackPanel></Expander>
-    <Expander Header="Attention and blockers" HorizontalAlignment="Stretch"><StackPanel Spacing="6"><ListBox ItemsSource="{Binding Attention}" SelectedItem="{Binding SelectedAttention}" MaxHeight="160"/><Button Content="Open queued file" Command="{Binding OpenAttentionCommand}"/><Button Content="Clear queued blocker" Command="{Binding ClearQueuedBlockerCommand}"/><TextBlock Text="Blocking question" Classes="section-title"/><TextBox Text="{Binding ConcernText}" Watermark="What needs an answer?" TextWrapping="Wrap"/><Button Content="Flag blocker" Command="{Binding FlagBlockerCommand}"/><Button Content="Clear blocker" Command="{Binding ClearBlockerCommand}"/></StackPanel></Expander>
-    <Expander Header="Graph and maintenance" HorizontalAlignment="Stretch"><StackPanel Spacing="8"><TextBlock Text="{Binding Topology}" TextWrapping="Wrap"/><TextBlock Text="Captured graph" Classes="section-title"/><ComboBox ItemsSource="{Binding GraphHistory}" SelectedItem="{Binding HistoricalGraph}"/><Button Content="Show historical graph" Command="{Binding ShowHistoricalGraphCommand}"/><TextBlock Text="Dependency parent" Classes="section-title"/><ComboBox ItemsSource="{Binding GraphNodes}" SelectedItem="{Binding DependencyParent}"/><TextBlock Text="Dependency child" Classes="section-title"/><ComboBox ItemsSource="{Binding GraphNodes}" SelectedItem="{Binding DependencyChild}"/><Button Content="Set parent" Command="{Binding SetDependencyCommand}"/><TextBlock Text="Renamed local ref" Classes="section-title"/><TextBox Text="{Binding NewLocalRef}" Watermark="refs/heads/branch"/><Button Content="Rebind local history" Command="{Binding RebindLocalRefCommand}"/><TextBlock Text="Final-file line number" Classes="section-title"/><TextBox Text="{Binding LineNumber}" Watermark="Line number"/><Button Content="Find line origin" Command="{Binding TraceLineCommand}"/><Button Content="Remove history pins" Command="{Binding ForgetHistoricalCodeCommand}"/></StackPanel></Expander>
-   </StackPanel></ScrollViewer>
-   <Grid Grid.Column="2" RowDefinitions="Auto,*" RowSpacing="8">
-    <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="4"><Button Content="Back" Command="{Binding BackCommand}" Classes="quiet"/><Button Grid.Column="1" Content="Forward" Command="{Binding ForwardCommand}" Classes="quiet"/><Button Grid.Column="3" Content="Mark reviewed" Command="{Binding MarkReviewedCommand}" Classes="primary"/></Grid>
-    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"><StackPanel><TextBlock IsVisible="{Binding !DocumentSections.Count}" Text="{Binding EmptyDocumentMessage}" TextWrapping="Wrap" Classes="muted" Margin="12,20"/><SelectableTextBlock Text="{Binding Preview}" TextWrapping="Wrap" Margin="8"/><ItemsControl ItemsSource="{Binding DocumentSections}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" Margin="12" TextWrapping="Wrap"/><local:DiffSectionView Height="520"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel></ScrollViewer>
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.HistoryPanel"
+             Background="{DynamicResource CanvasBrush}">
+ <Grid RowDefinitions="Auto,*,Auto">
+  <Border Padding="10,6" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+   <Grid RowDefinitions="Auto,Auto" RowSpacing="6">
+    <Grid ColumnDefinitions="*,*" ColumnSpacing="12" IsEnabled="{Binding !IsBusy}">
+     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+      <TextBlock Text="Layer" Classes="section-title" VerticalAlignment="Center"/>
+      <ComboBox Grid.Column="1" ItemsSource="{Binding Nodes}" SelectedItem="{Binding SelectedNode}"
+                PlaceholderText="Select a layer" AutomationProperties.Name="History layer" MinWidth="0" HorizontalAlignment="Stretch"/>
+      <Button Grid.Column="2" Content="Load layer" Command="{Binding LoadLayerCommand}" Classes="quiet"/>
+     </Grid>
+     <Grid Grid.Column="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+      <TextBlock Text="Compare with" Classes="section-title" VerticalAlignment="Center"/>
+      <ComboBox Grid.Column="1" ItemsSource="{Binding Versions}" SelectedItem="{Binding PreviousVersion}"
+                PlaceholderText="No earlier version" AutomationProperties.Name="Earlier version" MinWidth="0" HorizontalAlignment="Stretch"/>
+      <Button Grid.Column="2" Content="Compare" Command="{Binding CompareVersionsCommand}" Classes="quiet"/>
+     </Grid>
+    </Grid>
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="4">
+     <TextBlock Text="File" Classes="section-title" VerticalAlignment="Center"/>
+     <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="2" Margin="2,0,2,0" IsEnabled="{Binding !IsBusy}">
+      <ComboBox x:Name="ReviewFiles" ItemsSource="{Binding Files}" SelectedItem="{Binding SelectedFile}" HorizontalContentAlignment="Stretch"
+                IsVisible="{Binding !HasDocumentFiles}" PlaceholderText="Select a file" AutomationProperties.Name="Layer file"
+                MinWidth="0" MaxDropDownHeight="400" HorizontalAlignment="Stretch" IsTextSearchEnabled="True"
+                TextSearch.TextBinding="{Binding Change.DisplayPath}">
+       <ComboBox.ItemTemplate><DataTemplate>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+         <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Label}" VerticalAlignment="Center"/>
+         <local:FileChangeBadge Grid.Column="1" Change="{Binding Change}"/>
+        </Grid>
+       </DataTemplate></ComboBox.ItemTemplate>
+      </ComboBox>
+      <ComboBox x:Name="HistoryDiffFiles" ItemsSource="{Binding DocumentFiles}" SelectedItem="{Binding SelectedDocumentFile}" HorizontalContentAlignment="Stretch"
+                IsVisible="{Binding HasDocumentFiles}" AutomationProperties.Name="Comparison file"
+                MinWidth="0" MaxDropDownHeight="400" HorizontalAlignment="Stretch" IsTextSearchEnabled="True"
+                TextSearch.TextBinding="{Binding File.DisplayPath}">
+       <ComboBox.ItemTemplate><DataTemplate>
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+         <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Label}" VerticalAlignment="Center"/>
+         <local:FileChangeBadge Grid.Column="1" Change="{Binding File}"/>
+        </Grid>
+       </DataTemplate></ComboBox.ItemTemplate>
+      </ComboBox>
+      <Button Grid.Column="1" x:Name="HistoryFolderButton" Content="Folders" Classes="quiet" ToolTip.Tip="Browse changed files by folder"
+              AutomationProperties.Name="Browse changed files by folder">
+       <Button.Flyout>
+        <Flyout Placement="BottomEdgeAlignedRight" Opening="OpenFileFolders">
+         <Grid Width="320" MinHeight="56" MaxHeight="360">
+          <TreeView x:Name="HistoryFolderFiles" Classes="file-tree" AutoScrollToSelectedItem="True" BorderThickness="0" Background="Transparent"
+                    ScrollViewer.HorizontalScrollBarVisibility="Disabled" Tapped="FolderFileTapped" KeyDown="FolderFileKeyDown"
+                    AutomationProperties.Name="Comparison files by folder">
+           <TreeView.ItemTemplate><TreeDataTemplate ItemsSource="{Binding Children}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+             <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Path}" VerticalAlignment="Center"/>
+             <local:FileChangeBadge Grid.Column="1" Change="{Binding Change}"/>
+            </Grid>
+           </TreeDataTemplate></TreeView.ItemTemplate>
+          </TreeView>
+          <TextBlock Text="No changed files to browse." IsVisible="{Binding !#HistoryFolderFiles.ItemCount}" Classes="muted" Margin="6,8"/>
+         </Grid>
+        </Flyout>
+       </Button.Flyout>
+      </Button>
+     </Grid>
+     <Button Grid.Column="2" Content="Current diff" Command="{Binding ShowCurrentCommand}" Classes="quiet"/>
+     <Button Grid.Column="3" Content="Since my review" Command="{Binding SinceReviewedCommand}" Classes="quiet"/>
+     <Button Grid.Column="4" Content="Mark reviewed" Command="{Binding MarkReviewedCommand}" Classes="primary"
+             ToolTip.Tip="Mark the selected file reviewed on the current layer version"/>
+     <Button Grid.Column="5" x:Name="HistoryToolsButton" Content="Tools" Classes="quiet">
+      <Button.Flyout>
+       <Flyout Placement="BottomEdgeAlignedRight">
+        <ScrollViewer x:Name="HistoryTools" Width="360" MaxHeight="360" HorizontalScrollBarVisibility="Disabled">
+         <StackPanel Spacing="8">
+          <WrapPanel>
+           <Button Content="Check stack" Command="{Binding AnalyzeCommand}" Classes="quiet"/>
+           <Button Content="Needs attention" Command="{Binding AttentionCommand}" Classes="quiet"/>
+           <Button Content="Previous diff" Command="{Binding ShowPreviousCommand}" Classes="quiet"/>
+           <Button Content="File through stack" Command="{Binding EvolutionCommand}" Classes="quiet"/>
+           <Button Content="Undo reviewed" Command="{Binding UnmarkReviewedCommand}" Classes="quiet"/>
+          </WrapPanel>
+          <Expander Header="Attention and blockers" HorizontalAlignment="Stretch">
+           <StackPanel Spacing="6">
+            <ListBox ItemsSource="{Binding Attention}" SelectedItem="{Binding SelectedAttention}" MaxHeight="160"/>
+            <Button Content="Open queued file" Command="{Binding OpenAttentionCommand}"/>
+            <Button Content="Clear queued blocker" Command="{Binding ClearQueuedBlockerCommand}"/>
+            <TextBlock Text="Blocking question" Classes="section-title"/>
+            <TextBox Text="{Binding ConcernText}" Watermark="What needs an answer?" TextWrapping="Wrap"/>
+            <Button Content="Flag blocker" Command="{Binding FlagBlockerCommand}"/>
+            <Button Content="Clear blocker" Command="{Binding ClearBlockerCommand}"/>
+           </StackPanel>
+          </Expander>
+          <Expander Header="Graph and maintenance" HorizontalAlignment="Stretch">
+           <StackPanel Spacing="8">
+            <TextBlock Text="{Binding Topology}" TextWrapping="Wrap"/>
+            <TextBlock Text="Captured graph" Classes="section-title"/>
+            <ComboBox ItemsSource="{Binding GraphHistory}" SelectedItem="{Binding HistoricalGraph}"/>
+            <Button Content="Show historical graph" Command="{Binding ShowHistoricalGraphCommand}"/>
+            <TextBlock Text="Dependency parent" Classes="section-title"/>
+            <ComboBox ItemsSource="{Binding GraphNodes}" SelectedItem="{Binding DependencyParent}"/>
+            <TextBlock Text="Dependency child" Classes="section-title"/>
+            <ComboBox ItemsSource="{Binding GraphNodes}" SelectedItem="{Binding DependencyChild}"/>
+            <Button Content="Set parent" Command="{Binding SetDependencyCommand}"/>
+            <TextBlock Text="Renamed local ref" Classes="section-title"/>
+            <TextBox Text="{Binding NewLocalRef}" Watermark="refs/heads/branch"/>
+            <Button Content="Rebind local history" Command="{Binding RebindLocalRefCommand}"/>
+            <TextBlock Text="Final-file line number" Classes="section-title"/>
+            <TextBox Text="{Binding LineNumber}" Watermark="Line number"/>
+            <Button Content="Find line origin" Command="{Binding TraceLineCommand}"/>
+            <Button Content="Remove history pins" Command="{Binding ForgetHistoricalCodeCommand}"/>
+           </StackPanel>
+          </Expander>
+         </StackPanel>
+        </ScrollViewer>
+       </Flyout>
+      </Button.Flyout>
+     </Button>
+    </Grid>
    </Grid>
+  </Border>
+  <Grid Grid.Row="1">
+   <ContentControl x:Name="HistoryDiff" Content="{Binding ActiveDocumentSection}" IsVisible="{Binding HasActiveDocumentSection}"
+                   HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+    <ContentControl.ContentTemplate>
+     <DataTemplate><local:DiffSectionView ShowFileNavigator="False"/></DataTemplate>
+    </ContentControl.ContentTemplate>
+   </ContentControl>
+   <ScrollViewer IsVisible="{Binding !HasActiveDocumentSection}" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="12,16">
+     <TextBlock Text="{Binding EmptyDocumentMessage}" IsVisible="{Binding !HasPreview}" TextWrapping="Wrap" Classes="muted"/>
+     <SelectableTextBlock Text="{Binding Preview}" IsVisible="{Binding HasPreview}" TextWrapping="Wrap"/>
+    </StackPanel>
+   </ScrollViewer>
   </Grid>
-  <StackPanel Grid.Row="3" Spacing="5"><ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="2"/><ScrollViewer MaxHeight="64"><TextBlock Text="{Binding Message}" TextWrapping="Wrap"/></ScrollViewer></StackPanel>
+  <Border Grid.Row="2" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0">
+   <Grid RowDefinitions="Auto,Auto">
+    <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="2"/>
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="10,2">
+     <ScrollViewer VerticalAlignment="Center" HorizontalScrollBarVisibility="Disabled" MaxHeight="56">
+      <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="11" Classes="muted" Margin="0,4"/>
+     </ScrollViewer>
+     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasActiveDocumentSection}">
+      <TextBlock Text="{Binding SelectedFile.State}" ToolTip.Tip="{Binding SelectedFile.Label}" FontSize="11" Classes="muted" VerticalAlignment="Center"/>
+      <Button Content="Details" IsVisible="{Binding HasPreview}" Classes="quiet">
+       <Button.Flyout>
+        <Flyout Placement="TopEdgeAlignedRight">
+         <ScrollViewer Width="400" MaxHeight="360" HorizontalScrollBarVisibility="Disabled">
+          <SelectableTextBlock Text="{Binding Preview}" TextWrapping="Wrap"/>
+         </ScrollViewer>
+        </Flyout>
+       </Button.Flyout>
+      </Button>
+     </StackPanel>
+    </Grid>
+   </Grid>
+  </Border>
  </Grid>
 </UserControl>

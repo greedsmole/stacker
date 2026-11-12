@@ -2,6 +2,7 @@ using Stacker.Core.Framework;
 // Purpose: Workspace scenarios for multiple independent stacks, saved view state, and selection-driven comparison modes.
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using Stacker.Core;
@@ -13,8 +14,10 @@ namespace Stacker.Tests;
 [Collection(HeadlessApp.CollectionName)]
 public sealed class WorkspaceV3Tests
 {
-    private static MainViewModel Create(GitFixture f, ApplicationStore store, FakeGitHub? hub = null) =>
-        new(f.Reader, new YamlStackStore(), new JsonSettingsStore(Path.Combine(f.Root, "settings")), new GitExecutable(), new(f.Reader), new(f.Reader), hub, hub, new SeededCache(f.Root), store);
+    private static MainViewModel Create(GitFixture f, ApplicationStore store, FakeGitHub? hub = null,
+        IGitHubWriter? writer = null, GitCommandLog? commandLog = null) =>
+        new(f.Reader, new YamlStackStore(), new JsonSettingsStore(Path.Combine(f.Root, "settings")), new GitExecutable(),
+            new(f.Reader), new(f.Reader), hub, writer ?? hub, new SeededCache(f.Root), store, commandLog: commandLog);
     private sealed class SeededCache(string root) : IPullRequestObjects
     {
         public List<long[]> Requests { get; } = [];
@@ -105,7 +108,11 @@ public sealed class WorkspaceV3Tests
     {
         await using var f = new GitFixture(); await f.Linear();
         var hub = new FakeGitHub { Current = DiscoveryTests.Pr(42, "main", "A") with { BaseSha = await f.Git("rev-parse", "main"), HeadSha = await f.Git("rev-parse", "A") } };
-        using var vm = Create(f, new ApplicationStore(Path.Combine(f.Root, "app")), hub);
+        var log = new GitCommandLog();
+        await new ProcessRunner(log).RunAsync(new(new GitExecutable().Resolve(), ["--version"], f.Root));
+        var writer = new GitHubCli(new ScriptedRunner(_ => new(1, """{"message":"Validation Failed","errors":[{"field":"line","code":"invalid"}]}""",
+            "gh: Validation Failed (HTTP 422)")), new(), new(), log);
+        using var vm = Create(f, new ApplicationStore(Path.Combine(f.Root, "app")), hub, writer, log);
         var window = new MainWindow { DataContext = vm }; window.Show(); await vm.OpenRepositoryAsync(f.Root);
         await vm.SelectLayerAsync(vm.OtherGroups[0].Layers[0], false); await vm.ShowReviewAsync(); window.UpdateLayout();
         Assert.True(vm.IsReviewOpen); Assert.NotNull(window.GetVisualDescendants().OfType<ReviewPanel>().FirstOrDefault());
@@ -122,6 +129,26 @@ public sealed class WorkspaceV3Tests
         Assert.Equal("Comment entered in the inline editor", Assert.Single(vm.ActiveReview.DraftComments).Body);
         Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.Content?.ToString() == "Submit review");
         Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.IsVisible && b.Content?.ToString() == "Restore layer selection");
+
+        vm.IsReviewOpen = false;
+        inline.Text = "Keep this comment after rejection";
+        var post = window.GetVisualDescendants().OfType<Button>().First(b => b.Content?.ToString() == "Post now" && b.IsEffectivelyVisible);
+        await ((CommunityToolkit.Mvvm.Input.IAsyncRelayCommand)post.Command!).ExecuteAsync(post.CommandParameter);
+        await Dispatcher.UIThread.InvokeAsync(window.UpdateLayout, DispatcherPriority.Background);
+        Assert.Equal("Keep this comment after rejection", vm.ActiveReview.Composer);
+        Assert.True(vm.ActiveReview.CanPublish);
+        Assert.Contains(window.GetVisualDescendants().OfType<SelectableTextBlock>(), t => t.IsEffectivelyVisible &&
+            t.Text?.Contains("GitHub HTTP 422", StringComparison.Ordinal) == true && t.Text.Contains("line · invalid", StringComparison.Ordinal));
+        var diagnostics = window.GetVisualDescendants().OfType<Button>().Single(b => b.Content?.ToString() == "GitHub log" && b.IsEffectivelyVisible);
+        Assert.NotNull(diagnostics.Command);
+        diagnostics.Command.Execute(diagnostics.CommandParameter);
+        window.UpdateLayout();
+        Assert.True(vm.IsGitLogOpen);
+        Assert.True(vm.GitHubLogsOnly);
+        Assert.Equal(2, vm.GitLogEntries.Count);
+        Assert.True(Assert.Single(vm.VisibleGitLogEntries).IsFailure);
+        Assert.Contains(window.GetVisualDescendants().OfType<SelectableTextBlock>(), t => t.IsEffectivelyVisible &&
+            t.Text?.Contains("gh api --hostname", StringComparison.Ordinal) == true);
         await vm.FlushReviewsAsync(); window.Close();
     }
     // Scenario: Coordinator delays on activation pauses and backs off without overlapping.

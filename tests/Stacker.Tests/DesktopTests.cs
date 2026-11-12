@@ -4,6 +4,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
+using Avalonia.Styling;
+using Avalonia.VisualTree;
 using Stacker.Core;
 using Stacker.Desktop;
 using Stacker.Desktop.ViewModels;
@@ -24,6 +27,45 @@ public sealed class HeadlessCollection { }
 [Collection(HeadlessApp.CollectionName)]
 public sealed class DesktopTests
 {
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Added_and_removed_rows_keep_their_neon_accents_at_both_line_heights(bool light)
+    {
+        await using var fixture = new GitFixture();
+        await fixture.Init();
+        var basis = await fixture.Git("rev-parse", "HEAD");
+        await fixture.Write("base.txt", "changed\n");
+        await fixture.Commit("replace line");
+        var head = await fixture.Git("rev-parse", "HEAD");
+        var files = await fixture.Reader.FilesAsync(fixture.Root, basis, head);
+        using var section = new DiffSectionViewModel(fixture.Reader, fixture.Root, new("head", "base", basis, head, null, files));
+        await section.LoadAsync(section.SelectedFile);
+        var app = Application.Current!;
+        var priorHeight = app.Resources["DiffLineHeight"];
+        var view = new DiffSectionView { DataContext = section };
+        var window = new Window { Content = view, Width = 840, Height = 480, RequestedThemeVariant = light ? ThemeVariant.Light : ThemeVariant.Dark };
+        window.Show();
+        try
+        {
+            foreach (var height in new[] { 16d, 26d })
+            {
+                app.Resources["DiffLineHeight"] = height;
+                window.UpdateLayout();
+                var rows = view.GetVisualDescendants().OfType<Grid>().Where(row => row.Name == "CodeRow").ToArray();
+                foreach (var (kind, color) in new[] { (DiffLineKind.Added, "#50FF00"), (DiffLineKind.Removed, "#FF173C") })
+                {
+                    var row = Assert.Single(rows, row => row.DataContext is RenderedDiffLine line && line.Kind == kind);
+                    var accent = Assert.Single(row.Children.OfType<Border>(), border => border.Classes.Contains("diff-accent"));
+                    Assert.Equal(Color.Parse(color), Assert.IsAssignableFrom<ISolidColorBrush>(accent.Background).Color);
+                    Assert.NotNull(row.Background);
+                    Assert.Equal(height, row.Bounds.Height);
+                }
+            }
+        }
+        finally { window.Close(); app.Resources["DiffLineHeight"] = priorHeight; }
+    }
+
     [AvaloniaFact]
     public void File_navigator_can_collapse_and_restore_its_width()
     {
@@ -61,6 +103,11 @@ public sealed class DesktopTests
         await vm.RefreshAsync();
         Assert.Equal(new[] { 0, 2 }, vm.SelectedPositions);
         Assert.Equal(2, vm.Sections.Count);
+        await vm.SetGroupFilesByFolderAsync(true);
+        Assert.All(vm.Sections, section => Assert.True(section.GroupFilesByFolder));
+        await vm.SelectLayerAsync(vm.LocalGroups[0].Layers[1], false);
+        Assert.True(Assert.Single(vm.Sections).GroupFilesByFolder);
+        Assert.True((await new JsonSettingsStore(Path.Combine(fixture.Root, "settings")).LoadAsync()).GroupFilesByFolder);
         window.Close();
     }
     [AvaloniaFact]

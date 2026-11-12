@@ -125,7 +125,7 @@ public sealed partial class ArchitectureTests
         Type[] ports = [typeof(IProcessRunner), typeof(IProcessLauncher), typeof(IEditorLauncher),
             typeof(IGitRepositoryReader), typeof(IGitBranchWriter), typeof(IStackStore), typeof(ISettingsStore),
             typeof(IBlobReader), typeof(IGitHubReader), typeof(IGitHubWriter), typeof(IGitHubPullRequestWriter),
-            typeof(IPullRequestObjects), typeof(ISyntaxHighlighter), typeof(IJournal), typeof(IApplicationState),
+            typeof(IPullRequestObjects), typeof(ISyntaxHighlighter), typeof(ISymbolNavigation), typeof(IJournal), typeof(IApplicationState),
             typeof(IDemoRepository), typeof(IDemoSnapshotReader), typeof(IAtomicFile), typeof(IHistoryStore), typeof(IHistoryGit), typeof(IHistoryRemoteReader),typeof(IChangeIdentityService),typeof(IReviewDraftRepository),typeof(IWorkspaceBackupService),typeof(IObjectStore),typeof(IDiagnosticSink)];
         foreach (var port in ports)
             foreach (var method in port.GetMethods().Where(method => !method.IsSpecialName))

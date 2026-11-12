@@ -1,6 +1,6 @@
 # Stacker v0.6
 
-A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Release targets: **macOS and Windows on x64 and ARM64**.
+A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Release packages cover **macOS Apple Silicon, macOS Intel, and Windows x64**.
 
 ## Run
 
@@ -14,9 +14,9 @@ dotnet run --project src/Stacker.Desktop -- --demo
 dotnet run --project src/Stacker.Desktop -- /path/to/repository
 ```
 
-Build a package for your computer with `make publish`, or choose a target with `make publish RID=win-x64`. The direct Python command also works: `python3 scripts/package.py osx-arm64`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe`; keep its adjacent files. No separate .NET runtime is required. Git and optional GitHub CLI are installed separately. The archive is written to `artifacts/Stacker-0.7.0-osx-arm64.tar.gz`. The `.app` is not Developer ID signed or notarized. Public distribution signing requires the publisher's Apple credentials.
+Build a package for your computer with `make publish`, or choose a target with `make publish RID=win-x64`. The direct Python command `python3 scripts/package.py osx-arm64` writes `artifacts/Stacker-0.8.1-osx-arm64.tar.gz`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe` with its adjacent files. The packages include .NET. Install Git and the optional GitHub CLI separately. The macOS app bundles ship without Developer ID signing or notarization.
 
-Download the packages from [the v0.7.0 release](https://github.com/greedsmole/stacker/releases/tag/v0.7.0). Changes and migration details are in [the release notes](docs/releases/v0.7.0.md).
+Download the packages from [the v0.8.1 release](https://github.com/greedsmole/stacker/releases/tag/v0.8.1). See the [release notes](docs/releases/v0.8.1.md) for changes and package details.
 
 ## Navigation and comparisons
 
@@ -39,13 +39,19 @@ The repository switcher contains recent folders, Open folder and Open demo. Stac
 
 **Search:** choose **Find**, or press Cmd/Ctrl+P for file names and Cmd/Ctrl+Shift+F for changed text. File search checks paths across all visible comparison sections. Changed text search checks added and removed lines in their pinned diff snapshots; optional Regex uses a bounded match time. Select a result to open its file and scroll to the line. Search runs on demand, can be cancelled and reports files whose patches exceed the display limit.
 
-**Git logs:** the **Git logs** tab shows each Git command while it runs, then its duration, exit status and up to 2 KiB of error output. Copy or clear the log there. Credentials embedded in HTTPS URLs are redacted. The tab includes reads and local-repository fetches so a slow GHES fetch is visible.
+Use **Folders** in the **Files** pane to switch between a flat list and the folder tree. Both views use the same filter, and Stacker remembers the preference. In History, **Folders** opens a picker above the diff. The outlined Git status letters show added (`A`), modified (`M`), deleted (`D`), renamed (`R`), copied (`C`) and type-changed (`T`) files. Hover over a letter for the full path and change details.
+
+**Command log** shows Git and GitHub CLI calls in the current session with duration, exit status and available error details. Use **GitHub only** to see `gh` calls. Review text goes through stdin and credentials are redacted from diagnostic output. **Saved operations** opens the workspace journal of write attempts, including GitHub publications.
 
 **Refresh and background updates:** one Refresh checks local refs and GitHub. GitHub PR metadata and the selected PR's discussion are also read every 60 seconds while the window is active. Losing focus pauses the timer; regaining focus only restarts the delay. Background reads never download Git objects. Comments update in place; changed code or stack structure waits behind **New changes available → Update changes**. Temporary failures back off to 2/4/8 minutes, authentication failures suspend the loop, and previous data remains visible. Settings can disable background refresh.
 
 The diff displays code, line numbers and compact hunk ranges. Git headers (`diff --git`, `index`, `---/+++`) are omitted; rename/mode/binary/submodule information is shown as file metadata. Missing final newlines remain visible. Text selection copies source text, and Cmd/Ctrl+C on selected diff rows omits markers and line numbers. **Copy patch** in the file menu still copies the original patch.
 
+Click an unchanged-lines row to reveal up to 20 lines beside a change. Between hunks, the up arrow reveals lines above the next hunk. Choose **Show full file** or **Collapse unchanged lines** from the file menu to switch between the full comparison and its compact view.
+
 Use **Wrap code** above a diff to fit long lines to the pane; the preference is saved. For a multi-line comment, Shift-click adjacent code rows and choose **Comment on selected lines**. The editor shows the line range before you add it to a review or post it. Mixed added/removed sides are rejected with an explanation.
+
+Use the sidebar button next to **stacker** to hide or show the stack list. **Settings → Diff line height** controls code spacing. In a single-layer or pull-request diff, the checkbox beside each file records a personal review checkpoint in **History**.
 
 ## Reproducible demo
 
@@ -95,11 +101,13 @@ Select a GitHub PR layer: its changes and discussion load automatically. The hea
 - **File:** **Comment on file** opens a composer for the selected file, including binary files. Publish explicitly with Post comment.
 - **PR:** **Discussion** displays general comments and review decisions and provides its own PR composer.
 - **Threads:** current threads appear with the code; replies and resolve/reopen actions are contextual. Resolved threads collapse. Outdated threads remain in the inspector and are never attached to an arbitrary current line.
-- **Submit:** **Review (N)** lists pending line comments, with Edit/Remove, summary and Comment / Approve / Request changes. Request changes requires an explanation. Submission is always explicit.
+- **Submit a review** by using **Add to review** on each line, then **Review (N) → Submit review** to send the comments together. Each draft shows the file and line range. Request changes requires an explanation.
+
+After **Post now** succeeds, the editor is ready for the next comment while the discussion refreshes. Publication errors appear in the line editor and review panel, with a **GitHub log** shortcut. A rejected publication keeps the draft available for retry.
 
 Drafts are isolated by host, repository, account, PR and code version. Line, reply, file and PR composer text is kept separately. Old ambiguous composer text is displayed as a recovered draft and requires choosing a destination. Background reads do not disable editors or clear typed text.
 
-Select adjacent diff rows with Shift-click. One blue **+** spans the selected range; click it to comment on that range. Deleted lines use LEFT; additions and unchanged context use RIGHT. Gaps and mixed-side ranges cannot form a line comment. Context comments remain supported: the [GitHub review-comment API](https://docs.github.com/en/rest/pulls/comments) explicitly accepts unchanged lines shown for context, and [GitLab's discussion API](https://docs.gitlab.com/api/discussions/#create-a-new-thread-in-the-merge-request-diff) accepts unchanged lines with both old/new coordinates. GitHub.com's [new Files changed experience](https://github.blog/changelog/2025-09-25-pull-request-files-changed-public-preview-now-supports-commenting-on-unchanged-lines/) also supports comments further outside the original hunks; Stacker currently displays patch context and validates publication against the server-provided patch.
+Select adjacent diff rows with Shift-click. One blue **+** spans the selected range; click it to comment on that range. Deleted lines use LEFT; additions and unchanged context use RIGHT. Gaps and mixed-side ranges cannot form a line comment. Context comments remain supported: the [GitHub review-comment API](https://docs.github.com/en/rest/pulls/comments) explicitly accepts unchanged lines shown for context, and [GitLab's discussion API](https://docs.gitlab.com/api/discussions/#create-a-new-thread-in-the-merge-request-diff) accepts unchanged lines with both old/new coordinates. GitHub.com's [new Files changed experience](https://github.blog/changelog/2025-09-25-pull-request-files-changed-public-preview-now-supports-commenting-on-unchanged-lines/) also supports comments further outside the original hunks. In Stacker, expanded context is available for reading and copying. Stacker validates publication against the server-provided patch.
 
 In the line editor, **Suggest code change** prefills a standard GitHub suggestion fence with the selected right-side code. Edit the replacement inside the fence, inspect the current/replacement preview, then **Add to review** or **Post now**. Empty replacement blocks represent deletion. Existing prose is retained. Deleted-side comments cannot generate applicable suggestions. Suggestions use the existing draft persistence and PR-version validation. Loaded suggestions are automatically rendered as replacement code with a copy action, including in threads and drafts; outdated threads never borrow current source as their original code. **Open demo** includes an offline suggestion example. Suggestions are submitted as comments; applying them to a branch remains a GitHub action.
 
@@ -142,13 +150,15 @@ Local stacks can be rewritten in place. **Restack…** appears in a stack's `·�
 - **Pull requests:** **Check pull requests** reads the live open pull requests and lists what each layer needs — a new pull request into its parent, or a new base when a layer's parent changed. Nothing is written until you press **Publish**. Layers are matched by repository and branch identity only: a fork's pull request is never borrowed, and two open pull requests for one layer are refused rather than guessed at. A new pull request is titled with the layer's newest commit subject. The checked plan is pinned to the repository and GitHub identity and is compared with live PRs before writing. A second successful check reports nothing left to do; an uncertain publication is inspected before retrying.
 - Existing pull requests pick up the rewritten commits by themselves. Drafts pinned to the previous commits are flagged by the existing stale-draft handling, and the demo repository disables every remote action.
 
-The Git logs tab records every command these actions run.
+The **Command log** tab records the Git and GitHub CLI calls these actions run.
 
 ## Syntax highlighting
 
 TextMateSharp tokenizes the old and new Git blobs separately, preserving multiline lexical state. Token spans map back to unified diff line numbers; patch markers are not treated as code. Supported initial extensions include C#, JSON, YAML, XML/XAML, JS/TS, HTML/CSS, SQL, shell and Markdown.
 
-The diff appears first. Highlighting runs in the background with cancellation and a blob/language/theme cache. Unknown languages, grammar failures, blobs above 2 MiB / 50,000 lines or tokenization exceeding the time budget fall back to plain text. There is no WebView, Monaco, LSP or go-to-definition.
+The diff appears first. Highlighting runs in the background with cancellation and a blob/language/theme cache. Unknown languages, grammar failures, blobs above 2 MiB / 50,000 lines or tokenization exceeding the time budget fall back to plain text.
+
+In a C# diff, right-click a symbol and choose **Go to Definition** or **Find References**, or use **F12** and **Shift+F12** from the focused code. Stacker loads the local project with Roslyn and MSBuild on demand. This requires a compatible installed .NET SDK, restored project dependencies, and a clean checkout of the exact commit on that side of the diff. Results point to checked-in source in the loaded solution or project.
 
 File patches retain the v0.1 limit of 5 MiB / 50,000 lines. Binary, submodule, rename and mode changes have explicit metadata. Non-UTF-8 path bytes remain outside v0.4 support.
 
@@ -179,13 +189,13 @@ See VERIFICATION.md for the actual local verification record and THIRD_PARTY_NOT
 
 ## Review history and stack analysis
 
-Choose **History** beside the comparison toolbar after selecting a stack or PR. History opens inside the main window, shares its layer/file selection, and pins the selected path in the opened repository’s Git object database. Back/Forward restores the selected version, mode and file. Historical patches use the same diff viewer as current code, with commenting disabled. Open a layer to preserve its version automatically; metadata refresh records versions without downloading objects. History begins when Stacker observes a version—it cannot reconstruct a force-pushed version that was never downloaded.
+Choose **History** beside the comparison toolbar after selecting a stack or PR. History opens the current diff in the main window and pins the selected path in the opened repository’s Git object database. The file picker identifies the section when the comparison contains multiple patches. Back/Forward restores the selected version, mode, section and file. Historical patches use the same diff viewer as current code, with commenting disabled. Open a layer to preserve its version automatically; metadata refresh records versions without downloading objects. History begins when Stacker observes a version—it cannot reconstruct a force-pushed version that was never downloaded.
 
 Select a layer and **Load layer**, then select a file. **Mark reviewed** records an explicit, personal checkpoint; merely reading a file does not mark it. **Since my review** and **Compare versions** show what changed. When the base moved, Stacker replays the old patch onto the new merge-base and compares that expected tree with the current head. Conflicting replay, missing objects or unsupported Git capabilities produce an unavailable result, never a false “unchanged” result. This is textual analysis, not proof of semantic equivalence.
 
-**Needs attention** lists unreviewed files, changed code and changed base context across the captured path. **Check stack** distinguishes stale parents, shared files and actual trial-merge conflicts. The checks use fixed versions and never run project code or change the user's branches, index or files. **File through stack** shows successive patches, renames and original PR threads; **Find line origin** attributes a final-file line to its latest textual addition or rewrite. An ancestry gap stops attribution.
+In **Tools**, **Needs attention** lists unreviewed files, changed code and changed base context across the captured path. **Check stack** distinguishes stale parents, shared files and actual trial-merge conflicts. The checks use fixed versions and never run project code or change the user's branches, index or files. **File through stack** shows successive patches, renames and original PR threads. **Find line origin** attributes a final-file line to its latest textual addition or rewrite. An ancestry gap stops attribution.
 
-The **Graph and history** section shows earlier dependency snapshots. Explicit parent links override discovered links for that child; cycles are refused. A local history identity can be explicitly rebound before adding the renamed ref to a stack definition. Existing independent histories are not silently merged. Closed/merged PR nodes remain in history; failed state reads are shown as unknown.
+The **Graph and maintenance** section in **Tools** shows earlier dependency snapshots. Explicit parent links override discovered links for that child; cycles are refused. A local history identity can be explicitly rebound before adding the renamed ref to a stack definition. Existing independent histories are not silently merged. Closed/merged PR nodes remain in history; failed state reads are shown as unknown.
 
 In the Review panel, **Reattach…** on an old draft comment proposes a unique exact text/context match. Inspect the old and new locations, then **Confirm new anchor**. Published comments are never moved. Ambiguous matches require manual selection.
 

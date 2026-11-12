@@ -38,9 +38,15 @@ public sealed class GitHubCliTests
     public async Task Json_auth_failure_with_exit_zero_is_rejected()
     {
         var runner = new ScriptedRunner(_ => new(0, "{\"hosts\":{\"enterprise.example\":[{\"active\":true,\"state\":\"error\",\"login\":\"alice\"}]}}", ""));
-        var cli = new GitHubCli(runner, new(), new());
+        var log = new GitCommandLog();
+        var cli = new GitHubCli(runner, new(), new(), log);
         var error = await Assert.ThrowsAsync<GitHubAuthenticationException>(() => cli.ConnectAsync(".", "enterprise.example/team/repo")); Assert.Contains("gh auth login --hostname enterprise.example", error.Message);
         Assert.Single(runner.Calls); Assert.DoesNotContain("--show-token", runner.Calls[0].Arguments);
+        var entry = Assert.Single(log.Snapshot());
+        Assert.True(entry.IsGitHub);
+        Assert.True(entry.IsFailure);
+        Assert.Equal(0, entry.ExitCode);
+        Assert.Equal(error.Message, entry.Detail);
     }
     // Scenario: Invalid environment token explains saved account override.
     [Fact]
@@ -141,7 +147,70 @@ public sealed class GitHubCliTests
     public async Task Server_patch_validation_rejects_unavailable_lines()
     {
         var runner = new ScriptedRunner(_ => new(0, "[[{\"filename\":\"a.cs\",\"patch\":\"@@ -1 +1 @@\\n-old\\n+new\\n\"}]]", "")); var cli = new GitHubCli(runner, new(), new()); var pr = DiscoveryTests.Pr(1, "main", "a");
-        await cli.ValidateAnchorsAsync(Context, pr, [new(1, pr.HeadSha, pr.BaseSha, "a.cs", "RIGHT", 1)]);
-        await Assert.ThrowsAsync<StackerException>(() => cli.ValidateAnchorsAsync(Context, pr, [new(1, pr.HeadSha, pr.BaseSha, "a.cs", "RIGHT", 2)]));
+        var valid = new ReviewAnchor(1, pr.HeadSha, pr.BaseSha, "a.cs", "RIGHT", 1);
+        await cli.ValidateAnchorsAsync(Context, pr, [valid, valid with { Side = "LEFT" }]);
+        var error = await Assert.ThrowsAsync<StackerException>(() => cli.ValidateAnchorsAsync(Context, pr, [valid, valid with { Line = 2, StartLine = 1 }]));
+        Assert.Contains("Comment 2 of 2 at a.cs:1–2 · RIGHT", error.Message);
+        Assert.Equal(EffectCertainty.NotStarted, error.Problem?.Certainty);
+        Assert.Equal(2, runner.Calls.Count);
+    }
+
+    [Fact]
+    public async Task GitHub_log_includes_validation_error_details_without_credentials_or_review_text()
+    {
+        const string comment = "Private comment body";
+        const string token = "github_pat_test123";
+        var runner = new ScriptedRunner(_ => new(1,
+            """
+            {"message":"Validation Failed","errors":[{"resource":"PullRequestReviewComment","field":"line","code":"invalid","message":"Private comment body. Token github_pat_test123"}]}
+            """, "gh: Validation Failed (HTTP 422)"));
+        var log = new GitCommandLog();
+        var events = new List<GitCommandEntry?>();
+        log.Changed += events.Add;
+        var cli = new GitHubCli(runner, new(), new(), log);
+
+        var error = await Assert.ThrowsAsync<StackerException>(() => cli.CommentAsync(Context, 42, comment));
+        Assert.Equal(EffectCertainty.Rejected, error.Problem?.Certainty);
+        Assert.Contains("GitHub HTTP 422", error.Message);
+        Assert.Contains("PullRequestReviewComment · line · invalid", error.Message);
+        Assert.Equal(2, events.Count);
+        Assert.True(events[0]!.IsRunning);
+        var entry = Assert.Single(log.Snapshot());
+        Assert.Equal(events[0]!.Id, entry.Id);
+        Assert.False(entry.IsRunning);
+        Assert.True(entry.IsFailure);
+        Assert.Equal(1, entry.ExitCode);
+        Assert.Contains("gh api --hostname enterprise.example --method POST repos/team/repo/issues/42/comments", entry.Command);
+        Assert.Equal(error.Message, entry.Detail);
+        Assert.DoesNotContain(comment, entry.Detail + entry.Command);
+        Assert.DoesNotContain(token, entry.Detail + entry.Command);
+    }
+
+    [Fact]
+    public async Task GraphQL_errors_are_visible_in_the_command_log_even_at_exit_zero()
+    {
+        var log = new GitCommandLog();
+        var runner = new ScriptedRunner(_ => new(0, """{"errors":[{"message":"Review thread is unavailable."}]}""", ""));
+        var cli = new GitHubCli(runner, new(), new(), log);
+        await Assert.ThrowsAsync<StackerException>(() => cli.ResolveAsync(Context, "thread", true));
+        var entry = Assert.Single(log.Snapshot());
+        Assert.Contains("graphql", entry.Command);
+        Assert.Contains("API error (exit 0)", entry.Summary);
+        Assert.Contains("Review thread is unavailable", entry.Detail);
+    }
+
+    [Fact]
+    public async Task A_missing_gh_executable_is_logged_without_marking_the_comment_as_sent()
+    {
+        await using var fixture = new GitFixture();
+        var log = new GitCommandLog();
+        var cli = new GitHubCli(new ProcessRunner(log), new(), new() { Override = Path.Combine(fixture.Root, "missing-gh") }, log);
+        var error = await Assert.ThrowsAsync<StackerException>(() => cli.CommentAsync(Context, 42, "Keep this draft"));
+        Assert.Equal(EffectCertainty.NotStarted, error.Problem?.Certainty);
+        var entry = Assert.Single(log.Snapshot());
+        Assert.True(entry.IsGitHub);
+        Assert.True(entry.IsFailure);
+        Assert.Null(entry.ExitCode);
+        Assert.Contains("Cannot start", entry.Detail);
     }
 }

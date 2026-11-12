@@ -13,6 +13,8 @@ namespace Stacker.Core.Framework;
 /// rolled back.</remarks>
 public sealed class CommandRunner(IJournal journal)
 {
+    internal static readonly TimeSpan CompletionTimeout = TimeSpan.FromSeconds(30);
+
     /// <summary>Reads the newest journal entries for a scope.</summary>
     /// <param name="scope">The repository root or <c>github:</c> identity used when the entries were opened.</param>
     /// <returns>At most 20 entries, newest first, or a failed result when the journal cannot be read.</returns>
@@ -33,15 +35,10 @@ public sealed class CommandRunner(IJournal journal)
     /// anything, which is what makes a crash mid-effect recoverable. After execution the entry is re-read by id:
     /// adapters write step state through the journal themselves and the copy the command held may be stale, so the
     /// durable entry is the only trustworthy source for the reported effects, the saved stash and the pending step.
-    /// The effect list is rebuilt from steps in <see cref="StepState.Done"/> as "kind: target", replacing whatever
-    /// the command returned. A failed command with <see cref="EffectCertainty.Rejected"/> or
-    /// <see cref="EffectCertainty.NotStarted"/> proves nothing ran, so its entry closes as
-    /// <see cref="JournalPhase.Dismissed"/> without compensation. Every other failure, including
-    /// <see cref="EffectCertainty.Unknown"/> where the boundary cannot tell whether a remote side accepted the write,
-    /// goes to <see cref="ReverseAsync"/> and is preserved for the user or undone, never retried. A non-failed outcome
-    /// closes as NeedsUser, RolledBack, Applied or Dismissed from its own flags, carrying forward the stash and
-    /// pending step the adapter recorded. If the close write itself fails, the exception path takes over and the
-    /// entry is driven through recovery rather than being reported as applied without durable evidence.
+    /// The effect list is rebuilt from steps in <see cref="StepState.Done"/>. A rejected or unstarted command
+    /// with no earlier effects closes as <see cref="JournalPhase.Dismissed"/>. Other failures go through recovery.
+    /// A returned outcome closes an unfinished entry with the matching phase, carrying forward its stash and pending
+    /// step. A failed close is resolved from the phase that actually persisted.
     /// A cancellation before the runner has an entry, during <see cref="IStackCommand.PlanAsync"/> or while the
     /// journal open is still in flight, reports Cancelled with certainty NotStarted and attempts no compensation:
     /// nothing had run. Once an entry exists, cancellation compensates on a fresh budget; a successful undo rewrites
@@ -53,79 +50,112 @@ public sealed class CommandRunner(IJournal journal)
     public async Task<CommandOutcome> RunAsync(string repository, IStackCommand command, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         JournalEntry? entry = null;
+        CommandOutcome? returned = null;
         try
         {
+            ct.ThrowIfCancellationRequested();
             var plan = await command.PlanAsync(ct);
             if (!plan.CanRun) return CommandOutcome.Refused(string.Join(" ", plan.Blockers));
+            ct.ThrowIfCancellationRequested();
             entry = (await journal.OpenAsync(repository, command.Kind, plan.Effects, ct)).OrThrow();
-            var outcome = await command.ExecuteAsync(new(entry, journal, progress), ct);
-            var known = (await journal.ByIdAsync(repository, entry.Id, ct)).OrThrow() ?? entry;
-            outcome = outcome with { Effects = known.Steps.Where(step => step.State == StepState.Done).Select(step => step.Kind + ": " + step.Target).ToArray() };
-            if (outcome.Status == CommandStatus.Failed && outcome.Certainty is EffectCertainty.Rejected or EffectCertainty.NotStarted)
-            { (await journal.CloseAsync(known, JournalPhase.Dismissed, message: outcome.Message, ct: ct)).OrThrow(); return outcome; }
-            if (outcome.Status == CommandStatus.Failed)
-                return await ReverseAsync(command, known, outcome.Message, outcome.Problem);
-            var phase = outcome.NeedsUser ? JournalPhase.NeedsUser : outcome.RolledBack ? JournalPhase.RolledBack
-                : outcome.Ok ? JournalPhase.Applied : JournalPhase.Dismissed;
-            (await journal.CloseAsync(known, phase, known.StashRef, known.PendingStepId, outcome.Message, ct)).OrThrow();
+            returned = ct.IsCancellationRequested ? CommandOutcome.CancelledBeforeDispatch()
+                : await command.ExecuteAsync(new(entry, journal, progress), ct);
+            using var completion = new CancellationTokenSource(CompletionTimeout);
+            var known = await ReadRecordedAsync(entry, completion.Token);
+            var outcome = returned with { Effects = CompletedEffects(known) };
+            returned = outcome;
+            var phase = outcome.Status switch
+            {
+                CommandStatus.Applied => JournalPhase.Applied,
+                CommandStatus.RolledBack => JournalPhase.RolledBack,
+                CommandStatus.NeedsUser when outcome.HasSeparateRecoveryEntry => JournalPhase.Dismissed,
+                CommandStatus.NeedsUser or CommandStatus.PartiallyApplied => JournalPhase.NeedsUser,
+                _ => JournalPhase.Dismissed
+            };
+            if (outcome.Status == CommandStatus.Cancelled && outcome.Certainty != EffectCertainty.NotStarted ||
+                outcome.Status == CommandStatus.Failed &&
+                (outcome.Certainty is not (EffectCertainty.Rejected or EffectCertainty.NotStarted) ||
+                 known.Steps.Any(step => step.State is StepState.Started or StepState.Done or StepState.Unknown)))
+                return await ReverseAsync(command, known, outcome);
+            if (known.Phase != phase)
+                (await journal.CloseAsync(known, phase, pendingStepId: phase == JournalPhase.NeedsUser ? known.PendingStepId : null,
+                    message: outcome.Message, ct: completion.Token)).OrThrow();
             return outcome;
         }
         catch (OperationCanceledException)
         {
-            if (entry is null) return new(CommandStatus.Cancelled, "The action was cancelled before execution.", null) { Certainty = EffectCertainty.NotStarted };
-            var recovered = await ReverseAsync(command, entry, "The action was cancelled", null);
-            return recovered.RolledBack ? recovered with { Status = CommandStatus.Cancelled, Message = "The action was cancelled. " + recovered.Message } : recovered;
+            if (entry is null) return CommandOutcome.CancelledBeforeDispatch();
+            return await ReverseAsync(command, entry, new(CommandStatus.Cancelled, "The action was cancelled.", null), returned);
         }
         catch (Exception ex)
         {
             var problem = Boundary.Problem(ex, ProblemCodes.Unknown);
-            return entry is null ? CommandOutcome.Failed(problem with { Certainty = EffectCertainty.NotStarted }) : await ReverseAsync(command, entry, ex.Message, problem);
+            return entry is null ? CommandOutcome.Failed(problem with { Certainty = EffectCertainty.NotStarted })
+                : await ReverseAsync(command, entry, CommandOutcome.Failed(problem), returned);
         }
     }
 
-    /// <summary>Compensates a command whose effects may have landed, then closes the entry with what is known.</summary>
-    /// <param name="command">The failed command; only an <see cref="IUndoableCommand"/> is offered an undo.</param>
-    /// <param name="entry">The entry the runner is holding, used to look up the durable version.</param>
-    /// <param name="reason">The user-facing reason, usually the failure message or "The action was cancelled".</param>
-    /// <param name="problem">The original problem preserved on the returned outcome; null for a cancellation.</param>
-    /// <returns>RolledBack when compensation succeeded, PartiallyApplied when some effects are known done, or
-    /// NeedsUser when nothing could be undone. A recovery failure returns NeedsUser with a message saying the
-    /// outcome could not be confirmed.</returns>
-    /// <remarks>Recovery gets its own 30-second cancellation source because the caller's token is usually already
-    /// cancelled: cleanup may run for at most 30 seconds, and the timeout value has no recorded rationale beyond
-    /// bounding how long the bus can spend on an undo. If that budget expires inside a journal write or the undo, the
-    /// catch below reports the operation as needing the user instead of letting an unhandled cancellation escape.
-    /// The entry is re-read first, so steps recorded after the runner's snapshot are included. Only an undo reporting
-    /// <see cref="CommandStatus.RolledBack"/> or <see cref="CommandStatus.Applied"/> counts as success. The runner
-    /// closes <see cref="JournalPhase.RolledBack"/> and reports RolledBack only after that write returns, so a
-    /// rollback claim always has durable evidence. A command that is not undoable, or an undo that refused or failed,
-    /// leaves the entry in <see cref="JournalPhase.NeedsUser"/> with the saved stash and pending step intact and
-    /// reports the completed effects: this is why an unknown remote outcome becomes a user decision rather than a
-    /// retry. The undo's own message is used only on success; otherwise the original reason stays the message. Any
-    /// exception, including the recovery timeout, returns <see cref="CommandOutcome.Attention"/> with the original
-    /// reason and problem, and the entry keeps whatever phase it had, which still needs attention.</remarks>
-    private async Task<CommandOutcome> ReverseAsync(IStackCommand command, JournalEntry entry, string reason, Problem? problem)
+    /// <summary>Preserves a durable result or compensates an unfinished command with a fresh time budget.</summary>
+    private async Task<CommandOutcome> ReverseAsync(IStackCommand command, JournalEntry entry, CommandOutcome failure, CommandOutcome? returned = null)
     {
-        using var recovery = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var recovery = new CancellationTokenSource(CompletionTimeout);
         try
         {
-            var known = (await journal.ByIdAsync(entry.Repository, entry.Id, recovery.Token)).OrThrow() ?? entry;
+            var known = await ReadRecordedAsync(entry, recovery.Token);
+            if (TerminalOutcome(known, failure, returned) is { } terminal) return terminal;
+            if (returned is { Status: CommandStatus.Cancelled, Certainty: EffectCertainty.NotStarted } ||
+                failure.Status == CommandStatus.Cancelled && known.Steps.Count > 0 && known.Steps.All(step => step.State == StepState.Planned))
+            {
+                var cancelled = CommandOutcome.CancelledBeforeDispatch();
+                (await journal.CloseAsync(known, JournalPhase.Dismissed, message: cancelled.Message, ct: recovery.Token)).OrThrow();
+                return cancelled;
+            }
             if (command is IUndoableCommand undoable)
             {
                 var outcome = await undoable.UndoAsync(known, recovery.Token);
                 if (outcome.RolledBack || outcome.Ok)
                 {
-                    (await journal.CloseAsync(known, JournalPhase.RolledBack, message: reason, ct: recovery.Token)).OrThrow();
-                    return CommandOutcome.Restored(outcome.Message, problem);
+                    known = await ReadRecordedAsync(entry, recovery.Token);
+                    if (TerminalOutcome(known, failure) is { } restored) return restored;
+                    (await journal.CloseAsync(known, JournalPhase.RolledBack, message: failure.Message, ct: recovery.Token)).OrThrow();
+                    return AfterRollback(failure, outcome.Message);
                 }
             }
-            (await journal.CloseAsync(known, JournalPhase.NeedsUser, known.StashRef, known.PendingStepId, reason, recovery.Token)).OrThrow();
-            var effects = known.Steps.Where(step => step.State == StepState.Done).Select(step => step.Kind + ": " + step.Target).ToArray();
-            return new CommandOutcome(effects.Length > 0 ? CommandStatus.PartiallyApplied : CommandStatus.NeedsUser, reason, problem) { Effects = effects };
+            (await journal.CloseAsync(known, JournalPhase.NeedsUser, known.StashRef, known.PendingStepId, failure.Message, recovery.Token)).OrThrow();
+            var effects = CompletedEffects(known);
+            return new CommandOutcome(effects.Length > 0 ? CommandStatus.PartiallyApplied : CommandStatus.NeedsUser, failure.Message, failure.Problem)
+                { Effects = effects, Certainty = failure.Certainty };
         }
         catch (Exception ex)
         {
-            return CommandOutcome.Attention($"{reason} Recovery could not be confirmed: {ex.Message}") with { Problem = problem };
+            try
+            {
+                if (!recovery.IsCancellationRequested && TerminalOutcome(await ReadRecordedAsync(entry, recovery.Token), failure, returned) is { } terminal)
+                    return terminal;
+            }
+            catch (Exception) { /* The outcome could not be confirmed from storage. */ }
+            return CommandOutcome.Attention($"{failure.Message} Recovery could not be confirmed: {ex.Message}") with { Problem = failure.Problem };
         }
     }
+
+    private async Task<JournalEntry> ReadRecordedAsync(JournalEntry entry, CancellationToken ct) =>
+        (await journal.ByIdAsync(entry.Repository, entry.Id, ct)).OrThrow()
+        ?? throw new StackerException(Problem.Of(ProblemCodes.StateInvalid, "The command journal entry is missing."));
+
+    private static CommandOutcome? TerminalOutcome(JournalEntry entry, CommandOutcome failure, CommandOutcome? returned = null) => entry.Phase switch
+    {
+        JournalPhase.Applied => CommandOutcome.Done(entry.Summary) with { Effects = CompletedEffects(entry) },
+        JournalPhase.RolledBack or JournalPhase.Undone => AfterRollback(failure, entry.Summary),
+        JournalPhase.Dismissed => returned ?? failure,
+        _ => null
+    };
+
+    /// <summary>Reports cancellation after a successful restore, or reports the restore after any other failure.</summary>
+    private static CommandOutcome AfterRollback(CommandOutcome failure, string message) => failure.Status == CommandStatus.Cancelled
+        ? failure with { Message = failure.Message + " " + message }
+        : CommandOutcome.Restored(message, failure.Problem);
+
+    /// <summary>Lists completed effects using the stored steps.</summary>
+    private static string[] CompletedEffects(JournalEntry entry) => entry.Steps.Where(step => step.State == StepState.Done)
+        .Select(step => step.Kind + ": " + step.Target).ToArray();
 }

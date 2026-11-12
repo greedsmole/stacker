@@ -57,9 +57,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
         ISyntaxHighlighter? highlighter = null, IDemoRepository? demo = null, IGhToolSettings? ghExecutable = null, IGitDiagnosticLog? commandLog = null,
         IGitBranchWriter? branchWriter = null, IGitHubPullRequestWriter? pullRequestWriter = null, IEditorLauncher? editorLauncher = null,
         CommandBus? commands = null, IHistoryStore? historyStore = null, IHistoryGit? historyObjects = null,
-        ChangeGraphService? historyGraph = null, VersionComparisonService? historyComparisons = null, ReviewProgressService? historyProgress = null, IWorkspaceBackupService? backupService = null, IChangeIdentityService? identities = null, IDiagnosticSink? diagnostics = null)
+        ChangeGraphService? historyGraph = null, VersionComparisonService? historyComparisons = null, ReviewProgressService? historyProgress = null, IWorkspaceBackupService? backupService = null, IChangeIdentityService? identities = null, IDiagnosticSink? diagnostics = null,
+        ISymbolNavigation? symbolNavigation = null)
     {
         _backupService = backupService; _runtime.Identities = identities; _runtime.Diagnostics = diagnostics;
+        SymbolNavigation = symbolNavigation;
         _runtime.HistoryStore = historyStore; _runtime.HistoryObjects = historyObjects; _runtime.HistoryGraph = historyGraph; _runtime.HistoryComparisons = historyComparisons; _runtime.HistoryProgress = historyProgress;
         _syncController = new(this, _runtime);
         _workspaceController = new(this, _runtime);
@@ -75,7 +77,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
         _runtime._commandLog = commandLog;
         _runtime._commands = commands;
         if (_runtime._commands is not null) { _runtime._commands.Reported += ReportCommand; _runtime._commands.Starting += CommandStarting; }
-        if (_runtime._commandLog is not null) { foreach (var entry in _runtime._commandLog.Snapshot()) GitLogEntries.Add(entry); _runtime._commandLog.Changed += LogChanged; }
+        if (_runtime._commandLog is not null) { foreach (var entry in _runtime._commandLog.Snapshot()) _gitLogController.AddOrUpdate(entry); _runtime._commandLog.Changed += LogChanged; }
         Sections.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasNoSections));
@@ -125,7 +127,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     public Task DeleteSelectedStackAsync() => _navigationController.DeleteSelectedStackAsync();
     internal Task<bool> SaveStacksAsync(IReadOnlyList<StackDefinition> stacks) => _navigationController.SaveStacksAsync(stacks);
     public Task SaveSettingsAsync() => _navigationController.SaveSettingsAsync();
-    public Task SetWrapCodeAsync(bool enabled) => _navigationController.SetWrapCodeAsync(enabled);
+    public Task SetWrapCodeAsync(bool enabled)
+    {
+        if (ActiveHistory is { } history) history.WrapCode = enabled;
+        return _navigationController.SetWrapCodeAsync(enabled);
+    }
+    public Task SetGroupFilesByFolderAsync(bool enabled) => _navigationController.SetGroupFilesByFolderAsync(enabled);
     public void DisposeViews() => _navigationController.DisposeViews();
     public void Dispose() { ActiveHistory?.Dispose(); ActiveHistory = null; _runtime.Session.Suspend(); _navigationController.Dispose(); }
 }

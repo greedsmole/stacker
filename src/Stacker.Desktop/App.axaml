@@ -1,10 +1,53 @@
-<Application xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Stacker.Desktop.App" Name="Stacker" RequestedThemeVariant="Dark">
- <Application.Resources><ResourceDictionary><ResourceDictionary.ThemeDictionaries>
-  <ResourceDictionary x:Key="Dark"><SolidColorBrush x:Key="SelectionBrush">#35443B</SolidColorBrush><SolidColorBrush x:Key="SelectionTextBrush">#F1F6EF</SolidColorBrush><SolidColorBrush x:Key="CanvasBrush">#191D1C</SolidColorBrush><SolidColorBrush x:Key="PanelBrush">#222725</SolidColorBrush><SolidColorBrush x:Key="DividerBrush">#3B4440</SolidColorBrush><SolidColorBrush x:Key="NoticeBrush">#2C3631</SolidColorBrush><SolidColorBrush x:Key="WarningBrush">#E5B76B</SolidColorBrush><SolidColorBrush x:Key="SuggestionAddedBrush">#193D2B</SolidColorBrush><SolidColorBrush x:Key="SuggestionRemovedBrush">#402626</SolidColorBrush></ResourceDictionary>
-  <ResourceDictionary x:Key="Light"><SolidColorBrush x:Key="SelectionBrush">#DDE9DD</SolidColorBrush><SolidColorBrush x:Key="SelectionTextBrush">#203C2C</SolidColorBrush><SolidColorBrush x:Key="CanvasBrush">#FCFCF9</SolidColorBrush><SolidColorBrush x:Key="PanelBrush">#F0F2ED</SolidColorBrush><SolidColorBrush x:Key="DividerBrush">#D5DCD5</SolidColorBrush><SolidColorBrush x:Key="NoticeBrush">#E8EEE7</SolidColorBrush><SolidColorBrush x:Key="WarningBrush">#875816</SolidColorBrush><SolidColorBrush x:Key="SuggestionAddedBrush">#E4F5E9</SolidColorBrush><SolidColorBrush x:Key="SuggestionRemovedBrush">#FCE7E7</SolidColorBrush></ResourceDictionary>
+<Application xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.App" Name="Stacker" RequestedThemeVariant="Dark">
+ <Application.Resources><ResourceDictionary>
+  <x:Double x:Key="DiffLineHeight">18</x:Double>
+  <SolidColorBrush x:Key="DiffAddedAccentBrush">#50FF00</SolidColorBrush>
+  <SolidColorBrush x:Key="DiffRemovedAccentBrush">#FF173C</SolidColorBrush>
+  <SolidColorBrush x:Key="DiffHunkBrush">#187C8794</SolidColorBrush>
+  <ResourceDictionary.ThemeDictionaries>
+   <ResourceDictionary x:Key="Dark">
+    <SolidColorBrush x:Key="PrimaryBrush">#0078D4</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryHoverBrush">#026EC1</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryPressedBrush">#005FA8</SolidColorBrush>
+    <SolidColorBrush x:Key="SelectionBrush">#223A51</SolidColorBrush>
+    <SolidColorBrush x:Key="SelectionTextBrush">#EAF4FF</SolidColorBrush>
+    <SolidColorBrush x:Key="CanvasBrush">#1C1E20</SolidColorBrush>
+    <SolidColorBrush x:Key="PanelBrush">#232629</SolidColorBrush>
+    <SolidColorBrush x:Key="DividerBrush">#3B424A</SolidColorBrush>
+    <SolidColorBrush x:Key="NoticeBrush">#293039</SolidColorBrush>
+    <SolidColorBrush x:Key="WarningBrush">#E5B76B</SolidColorBrush>
+    <SolidColorBrush x:Key="FileAddedBrush">#8BD7A0</SolidColorBrush>
+    <SolidColorBrush x:Key="FileModifiedBrush">#91C7FF</SolidColorBrush>
+    <SolidColorBrush x:Key="FileDeletedBrush">#FF9FA6</SolidColorBrush>
+    <SolidColorBrush x:Key="FileRelocatedBrush">#D1B8FC</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffAddedBrush">#B00A5700</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffRemovedBrush">#B07F0925</SolidColorBrush>
+    <SolidColorBrush x:Key="SuggestionAddedBrush">#193D2B</SolidColorBrush>
+    <SolidColorBrush x:Key="SuggestionRemovedBrush">#402626</SolidColorBrush>
+   </ResourceDictionary>
+   <ResourceDictionary x:Key="Light">
+    <SolidColorBrush x:Key="PrimaryBrush">#005FB8</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryHoverBrush">#0258A8</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryPressedBrush">#004A91</SolidColorBrush>
+    <SolidColorBrush x:Key="SelectionBrush">#DCEBFA</SolidColorBrush>
+    <SolidColorBrush x:Key="SelectionTextBrush">#163B60</SolidColorBrush>
+    <SolidColorBrush x:Key="CanvasBrush">#FCFCFC</SolidColorBrush>
+    <SolidColorBrush x:Key="PanelBrush">#F1F3F5</SolidColorBrush>
+    <SolidColorBrush x:Key="DividerBrush">#D4DAE0</SolidColorBrush>
+    <SolidColorBrush x:Key="NoticeBrush">#E8EEF5</SolidColorBrush>
+    <SolidColorBrush x:Key="WarningBrush">#875816</SolidColorBrush>
+    <SolidColorBrush x:Key="FileAddedBrush">#276642</SolidColorBrush>
+    <SolidColorBrush x:Key="FileModifiedBrush">#005A9E</SolidColorBrush>
+    <SolidColorBrush x:Key="FileDeletedBrush">#A6273A</SolidColorBrush>
+    <SolidColorBrush x:Key="FileRelocatedBrush">#673D9A</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffAddedBrush">#A09EFF75</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffRemovedBrush">#A0FF8C9D</SolidColorBrush>
+    <SolidColorBrush x:Key="SuggestionAddedBrush">#E4F5E9</SolidColorBrush>
+    <SolidColorBrush x:Key="SuggestionRemovedBrush">#FCE7E7</SolidColorBrush>
+   </ResourceDictionary>
  </ResourceDictionary.ThemeDictionaries></ResourceDictionary></Application.Resources>
  <Application.Styles>
-  <FluentTheme><FluentTheme.Palettes><ColorPaletteResources x:Key="Dark" Accent="#5FA77B"/><ColorPaletteResources x:Key="Light" Accent="#286748"/></FluentTheme.Palettes></FluentTheme>
+  <FluentTheme><FluentTheme.Palettes><ColorPaletteResources x:Key="Dark" Accent="#0078D4"/><ColorPaletteResources x:Key="Light" Accent="#005FB8"/></FluentTheme.Palettes></FluentTheme>
   <Style Selector="Window"><Setter Property="FontFamily" Value="Inter"/><Setter Property="FontSize" Value="13"/><Setter Property="Background" Value="{DynamicResource CanvasBrush}"/></Style>
   <Style Selector="Button, ToggleButton"><Setter Property="CornerRadius" Value="3"/><Setter Property="Padding" Value="10,6"/><Setter Property="MinHeight" Value="30"/></Style>
   <Style Selector="Button.quiet, ToggleButton.quiet"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/></Style>
@@ -13,14 +56,35 @@
   <Style Selector="Button.line-add"><Setter Property="Transitions"><Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.10"/></Transitions></Setter></Style>
   <Style Selector="TextBlock.muted"><Setter Property="Opacity" Value="0.8"/></Style>
   <Style Selector="TextBlock.label"><Setter Property="FontSize" Value="11"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Opacity" Value="0.8"/></Style>
-  <Style Selector="Button.primary"><Setter Property="Background" Value="#286748"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderThickness" Value="0"/></Style>
+  <Style Selector="Button.primary"><Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderThickness" Value="0"/></Style>
   <Style Selector="Border.notice"><Setter Property="Background" Value="{DynamicResource NoticeBrush}"/><Setter Property="CornerRadius" Value="3"/></Style>
   <Style Selector="Border.selected"><Setter Property="Background" Value="{DynamicResource SelectionBrush}"/></Style>
   <Style Selector="ListBoxItem"><Setter Property="Padding" Value="8,7"/><Setter Property="CornerRadius" Value="2"/></Style>
+  <Style Selector="ListBox.file-list ListBoxItem">
+   <Setter Property="MinHeight" Value="26"/>
+   <Setter Property="Padding" Value="6,2"/>
+   <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+   <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}"/>
+  </Style>
   <Style Selector="ListBox.file-list ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource SelectionBrush}"/><Setter Property="Foreground" Value="{DynamicResource SelectionTextBrush}"/></Style>
+  <Style Selector="TreeView.file-tree TreeViewItem">
+   <Setter Property="MinHeight" Value="26"/>
+   <Setter Property="Padding" Value="2,1,6,1"/>
+   <Setter Property="CornerRadius" Value="2"/>
+   <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+   <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}"/>
+  </Style>
+  <Style Selector="TreeView.file-tree TreeViewItem /template/ Panel#PART_ExpandCollapseChevronContainer"><Setter Property="Margin" Value="3,0,5,0"/></Style>
+  <Style Selector="TreeView.file-tree TreeViewItem:selected /template/ Border#PART_LayoutRoot"><Setter Property="Background" Value="{DynamicResource SelectionBrush}"/></Style>
+  <Style Selector="TreeView.file-tree TreeViewItem:selected /template/ ContentPresenter#PART_HeaderPresenter"><Setter Property="Foreground" Value="{DynamicResource SelectionTextBrush}"/></Style>
+  <Style Selector="local|FileChangeBadge"><Setter Property="BorderBrush" Value="{DynamicResource FileModifiedBrush}"/></Style>
+  <Style Selector="local|FileChangeBadge.added"><Setter Property="BorderBrush" Value="{DynamicResource FileAddedBrush}"/></Style>
+  <Style Selector="local|FileChangeBadge.deleted"><Setter Property="BorderBrush" Value="{DynamicResource FileDeletedBrush}"/></Style>
+  <Style Selector="local|FileChangeBadge.relocated"><Setter Property="BorderBrush" Value="{DynamicResource FileRelocatedBrush}"/></Style>
+  <Style Selector="local|FileChangeBadge.type-changed"><Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}"/></Style>
   <Style Selector="TabItem"><Setter Property="FontSize" Value="12"/><Setter Property="Padding" Value="8,8"/></Style>
   <Style Selector="TextBlock.section-title"><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
-  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="#20563B"/><Setter Property="Foreground" Value="White"/></Style>
-  <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="#19452F"/><Setter Property="Foreground" Value="White"/></Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/><Setter Property="Foreground" Value="White"/></Style>
+  <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource PrimaryPressedBrush}"/><Setter Property="Foreground" Value="White"/></Style>
  </Application.Styles>
 </Application>

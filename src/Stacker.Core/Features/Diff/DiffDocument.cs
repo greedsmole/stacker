@@ -36,4 +36,9 @@ public sealed record DiffDocument(DiffDocumentMode Mode, IReadOnlyList<DiffDocum
 /// <param name="VersionId">Observed version the document is anchored at; null when the document is not version-specific.</param>
 /// <param name="Path">File to reselect after rebuilding; null when no file was selected.</param>
 /// <param name="Mode">Comparison to rebuild.</param>
-public sealed record NavigationTarget(string ChangeId, string? VersionId, string? Path, DiffDocumentMode Mode);
+public sealed record NavigationTarget(string ChangeId, string? VersionId, string? Path, DiffDocumentMode Mode)
+{
+    /// <summary>The displayed section and path, which can differ from the current layer's file.</summary>
+    public int? SectionIndex { get; init; }
+    public string? SectionPath { get; init; }
+}

@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
+using Avalonia.Controls.Primitives;
 using Avalonia.Threading;
 using Stacker.Desktop;
 using Stacker.Desktop.ViewModels;
@@ -12,6 +13,44 @@ namespace Stacker.Tests;
 [Collection(HeadlessApp.CollectionName)]
 public sealed class WindowInteractionTests
 {
+    [AvaloniaFact]
+    public async Task Stack_panel_can_be_hidden_and_restored_at_its_previous_width()
+    {
+        await using var fixture = new GitFixture();
+        using var vm = CreateVm(fixture);
+        var window = new PickerWindow { DataContext = vm };
+        window.Show();
+        try
+        {
+            await DrainUiAsync();
+            var workspace = window.FindControl<Grid>("Workspace")!;
+            var pane = window.FindControl<Grid>("StacksPane")!;
+            var toggle = window.FindControl<ToggleButton>("StacksToggle")!;
+            workspace.ColumnDefinitions[0].Width = new(344);
+            window.UpdateLayout();
+
+            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.UpdateLayout();
+            Assert.False(pane.IsVisible);
+            Assert.False(window.FindControl<GridSplitter>("StacksSplitter")!.IsVisible);
+            Assert.Equal(0, workspace.ColumnDefinitions[0].ActualWidth);
+            Assert.Equal(0, workspace.ColumnDefinitions[1].ActualWidth);
+            Assert.True(toggle.IsVisible);
+
+            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.UpdateLayout();
+            Assert.True(pane.IsVisible);
+            Assert.Equal(344, workspace.ColumnDefinitions[0].ActualWidth);
+
+            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.UpdateLayout();
+        }
+        finally { window.Close(); await WaitUntilAsync(() => !window.IsVisible); }
+        var settings = await new JsonSettingsStore(Path.Combine(fixture.Root, "settings")).LoadAsync();
+        Assert.True(settings.StacksHidden);
+        Assert.Equal(344, settings.NavigationWidth);
+    }
+
     /// <summary>Ensures the picker guard prevents duplicate dialogs and is released after cancellation.</summary>
     [AvaloniaFact]
     public async Task Folder_picker_closes_repository_popup_and_ignores_duplicate_clicks()

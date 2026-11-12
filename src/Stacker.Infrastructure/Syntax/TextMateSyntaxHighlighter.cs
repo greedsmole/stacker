@@ -32,7 +32,6 @@ public sealed class TextMateSyntaxHighlighter : ISyntaxHighlighter
             if (_cache.TryGetValue(key, out var cached)) return cached;
             var result = await Task.Run<IReadOnlyDictionary<int, IReadOnlyList<SyntaxSpan>>>(() =>
             {
-                var watch = Stopwatch.StartNew();
                 var output = new Dictionary<int, IReadOnlyList<SyntaxSpan>>();
                 if (!_registries.TryGetValue(theme, out var registry))
                 {
@@ -47,6 +46,7 @@ public sealed class TextMateSyntaxHighlighter : ISyntaxHighlighter
                 var state = grammar.TokenizeLine("", null, TimeSpan.FromMilliseconds(100)).RuleStack;
                 var palette = registry.Registry.GetTheme();
                 var lines = text.Split('\n');
+                var watch = Stopwatch.StartNew();
                 for (var index = 0; index < lines.Length; index++)
                 {
                     ct.ThrowIfCancellationRequested();

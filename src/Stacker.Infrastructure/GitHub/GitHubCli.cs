@@ -6,7 +6,8 @@ using Stacker.Core;
 
 namespace Stacker.Infrastructure;
 
-public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecutable gh) : IGitHubReader, IGitHubWriter, IGitHubPullRequestWriter
+public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, GhExecutable gh, GitCommandLog? commandLog = null)
+    : IGitHubReader, IGitHubWriter, IGitHubPullRequestWriter
 {
     /// <summary>Extracts host and repository from HTTPS, SSH, or SCP-style Git remote syntax.</summary>
     /// <remarks>Git aliases that do not identify a hostname must be configured explicitly by the user.</remarks>
@@ -33,48 +34,21 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
         if (name.Length == 0) throw new StackerException("Repository name is empty.");
         return (parts[0].ToLowerInvariant(), parts[1], name);
     }
-    // JSON is parsed even after a successful exit: gh auth status can encode invalid credentials in its JSON payload.
-    private readonly ReadScheduler _metadataReads = new();
-    private Task<JsonElement> RunJsonAsync(string[] args, CancellationToken ct, string? body = null) => body is null
-        ? _metadataReads.RunAsync(ReadWork.Metadata, token => RunJsonCoreAsync(args, token, body), ct)
-        : RunJsonCoreAsync(args, ct, body);
-    private async Task<JsonElement> RunJsonCoreAsync(string[] args, CancellationToken ct, string? body = null)
-    {
-        var response = (await runner.RunAsync(new(gh.Resolve(), args, Timeout: TimeSpan.FromSeconds(60), MaxOutputBytes: 32 * 1024 * 1024,
-            Environment: new Dictionary<string, string> { ["GH_PROMPT_DISABLED"] = "1", ["GH_PAGER"] = "cat", ["GH_DEBUG"] = "" }, StandardInput: body, UnsetEnvironment: gh.UnsetEnvironment), ct)).OrThrow();
-        // gh reports "not authenticated" with a non-zero exit and a JSON payload; the payload carries the useful diagnosis.
-        var parsed = TryParse(response.StdOut);
-        if (response.ExitCode != 0)
-        {
-            if (response.StdErr.Contains("HTTP 401", StringComparison.OrdinalIgnoreCase)) throw new GitHubAuthenticationException(Problem.Of(ProblemCodes.GitHubAuth, response.StdErr.Trim()) with { Certainty = EffectCertainty.Rejected });
-            if (args[0] != "auth" || parsed is null)
-                throw new StackerException(Problem.Of(ProblemCodes.GitHubRequest, $"GitHub request failed ({response.ExitCode}): {response.StdErr.Trim()} {parsed?.ToString()}".Trim())
-                    with
-                { Certainty = System.Text.RegularExpressions.Regex.IsMatch(response.StdErr, @"HTTP (401|403|404|422)\b") ? EffectCertainty.Rejected : EffectCertainty.Unknown });
-        }
-        return parsed ?? throw new StackerException("gh returned invalid JSON. Check the GitHub host and CLI version.");
-    }
-    /// <summary>The root element of a JSON payload, or null when the output is not JSON at all.</summary>
-    private static JsonElement? TryParse(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return null;
-        try { return JsonDocument.Parse(text).RootElement.Clone(); }
-        catch (JsonException) { return null; }
-    }
-    // All API calls pin the hostname. POST bodies go through stdin so review text is never interpreted as CLI arguments.
-    private Task<JsonElement> Api(string host, string endpoint, CancellationToken ct, object? body = null, bool paginate = false, string? method = null) =>
-        RunJsonAsync(["api", "--hostname", host, "--method", method ?? (body is null ? "GET" : "POST"), endpoint,
-            .. (paginate ? new[] { "--paginate", "--slurp" } : []), .. (body is null ? [] : new[] { "--input", "-" })], ct, body is null ? null : JsonSerializer.Serialize(body));
     /// <summary>Returns only the active, valid account for this host, while explaining environment-token precedence.</summary>
     private async Task<string> ActiveUser(string host, CancellationToken ct)
     {
-        var status = await RunJsonAsync(["auth", "status", "--active", "--hostname", host, "--json", "hosts"], ct);
+        var account = await RunJsonAsync(["auth", "status", "--active", "--hostname", host, "--json", "hosts"], ct,
+            read: status => ActiveAccount(host, status));
+        return Str(account, "login");
+    }
+    private static JsonElement ActiveAccount(string host, JsonElement status)
+    {
         if (status.TryGetProperty("hosts", out var hosts) && hosts.TryGetProperty(host, out var accounts))
             foreach (var entry in accounts.EnumerateArray())
             {
                 if (Bool(entry, "active") && Str(entry, "state") != "success" && Str(entry, "tokenSource") is "GH_TOKEN" or "GITHUB_TOKEN" or "GH_ENTERPRISE_TOKEN" or "GITHUB_ENTERPRISE_TOKEN")
                     throw new GitHubAuthenticationException($"{host}: {Str(entry, "tokenSource")} is invalid and overrides saved gh accounts. Enable Settings → Use saved gh credentials, then Refresh; or fix the environment token and restart Stacker.");
-                if (Bool(entry, "active") && Str(entry, "state") == "success" && !string.IsNullOrEmpty(Str(entry, "login"))) return Str(entry, "login");
+                if (Bool(entry, "active") && Str(entry, "state") == "success" && !string.IsNullOrEmpty(Str(entry, "login"))) return entry;
             }
         throw new GitHubAuthenticationException($"Not authenticated for {host}. Run: gh auth login --hostname {host}, then retry.");
     }
@@ -173,28 +147,51 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
     public async Task ValidateAnchorsAsync(GitHubRepositoryContext context, PullRequest pr, IReadOnlyList<ReviewAnchor> anchors, CancellationToken ct = default)
     {
         if (anchors.Count == 0) return;
-        var files = Pages(await Api(context.Host, $"{Repo(context)}/pulls/{pr.Number}/files?per_page=100", ct, paginate: true)).ToArray();
-        foreach (var anchor in anchors)
+        var files = Pages(await Api(context.Host, $"{Repo(context)}/pulls/{pr.Number}/files?per_page=100", ct, paginate: true))
+            .ToLookup(file => Str(file, "filename"), StringComparer.Ordinal);
+        var linesByFile = new Dictionary<string, (HashSet<int> Left, HashSet<int> Right)>(StringComparer.Ordinal);
+        for (var index = 0; index < anchors.Count; index++)
         {
-            if (anchor.HeadSha != pr.HeadSha || anchor.BaseSha != pr.BaseSha || anchor.PullRequest != pr.Number) throw new StackerException("The PR changed. Recheck the draft anchors.");
-            var file = files.FirstOrDefault(f => Str(f, "filename") == anchor.Path);
-            if (file.ValueKind != JsonValueKind.Object || !file.TryGetProperty("patch", out var patch) || patch.ValueKind != JsonValueKind.String)
-                throw new StackerException("GitHub did not provide a reviewable patch for this file. Open it on GitHub.");
-            var parsed = PatchParser.Parse(new(anchor.Path, anchor.Path, FileChangeKind.Modified, 0, 0, "100644", "100644"), patch.GetString()!);
-            var valid = parsed.Lines.Where(l => anchor.Side == "LEFT" ? l.Kind == DiffLineKind.Removed : l.Kind is DiffLineKind.Added or DiffLineKind.Context)
-                .Select(l => anchor.Side == "LEFT" ? l.OldLineNumber : l.NewLineNumber).Where(n => n.HasValue).Select(n => n!.Value).ToHashSet();
+            var anchor = anchors[index];
+            var location = $"Comment {index + 1} of {anchors.Count} at {anchor.LocationLabel}.";
+            if (anchor.HeadSha != pr.HeadSha || anchor.BaseSha != pr.BaseSha || anchor.PullRequest != pr.Number)
+                throw AnchorProblem(location + " The comment belongs to an older PR snapshot. Recheck or reattach it.");
+            if (!linesByFile.TryGetValue(anchor.Path, out var lines))
+            {
+                var file = files[anchor.Path].FirstOrDefault();
+                if (file.ValueKind != JsonValueKind.Object)
+                    throw AnchorProblem(location + " This file is missing from the current GitHub diff. Recheck or reattach the comment.");
+                if (!file.TryGetProperty("patch", out var patch) || patch.ValueKind != JsonValueKind.String)
+                    throw AnchorProblem(location + " GitHub did not return a reviewable patch for this file. Open the diff on GitHub.");
+                var parsed = PatchParser.Parse(new(anchor.Path, anchor.Path, FileChangeKind.Modified, 0, 0, "100644", "100644"), patch.GetString()!);
+                lines = ([], []);
+                foreach (var line in parsed.Lines)
+                {
+                    if (line.Kind == DiffLineKind.Removed && line.OldLineNumber is int oldNumber) lines.Left.Add(oldNumber);
+                    if (line.Kind is DiffLineKind.Added or DiffLineKind.Context && line.NewLineNumber is int newNumber) lines.Right.Add(newNumber);
+                }
+                linesByFile.Add(anchor.Path, lines);
+            }
+            var valid = anchor.Side == "LEFT" ? lines.Left : lines.Right;
             var start = anchor.StartLine ?? anchor.Line;
             if (anchor.Side is not ("LEFT" or "RIGHT") || start <= 0 || anchor.Line < start || anchor.Line - start > 50_000 || Enumerable.Range(start, anchor.Line - start + 1).Any(n => !valid.Contains(n)))
-                throw new StackerException("The selected range is not present on this side of the GitHub diff.");
+                throw AnchorProblem(location + " The range is missing from this side of the GitHub diff. Recheck or reattach the comment.");
         }
     }
+
+    private static StackerException AnchorProblem(string message) =>
+        new(Problem.Of(ProblemCodes.GitHubRequest, message) with { Certainty = EffectCertainty.NotStarted });
+
     // GraphQL is used for review threads because REST does not expose resolution and outdated state consistently.
-    private async Task<JsonElement> Graph(string host, string query, object variables, CancellationToken ct)
-    {
-        var json = await Api(host, "graphql", ct, new { query, variables });
-        if (json.TryGetProperty("errors", out var errors)) throw new StackerException("GitHub GraphQL: " + errors.ToString());
-        return json.GetProperty("data").Clone();
-    }
+    private Task<JsonElement> Graph(string host, string query, object variables, CancellationToken ct) =>
+        Api(host, "graphql", ct, new { query, variables }, read: json =>
+        {
+            if (json.ValueKind == JsonValueKind.Object && json.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Array && errors.GetArrayLength() > 0)
+                throw new StackerException(SafeDetail("GitHub GraphQL request failed. " + DescribeErrors(json), null));
+            if (json.ValueKind != JsonValueKind.Object || !json.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+                throw new StackerException("GitHub returned no GraphQL data.");
+            return data;
+        });
     /// <summary>Posts one ordinary PR conversation comment, not a review decision or code-thread comment.</summary>
     public async Task CommentAsync(GitHubRepositoryContext context, long number, string body, CancellationToken ct = default) =>
         _ = await Api(context.Host, $"{Repo(context)}/issues/{number}/comments", ct, new { body });

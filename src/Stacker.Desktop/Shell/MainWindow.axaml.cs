@@ -14,13 +14,14 @@ namespace Stacker.Desktop;
 public partial class MainWindow : Window
 {
     private bool _ready;
-    private bool _closing;
+    private enum ClosePhase { Open, Preparing, AwaitingDecision, SavingCopy, Committing, ReadyToClose }
+    private ClosePhase _closePhase;
     private bool _repositoryActionPending;
     private MainViewModel Vm => (MainViewModel)DataContext!;
     public MainWindow()
     {
         InitializeComponent();
-        Activated += (_, _) => { if (_ready) Vm.SetWindowActive(true); };
+        Activated += (_, _) => { if (_ready && _closePhase == ClosePhase.Open) Vm.SetWindowActive(true); };
         KeyDown += SearchShortcut;
         Deactivated += (_, _) => { if (_ready) Vm.SetWindowActive(false); };
         SizeChanged += (_, _) =>
@@ -34,24 +35,27 @@ public partial class MainWindow : Window
 AsyncHandler.Run(async () =>
 {
     await Vm.InitializeAsync();
+    if (_closePhase is ClosePhase.Committing or ClosePhase.ReadyToClose) return;
     Width = Vm.Settings.WindowWidth; Height = Vm.Settings.WindowHeight;
-    Workspace.ColumnDefinitions[0].Width = new(Vm.Settings.NavigationWidth);
     ApplyTheme();
+    ApplyDiffLineHeight();
+    ApplyStacksVisibility();
     Vm.Sections.CollectionChanged += (_, _) => ResizeSections();
     SectionScroll.SizeChanged += (_, _) => ResizeSections();
-    Workspace.ColumnDefinitions[0].MinWidth = 200;
-    Workspace.ColumnDefinitions[0].MaxWidth = 500;
     _ready = true;
+    if (_closePhase != ClosePhase.Open) return;
     var args = Environment.GetCommandLineArgs();
     if (args.Contains("--demo")) await Vm.OpenDemoAsync();
     else if (args.Length > 1 && !args[1].StartsWith('-')) await Vm.OpenRepositoryAsync(args[1]);
     else if (Vm.Settings.LastRepository is { } last) await Vm.OpenRepositoryAsync(last);
-    Vm.SetWindowActive(IsActive);
+    if (_closePhase == ClosePhase.Open) Vm.SetWindowActive(IsActive);
 }, message => AsyncHandler.Report(this, message));
         Closing += (_, e) =>
         {
-            if (_closing) return;
+            if (_closePhase == ClosePhase.ReadyToClose) return;
             e.Cancel = true;
+            if (_closePhase != ClosePhase.Open) return;
+            _closePhase = ClosePhase.Preparing;
             AsyncHandler.Run(HandleCloseAsync, message => AsyncHandler.Report(this, message));
         };
     }
@@ -91,14 +95,15 @@ AsyncHandler.Run(async () =>
     try
     {
         if (Clipboard is { } clipboard)
-            await clipboard.SetTextAsync(string.Join("\n\n", Vm.GitLogEntries.Select(entry => entry.Summary + "\n" + entry.WorkingDirectory + "\n" + entry.Detail)));
+            await clipboard.SetTextAsync(string.Join("\n\n", Vm.VisibleGitLogEntries.Select(entry =>
+                string.Join("\n", new[] { entry.Summary, entry.WorkingDirectory, entry.Detail }.Where(line => line.Length > 0)))));
     }
-    catch (Exception ex) { Vm.Error = "Cannot copy Git logs: " + ex.Message; }
+    catch (Exception ex) { Vm.Error = "Cannot copy the command log. " + ex.Message; }
 }, message => AsyncHandler.Report(this, message));
     /// <summary>Ends popup interaction before starting a repository action on the owning main window.</summary>
     private async Task RunRepositoryActionAsync(Func<Task> action)
     {
-        if (_repositoryActionPending || !_ready || _closing || !IsVisible) return;
+        if (_repositoryActionPending || !_ready || _closePhase != ClosePhase.Open || !IsVisible) return;
         _repositoryActionPending = true;
         try
         {
@@ -108,7 +113,7 @@ AsyncHandler.Run(async () =>
             // macOS flyouts have native popup windows. Let the click and popup teardown finish
             // before presenting an NSOpenPanel sheet, otherwise the popup can retain input/focus.
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
-            if (!_closing && IsVisible) await action();
+            if (_closePhase == ClosePhase.Open && IsVisible) await action();
         }
         catch (Exception ex) { Vm.Error = ex.Message; }
         finally { _repositoryActionPending = false; }
@@ -126,7 +131,7 @@ AsyncHandler.Run(async () =>
         await RunRepositoryActionAsync(async () =>
     {
         var path = await PickRepositoryFolderAsync();
-        if (path is not null && !_closing && IsVisible) await Vm.OpenRepositoryAsync(path);
+        if (path is not null && _closePhase == ClosePhase.Open && IsVisible) await Vm.OpenRepositoryAsync(path);
     });
     }, message => AsyncHandler.Report(this, message));
     private void OpenDemoClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await RunRepositoryActionAsync(Vm.OpenDemoAsync); }, message => AsyncHandler.Report(this, message));

@@ -69,8 +69,9 @@ public sealed class StorageTests
     public async Task Settings_survive_restart_and_invalid_dimensions_are_clamped()
     {
         await using var f = new GitFixture(); var store = new JsonSettingsStore(f.Root);
-        await store.SaveAsync(new() { RecentRepositories = [f.Root], GitPath = "/custom/git", Theme = "Light", WindowWidth = -1 });
+        await store.SaveAsync(new() { RecentRepositories = [f.Root], GitPath = "/custom/git", Theme = "Light", WindowWidth = -1, DiffLineHeight = 21 });
         var restored = await new JsonSettingsStore(f.Root).LoadAsync();
         Assert.Equal("Light", restored.Theme); Assert.Equal("/custom/git", restored.GitPath); Assert.Equal(f.Root, Assert.Single(restored.RecentRepositories)); Assert.Equal(1000, restored.WindowWidth);
+        Assert.Equal(21, restored.DiffLineHeight);
     }
 }

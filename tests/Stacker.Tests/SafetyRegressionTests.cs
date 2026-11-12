@@ -149,7 +149,9 @@ public sealed class SafetyRegressionTests
     {
         await using var f = new GitFixture(); await f.Linear(); var root = await f.ResolvedRoot();
         var journal = f.CreateJournal();
-        var entry = (await journal.OpenAsync(root, "local.push", [new("A", "push", "refs/heads/A", new string('a', 40), new string('b', 40), StepState.Done)])).OrThrow();
+        var entry = (await journal.OpenAsync(root, "local.push", [new("A", "push", "refs/heads/A", new string('a', 40), null, StepState.Planned)])).OrThrow();
+        (await journal.StepAsync(entry, entry.Steps[0] with { State = StepState.Started })).OrThrow();
+        (await journal.StepAsync(entry, entry.Steps[0].Finished(new string('a', 40), new string('b', 40), StepState.Done))).OrThrow();
         (await journal.CloseAsync(entry, JournalPhase.NeedsUser, message: "Published A; B failed.")).OrThrow();
         using var vm = new MainViewModel(f.Reader, new YamlStackStore(), new JsonSettingsStore(f.Root + " settings"),
             new GitExecutable(), new StackService(f.Reader), new DiffService(f.Reader), branchWriter: f.Writer());
@@ -169,6 +171,7 @@ public sealed class SafetyRegressionTests
             [new("original", "original", "main", "main", null, StepState.Planned),
              new("A", "rebase", "refs/heads/A", oldA, null, StepState.Planned),
              new("B", "rebase", "refs/heads/B", oldB, null, StepState.Planned)])).OrThrow();
+        (await journal.StepAsync(entry, entry.Steps[1] with { State = StepState.Started })).OrThrow();
         await f.Git("checkout", "A"); await f.Git("commit", "--amend", "-m", "rewritten A");
         entry = (await journal.StepAsync(entry, entry.Steps[1].Finished(oldA, await f.Git("rev-parse", "A"), StepState.Done))).OrThrow();
         (await journal.CloseAsync(entry, JournalPhase.Applied)).OrThrow();

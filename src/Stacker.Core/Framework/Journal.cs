@@ -373,6 +373,8 @@ public sealed record CommandOutcome(CommandStatus Status, string Message, Proble
     /// <summary>Human-readable descriptions of effects that completed, filled by the runner from durable steps;
     /// empty for a refusal.</summary>
     public IReadOnlyList<string> Effects { get; init; } = [];
+    /// <summary>Whether an interrupted operation already has a different journal entry for recovery.</summary>
+    internal bool HasSeparateRecoveryEntry { get; init; }
     /// <summary>A successful outcome; certainty is confirmed because the command returned after its effects.</summary>
     /// <param name="message">Display-ready success text.</param>
     /// <returns>An applied outcome with no problem.</returns>
@@ -386,6 +388,8 @@ public sealed record CommandOutcome(CommandStatus Status, string Message, Proble
     /// <param name="message">The blockers, joined for display.</param>
     /// <returns>A refused outcome with no problem.</returns>
     public static CommandOutcome Refused(string message) => new(CommandStatus.Refused, message, null) { Certainty = EffectCertainty.NotStarted };
+    internal static CommandOutcome CancelledBeforeDispatch() => new(CommandStatus.Cancelled, "The action was cancelled before execution.", null)
+        { Certainty = EffectCertainty.NotStarted };
     /// <summary>A failure carrying its problem; certainty is copied from the problem so callers can tell a
     /// definite refusal from an unknown remote result.</summary>
     /// <param name="problem">The catalogued failure.</param>

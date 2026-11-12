@@ -56,6 +56,30 @@ public sealed class DiffQualityTests
         section.Dispose();
     }
 
+    [Fact]
+    public async Task A_rename_without_text_changes_offers_the_original_file_contents()
+    {
+        await using var fixture = new GitFixture();
+        await fixture.Init();
+        await fixture.Write("old.cs", "class Original {}\n\n");
+        await fixture.Commit("Add source");
+        var basis = await fixture.Git("rev-parse", "HEAD");
+        await fixture.Git("mv", "old.cs", "new.cs");
+        await fixture.Commit("Rename source");
+        var head = await fixture.Git("rev-parse", "HEAD");
+        var files = await fixture.Reader.FilesAsync(fixture.Root, basis, head);
+        var file = Assert.Single(files);
+        Assert.Equal(FileChangeKind.Renamed, file.Kind);
+        using var section = new DiffSectionViewModel(fixture.Reader, fixture.Root, new("rename", "main", basis, head, null, files), selectFirstFile: false);
+        await section.LoadAsync(file);
+
+        var gap = Assert.IsType<DiffContextGap>(Assert.Single(section.Lines).ContextGap);
+        Assert.Equal((1, 1, 2), (gap.OldStart, gap.NewStart, gap.Count));
+        Assert.False(gap.HasHunkAbove);
+        Assert.False(gap.HasHunkBelow);
+        Assert.True(section.HasCollapsedContext);
+    }
+
     // Scenario: Search results never outlive the sections they point at.
     [AvaloniaFact]
     public async Task Search_results_are_cleared_with_their_sections()

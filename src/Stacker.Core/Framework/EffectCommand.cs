@@ -38,14 +38,14 @@ public abstract class EffectCommand<T>(string kind, string target,
         Task.FromResult(CommandPlan.Ready([JournalStep.Planned("effect", kind, target)]));
 
     /// <summary>Whether the adapter records each step's state through the journal itself.</summary>
-    /// <remarks>False by default, so this class owns the single default step: it writes Started, then Failed or
-    /// Unknown, then Done. A multi-effect command sets this true because its plan has no single <c>effect</c> step and
+    /// <remarks>False by default, so this class owns the single default step: it writes Started followed by Done,
+    /// Failed or Unknown. A multi-effect command sets this true because its plan has no single <c>effect</c> step and
     /// its adapter knows when each branch or layer has landed; the base then leaves journaling entirely to that
     /// adapter. Only a subclass can know which convention its plan and effect follow.</remarks>
     protected virtual bool AdapterJournalsSteps => false;
     /// <summary>Runs the effect, records its step state and translates the typed result into an outcome.</summary>
     /// <param name="context">The opened entry, journal and progress sink for this run.</param>
-    /// <param name="ct">The bus-linked token; cancellation propagates to the adapter and to journal writes.</param>
+    /// <param name="ct">The bus-linked token for dispatch. Recording a returned result uses its own time budget.</param>
     /// <returns>Done for an applied effect, Restored for an adapter-reported rollback, Refused when the adapter
     /// reports a refused restack, Attention for a conflict or an entry that still needs the user, and Failed with the
     /// effect's problem when the adapter returned a failure. The runner decides the journal phase and any
@@ -53,10 +53,8 @@ public abstract class EffectCommand<T>(string kind, string target,
     /// <exception cref="StackerException">Thrown when recording the step fails; the runner catches it and takes the
     /// recovery path.</exception>
     /// <remarks>Unless <see cref="AdapterJournalsSteps"/> is set, the first planned step is marked Started before the
-    /// effect and finished afterwards. A failure marks Failed normally, but Unknown when the problem's certainty is
-    /// <see cref="EffectCertainty.Unknown"/>: after a lost response the code cannot claim the effect did not happen,
-    /// so the step records that uncertainty rather than a clean failure, and the runner reaches the same conclusion
-    /// from the problem's certainty and preserves the entry for recovery. On success the step is marked Done and its
+    /// effect and finished afterwards. The step records Failed for a definite refusal and Unknown when the outcome
+    /// still needs verification. On success the step is marked Done and its
     /// new SHA is recorded only when the typed value is a string that parses as a complete commit id (40- or
     /// 64-character lowercase hex), so a branch name, stash message or pull request reference never masquerades as a
     /// commit. A <see cref="RestackOutcome"/> is translated by its own status: a conflict becomes
@@ -69,24 +67,51 @@ public abstract class EffectCommand<T>(string kind, string target,
     /// not create.</remarks>
     public async Task<CommandOutcome> ExecuteAsync(CommandContext context, CancellationToken ct = default)
     {
-        if (!AdapterJournalsSteps)
-            (await context.Journal.StepAsync(context.Entry, context.Entry.Steps[0] with { State = StepState.Started }, ct)).OrThrow();
-        Value = await effect(context, ct);
-        if (Value.IsFailed)
+        try
         {
-            if (!AdapterJournalsSteps) (await context.Journal.StepAsync(context.Entry, context.Entry.Steps[0] with
-            { State = Value.Problem!.Certainty == EffectCertainty.Unknown ? StepState.Unknown : StepState.Failed }, ct)).OrThrow();
-            return CommandOutcome.Failed(Value.Problem!);
+            ct.ThrowIfCancellationRequested();
+            if (!AdapterJournalsSteps)
+                (await context.Journal.StepAsync(context.Entry, context.Entry.Steps[0] with { State = StepState.Started }, ct)).OrThrow();
+            ct.ThrowIfCancellationRequested();
         }
+        catch (OperationCanceledException) { return CommandOutcome.CancelledBeforeDispatch(); }
+
+        Value = await effect(context, ct);
+        var outcome = DescribeOutcome(Value, context.Entry.Id);
         if (!AdapterJournalsSteps)
-            (await context.Journal.StepAsync(context.Entry, context.Entry.Steps[0].Finished(null,
-                Value.Value is string sha && CommitSha.Parse(sha).IsOk ? sha : null, StepState.Done), ct)).OrThrow();
-        if (Value.Value is RestackOutcome outcome)
-            return outcome.Conflicted ? CommandOutcome.Attention(outcome.Message)
-                : outcome.RolledBack ? CommandOutcome.Restored(outcome.Message)
-                : outcome.Status == RestackStatus.Refused ? outcome.Journal is { NeedsAttention: true }
-                    ? CommandOutcome.Attention(outcome.Message) : CommandOutcome.Refused(outcome.Message)
-                : CommandOutcome.Done(outcome.Message);
+        {
+            // Once the adapter returned, cancellation must not discard the evidence of its result.
+            using var completion = new CancellationTokenSource(CommandRunner.CompletionTimeout);
+            var state = outcome.Status switch
+            {
+                CommandStatus.Applied or CommandStatus.RolledBack => StepState.Done,
+                _ when outcome.Certainty == EffectCertainty.Confirmed => StepState.Done,
+                _ when outcome.Certainty is EffectCertainty.Rejected or EffectCertainty.NotStarted => StepState.Failed,
+                _ => StepState.Unknown
+            };
+            var sha = state == StepState.Done && Value.IsOk && Value.Value is string candidate && CommitSha.Parse(candidate).IsOk ? candidate : null;
+            (await context.Journal.StepAsync(context.Entry, context.Entry.Steps[0].Finished(null, sha, state), completion.Token)).OrThrow();
+        }
+        return outcome;
+    }
+
+    private CommandOutcome DescribeOutcome(Result<T> value, string entryId)
+    {
+        if (value.IsFailed) return CommandOutcome.Failed(value.Problem!);
+        if (value.Value is RestackOutcome outcome)
+        {
+            if (outcome.Conflicted || outcome.Status == RestackStatus.Refused && outcome.Journal is { CanUndo: true })
+                return CommandOutcome.Attention(outcome.Message) with
+                {
+                    HasSeparateRecoveryEntry = outcome.Journal is { CanUndo: true } recovery && recovery.Id != entryId
+                };
+            return outcome.Status switch
+            {
+                RestackStatus.RolledBack => CommandOutcome.Restored(outcome.Message),
+                RestackStatus.Refused => CommandOutcome.Refused(outcome.Message),
+                _ => CommandOutcome.Done(outcome.Message)
+            };
+        }
         return CommandOutcome.Done(Describe());
     }
 }

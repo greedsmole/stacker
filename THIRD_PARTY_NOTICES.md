@@ -7,6 +7,7 @@ Stacker uses the following open-source components. Retain their package license 
 - CommunityToolkit.Mvvm — https://github.com/CommunityToolkit/dotnet — MIT.
 - YamlDotNet — https://github.com/aaubry/YamlDotNet — MIT.
 - TextMateSharp and TextMateSharp.Grammars — https://github.com/danipen/TextMateSharp — MIT. The grammar bundle includes third-party language grammars and themes; see that project's bundled license files for their notices.
+- Roslyn and its MSBuild workspace — https://github.com/dotnet/roslyn — MIT.
 - Microsoft.Extensions.DependencyInjection — https://github.com/dotnet/runtime — MIT.
 - .NET runtime — https://github.com/dotnet/runtime — MIT and third-party notices included by the self-contained publish.
 

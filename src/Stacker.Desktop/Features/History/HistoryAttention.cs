@@ -14,7 +14,8 @@ public sealed partial class HistoryWorkspaceViewModel
     {
         if (SelectedAttention is not { } item || IsBusy) return;
         SelectedNode = Nodes.FirstOrDefault(n => n.Id == item.ChangeId);
-        await LoadLayerAsync(); SelectedFile = Files.FirstOrDefault(f => f.Change.NewPath == item.Path);
+        if (!await LoadLayerDataAsync(item.Path)) return;
+        SelectedFile = Files.FirstOrDefault(f => f.Change.NewPath == item.Path);
         if (SelectedFile is null) { Preview = item.Label; Message = "This question refers to a file no longer changed by the current layer. It remains blocking until explicitly cleared."; }
         else await ShowCurrentAsync();
     }
@@ -37,7 +38,7 @@ public sealed partial class HistoryWorkspaceViewModel
         await ExecuteAsync(async () =>
         {
             (await _store.SetConcernAsync(new(current.ChangeId, file.Change.NewPath, ConcernText.Trim()), remove, _lifetime.Token)).OrThrow();
-            await LoadLayerAsync(); SelectedFile = Files.FirstOrDefault(f => f.Change.NewPath == file.Change.NewPath);
+            await LoadLayerDataAsync(file.Change.NewPath);
         });
     }
 }

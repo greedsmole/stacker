@@ -10,12 +10,29 @@ public sealed partial class RenderedDiffLine(DiffLine line) : ObservableObject
 {
     public DiffLine Source { get; } = line;
     public DiffLineKind Kind => Source.Kind;
+    public bool IsAdded => Kind == DiffLineKind.Added;
+    public bool IsRemoved => Kind == DiffLineKind.Removed;
+    public bool IsHunk => Kind == DiffLineKind.Header;
     public int? OldLineNumber => Source.OldLineNumber;
     public int? NewLineNumber => Source.NewLineNumber;
     public bool IsCode => Kind is DiffLineKind.Context or DiffLineKind.Added or DiffLineKind.Removed;
-    public bool CanCommentLeft => Kind == DiffLineKind.Removed;
-    public bool IsLineCommentVisible => IsCode && AllowComment && !IsRangeSelected;
+    public bool IsExpandedContext { get; init; }
+    public bool CanComment => IsCode && AllowComment && !IsExpandedContext;
+    public bool CanCommentLeft => IsRemoved && CanComment;
+    public bool IsLineCommentVisible => CanComment && !IsRangeSelected;
     public bool AllowComment { get; init; } = true;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsCollapsedContext), nameof(ContextLabel), nameof(ShowExpandUp))]
+    private DiffContextGap? _contextGap;
+    public bool IsCollapsedContext => ContextGap is not null;
+    public bool ShowExpandUp => ContextGap is { HasHunkAbove: true, HasHunkBelow: true, Count: > DiffContextGap.ExpandStep };
+    public string? ContextLabel => ContextGap switch
+    {
+        null => null,
+        { Count: 1 } => "Show 1 unchanged line",
+        { Count: <= DiffContextGap.ExpandStep } gap => $"Show {gap.Count} unchanged lines",
+        { RevealFromEnd: true } gap => $"Show {gap.RevealCount} lines above · {gap.Count} hidden",
+        { } gap => $"Show {gap.RevealCount} lines below · {gap.Count} hidden"
+    };
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsLineCommentVisible))] private bool _isRangeSelected;
     public string Marker => Kind == DiffLineKind.Added ? "+" : Kind == DiffLineKind.Removed ? "−" : "";
     public string Text => IsCode && Source.Text.Length > 0 ? Source.Text[1..] : Source.Text;
@@ -27,6 +44,29 @@ public sealed partial class RenderedDiffLine(DiffLine line) : ObservableObject
     [ObservableProperty] private IReadOnlyList<SyntaxSpan> _tokens = [];
     [ObservableProperty] private TextWrapping _textWrapping = TextWrapping.NoWrap;
 }
+public sealed partial class DiffFileRow(FileChange change) : ObservableObject
+{
+    public FileChange Change { get; } = change;
+    public string AccessibleName => $"{Change.DisplayPath} · {Change.Kind}";
+    public bool IsReviewed => ReviewStatus?.State == FileReviewState.Reviewed;
+    public bool HasReviewStatus => ReviewStatus is not null;
+    public bool CanChangeReview => HasReviewStatus && !SavingReview;
+    public string ReviewAction => ReviewStatus?.State switch
+    {
+        FileReviewState.Reviewed => "Mark unreviewed",
+        FileReviewState.CodeChanged => "Code changed since review. Mark reviewed",
+        FileReviewState.BaseChanged => "Base changed since review. Mark reviewed",
+        FileReviewState.MetadataChanged => "File metadata changed since review. Mark reviewed",
+        FileReviewState.Unavailable => "Previous review could not be compared. Mark reviewed",
+        _ => "Mark reviewed"
+    };
+
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsReviewed), nameof(HasReviewStatus), nameof(CanChangeReview), nameof(ReviewAction))]
+    private FileReviewStatus? _reviewStatus;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanChangeReview))]
+    private bool _savingReview;
+}
+
 public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
 {
     private readonly IGitRepositoryReader _git;
@@ -53,14 +93,25 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     public bool HasWarning => Warning is not null;
     public double ScrollX { get; set; }
     public double ScrollY { get; set; }
-    public ObservableCollection<FileChange> Files { get; } = [];
+    internal Task SelectedFileLoad { get; private set; } = Task.CompletedTask;
+    private readonly Dictionary<FileChange, DiffFileRow> _fileRows;
+    public IReadOnlyList<FileChange> Files { get; private set; } = [];
+    public BatchCollection<DiffFileRow> VisibleFiles { get; } = [];
+    internal ChangeVersion? ReviewVersion { get; set; }
+    internal string? ReviewScope { get; set; }
     public BatchCollection<RenderedDiffLine> Lines { get; } = [];
     public ObservableCollection<ReviewThread> Threads { get; } = [];
-    [ObservableProperty] private FileChange? _selectedFile;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(SelectedFileRow))] private FileChange? _selectedFile;
+    public DiffFileRow? SelectedFileRow
+    {
+        get => SelectedFile is { } file ? _fileRows.GetValueOrDefault(file) : null;
+        set { if (!_filtering) SelectedFile = value?.Change; }
+    }
     [ObservableProperty] private string _filter = "";
-    [ObservableProperty] private string _message = "Select a file to view changes.";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowMessage))] private string _message = "Select a file to view changes.";
     [ObservableProperty] private bool _isBusy;
-    [ObservableProperty] private bool _hasLoadError;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowMessage))] private bool _hasLoadError;
+    public bool ShowMessage => Message.Length > 0 || HasLoadError;
     [ObservableProperty] private bool _showSectionHeader;
     public ReviewViewModel? Review { get; set; }
     public bool IsContentVisible => !ShowSectionHeader || IsExpanded;
@@ -74,11 +125,14 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     partial void OnWrapCodeChanged(bool value)
     { foreach (var line in Lines) line.TextWrapping = value ? TextWrapping.Wrap : TextWrapping.NoWrap; OnPropertyChanged(nameof(CodeHorizontalScroll)); }
     [ObservableProperty] private double _panelHeight = 560;
-    public DiffSectionViewModel(IGitRepositoryReader git, string root, DiffResult result, ISyntaxHighlighter? highlighter = null, string theme = "Dark", bool readOnly = false)
+    public DiffSectionViewModel(IGitRepositoryReader git, string root, DiffResult result, ISyntaxHighlighter? highlighter = null,
+        string theme = "Dark", bool readOnly = false, bool selectFirstFile = true)
     {
         IsReadOnlyComparison = readOnly; _git = git; _root = root; Result = result; _highlighter = highlighter; Theme = theme;
+        _fileRows = result.Files.Distinct().ToDictionary(file => file, file => new DiffFileRow(file));
         UpdateFilter();
-        if (Files.Count == 0) Message = "No changes in this comparison."; else SelectedFile = Files[0];
+        if (Files.Count == 0) Message = "No changes in this comparison.";
+        else if (selectFirstFile) SelectedFile = Files[0];
     }
     public void BindPr(PullRequest? pr, GitHubRepositoryContext? context)
     {
@@ -97,17 +151,35 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     private void UpdateFilter()
     {
         var selected = SelectedFile; _filtering = true;
-        Files.Clear(); foreach (var file in Result.Files.Where(f => f.DisplayPath.Contains(Filter, StringComparison.OrdinalIgnoreCase))) Files.Add(file);
+        Files = Result.Files.Where(f => f.DisplayPath.Contains(Filter, StringComparison.OrdinalIgnoreCase)).ToArray();
+        VisibleFiles.ReplaceAll(Files.Select(file => _fileRows[file]));
         SelectedFile = selected is not null && Files.Contains(selected) ? selected : null;
+        if (GroupFilesByFolder) RebuildFolderFiles();
+        OnPropertyChanged(nameof(FileCountLabel));
+        OnPropertyChanged(nameof(HasNoFileMatches));
         _filtering = false;
+        if (SelectedFile == selected) OnPropertyChanged(nameof(SelectedFileRow));
         if (SelectedFile is null && selected is not null) _ = LoadAsync(null);
     }
-    partial void OnSelectedFileChanged(FileChange? value) { if (!_filtering) { ScrollX = ScrollY = 0; _ = LoadAsync(value); } }
+    internal void SetReviewStatuses(IReadOnlyList<FileReviewStatus> statuses)
+    {
+        if (_disposed) return;
+        foreach (var status in statuses)
+            if (_fileRows.TryGetValue(status.Change, out var row)) row.ReviewStatus = status;
+    }
+    partial void OnSelectedFileChanged(FileChange? value)
+    {
+        if (_filtering) return;
+        UpdateFolderSelection();
+        ScrollX = ScrollY = 0;
+        SelectedFileLoad = LoadAsync(value);
+    }
     /// <summary>Loads one file's patch on demand and cancels any request for the previously selected file.</summary>
     /// <remarks>Results are applied only while this request remains current, preventing stale selections from flashing.</remarks>
     public async Task LoadAsync(FileChange? file)
     {
         _load?.Cancel(); var load = new CancellationTokenSource(); _load = load;
+        ResetContext();
         Lines.Clear(); Patch = ""; HasLoadError = false; IsBusy = file is not null;
         Message = file is null ? "Select a file to view changes." : "Loading diff…";
         try
@@ -116,45 +188,69 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
             var diff = (await _git.PatchAsync(_root, Result.BaseSha, Result.HeadSha, file, load.Token)).OrThrow();
             if (load.IsCancellationRequested || _disposed) return;
             Patch = diff.Patch;
+            var readContext = _git is IBlobReader && DiffContext.CanRead(file);
+            var highlight = _highlighter is not null && !file.IsBinary && !file.IsSubmodule;
+            var head = readContext || (highlight && diff.Hunks.Any(hunk => hunk.NewCount > 0))
+                ? await ReadSourceBlobAsync(Result.HeadSha, file.NewPath, load.Token)
+                : null;
             var wrapping = WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap;
             var prepared = await Task.Run(() =>
             {
                 var presentation = DiffView.From(diff); var rows = new RenderedDiffLine[presentation.Rows.Count];
                 for (var i = 0; i < rows.Length; i++) { if (i % 1024 == 0) load.Token.ThrowIfCancellationRequested(); rows[i] = new(presentation.Rows[i]) { AllowComment = !IsReadOnlyComparison, TextWrapping = wrapping }; }
-                return (presentation, rows);
+                var context = readContext && head is not null ? DiffContext.Create(diff, presentation, head.Text, load.Token) : null;
+                return (presentation, rows, context);
             }, load.Token);
             if (load.IsCancellationRequested || _disposed) return;
             var view = prepared.presentation;
             if (wrapping != (WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap)) foreach (var row in prepared.rows) row.TextWrapping = WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap;
-            Lines.ReplaceAll(prepared.rows);
-            Message = view.EmptyReason;
+            SetContext(prepared.context, prepared.rows, readContext && head is null);
+            Message = Lines.Count == 0 ? view.EmptyReason : "";
             IsBusy = false; ApplyThreads();
-            if (!file.IsBinary && !file.IsSubmodule) await HighlightAsync(file, load.Token);
+            if (highlight) await HighlightAsync(file, head, load.Token);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { if (!load.IsCancellationRequested && !_disposed) { HasLoadError = true; Message = ex.Message; } }
         finally { if (ReferenceEquals(_load, load)) { _load = null; IsBusy = false; } load.Dispose(); }
     }
     // Old and new blobs are tokenized separately so multiline grammar state follows each side's actual source text.
-    private async Task HighlightAsync(FileChange file, CancellationToken ct)
+    private async Task HighlightAsync(FileChange file, BlobContent? head, CancellationToken ct)
     {
-        if (_highlighter is null || _git is not IBlobReader reader) return;
+        if (_highlighter is null) return;
+        var old = Lines.Any(line => line.IsRemoved) ? await ReadSourceBlobAsync(Result.BaseSha, file.OldPath, ct) : null;
+        var oldTokens = await ReadTokensAsync(old, file.OldPath);
+        var newTokens = await ReadTokensAsync(head, file.NewPath);
+        ct.ThrowIfCancellationRequested();
+        _contextTokens = _context is null ? null : newTokens;
+        foreach (var line in Lines)
+        {
+            var number = line.IsRemoved ? line.OldLineNumber : line.NewLineNumber;
+            var source = line.IsRemoved ? oldTokens : newTokens;
+            if (number is int index && source?.TryGetValue(index, out var spans) == true) line.Tokens = spans;
+        }
+
+        async Task<IReadOnlyDictionary<int, IReadOnlyList<SyntaxSpan>>?> ReadTokensAsync(BlobContent? content, string path)
+        {
+            if (content is null) return null;
+            try
+            {
+                var tokens = await _highlighter.HighlightAsync(content.Id, path, content.Text, Theme, ct);
+                return tokens.IsFailed ? null : tokens.Value;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { return null; }
+        }
+    }
+    private async Task<BlobContent?> ReadSourceBlobAsync(string commit, string path, CancellationToken ct)
+    {
+        if (_git is not IBlobReader reader) return null;
         try
         {
-            var old = (await reader.ReadBlobAsync(_root, Result.BaseSha, file.OldPath, ct)).OrThrow();
-            var current = (await reader.ReadBlobAsync(_root, Result.HeadSha, file.NewPath, ct)).OrThrow();
-            var oldTokens = old is null ? new Dictionary<int, IReadOnlyList<SyntaxSpan>>() : (await _highlighter.HighlightAsync(old.Id, file.OldPath, old.Text, Theme, ct)).OrThrow();
-            var newTokens = current is null ? new Dictionary<int, IReadOnlyList<SyntaxSpan>>() : (await _highlighter.HighlightAsync(current.Id, file.NewPath, current.Text, Theme, ct)).OrThrow();
-            ct.ThrowIfCancellationRequested();
-            foreach (var line in Lines)
-            {
-                var number = line.Kind == DiffLineKind.Removed ? line.OldLineNumber : line.NewLineNumber;
-                var source = line.Kind == DiffLineKind.Removed ? oldTokens : newTokens;
-                if (number is not null && source.TryGetValue(number.Value, out var spans)) line.Tokens = spans;
-            }
+            var result = await reader.ReadBlobAsync(_root, commit, path, ct);
+            return result.IsFailed ? null : result.Value;
         }
         catch (OperationCanceledException) { throw; }
-        catch { /* Syntax is optional; a readable patch remains on screen. */ }
+        catch { return null; }
     }
     public void SetThreads(IEnumerable<ReviewThread> threads) { ReplaceIfChanged(Threads, threads.ToArray()); ApplyThreads(); }
     private static void ReplaceIfChanged<T>(ObservableCollection<T> target, IReadOnlyList<T> values)
@@ -178,6 +274,7 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         Review?.Detach(this); _disposed = true; ContentLease?.Dispose(); ContentLease = null; _load?.Cancel();
+        ResetContext();
         // An evicted comparison must not keep a patch, its rows or their token tables alive.
         Lines.Clear(); Threads.Clear(); FileThreads.Clear(); Patch = "";
     }
