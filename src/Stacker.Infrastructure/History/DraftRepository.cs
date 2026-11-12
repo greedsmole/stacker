@@ -22,9 +22,15 @@ public sealed partial class SqliteHistoryStore
         }
         if (value is ReviewDraft draft)
         {
-            using var active = Command(c, tx, "SELECT payload,phase FROM publication_operations WHERE draft_key=$k AND phase IN(0,1,3)", ("$k", id));
+            using var active = Command(c, tx, "SELECT payload,phase,execution FROM publication_operations WHERE draft_key=$k AND phase IN(0,1,3)", ("$k", id));
             using var rows = active.ExecuteReader();
-            if (rows.Read()) draft.Operation = JsonSerializer.Deserialize<PublicationOperation>(rows.GetString(0))! with { Phase = (PublicationPhase)rows.GetInt32(1) };
+            if (rows.Read())
+            {
+                var operation = JsonSerializer.Deserialize<PublicationOperation>(rows.GetString(0))! with { Phase = (PublicationPhase)rows.GetInt32(1) };
+                draft.Operation = operation;
+                if (!rows.IsDBNull(2) && JsonSerializer.Deserialize<JournalEntry>(rows.GetString(2)) is { } execution)
+                    ReviewSessionService.ReconcileExecution(draft, execution);
+            }
         }
         tx.Commit(); return (value, revision);
     }, ct);
@@ -38,6 +44,8 @@ public sealed partial class SqliteHistoryStore
         if (command.ExecuteNonQuery() != 1) throw new StackerException(Problem.Of(ProblemCodes.StoreStaleRevision, "Draft changed in another session. Your text is kept in this window; copy it before reloading."));
         if (value is ReviewDraft draft)
         {
+            if (draft.Operation is { } active && draft.PublicationHistory.Any(operation => operation.Id == active.Id))
+                throw new StackerException(Problem.Of(ProblemCodes.StateInvalid, "A publication cannot be both active and archived."));
             var unfinished = new HashSet<string>();
             using (var pending = Command(c, tx, "SELECT id FROM publication_operations WHERE draft_key=$k AND phase IN(0,1,3)", ("$k", id)))
             using (var rows = pending.ExecuteReader()) while (rows.Read()) unfinished.Add(rows.GetString(0));

@@ -28,7 +28,7 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
     internal ComposerKey _composerKey = ComposerKey.Pr;
     internal bool _switchingComposer;
     public string ReviewLabel => $"Review ({DraftComments.Count})";
-    public bool HasPendingPublication => _draft.PendingOperation is not null;
+    public bool HasPendingPublication => _draft.PendingOperation is not null || _draft.Operation is not null;
     public bool HasStaleDraft => _draft.HeadSha != PullRequest.HeadSha || _draft.BaseSha != PullRequest.BaseSha;
     public bool HasRecoveredText => !string.IsNullOrEmpty(RecoveredText);
     public string RecoveredText => _draft.RecoveredText;
@@ -198,7 +198,6 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
         var lines = _section.Lines.Where(l => l.Kind is DiffLineKind.Added or DiffLineKind.Context && l.NewLineNumber >= start && l.NewLineNumber <= anchor.Line).OrderBy(l => l.NewLineNumber).ToArray();
         return lines.Length == anchor.Line - start + 1 ? string.Join("\n", lines.Select(l => l.Text.TrimEnd('\r'))) : null;
     }
-    internal void ClearPublishedComposer() => _reviewPublicationController.ClearPublishedComposer();
     [RelayCommand]
     internal async Task AddToDraftAsync()
     {
@@ -222,8 +221,6 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
     internal Task PublishAsync(string kind, IReadOnlyList<ReviewAnchor> anchors, Func<string, Task> send, string? filePath = null) => _reviewPublicationController.PublishAsync(kind, anchors, send, filePath);
     [RelayCommand] internal Task ToggleResolvedAsync() => _reviewPublicationController.ToggleResolvedAsync();
     [RelayCommand] internal Task UnlockRetryAsync() => _reviewPublicationController.UnlockRetryAsync();
-    internal void ClearPublishedFile(string path) => _reviewPublicationController.ClearPublishedFile(path);
-    internal void ClearSubmittedDraft() => _reviewPublicationController.ClearSubmittedDraft();
     internal static string Mark(string body, string marker) => body + "\n\n<!-- stacker:" + marker + " -->";
     // Serialize saves so an older asynchronous write cannot overwrite newer text typed by the user.
     internal void QueueSave() => _reviewDraftController.QueueSave();

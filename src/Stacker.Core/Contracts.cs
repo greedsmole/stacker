@@ -332,14 +332,13 @@ public interface IGitBranchWriter
     /// <param name="ct">Cancels before the resume; Git's rebase stays in progress.</param>
     /// <returns>The outcome after the commit was dropped.</returns>
     Task<Result<RestackOutcome>> SkipAsync(string root, CancellationToken ct = default);
-    /// <summary>Aborts the operation in progress and restores every branch the interrupted run moved.</summary>
-    /// <remarks>Recovery, not a plain Git abort: the journal tells it which layers this operation already rewrote, so refs are restored with
-    /// expected-current SHA checks and unrelated newer work is preserved. Uncertainty is reported for inspection rather than resolved by a
-    /// guessed reset.</remarks>
+    /// <summary>Aborts the Git operation in progress and restores recorded refs when it belongs to an interrupted restack.</summary>
     /// <param name="root">Repository root.</param>
     /// <param name="ct">Cancels before the restore; an abort that cannot finish is reported as a failure.</param>
     /// <returns>The outcome of the recovery, with the journal entry that was closed.</returns>
     Task<Result<RestackOutcome>> AbortAsync(string root, CancellationToken ct = default);
+    /// <summary>Restores a specific interrupted restack after checking the journal and the current Git operation.</summary>
+    Task<Result<RestackOutcome>> RestoreInterruptedRestackAsync(string root, string entryId, CancellationToken ct = default);
     /// <summary>The newest journal entry that still needs the user: undoable, conflicted, or holding a stash.</summary>
     /// <remarks>Drives the recovery banner. A null result means there is nothing waiting, so the shell can stop offering recovery actions.</remarks>
     /// <param name="root">Repository root.</param>

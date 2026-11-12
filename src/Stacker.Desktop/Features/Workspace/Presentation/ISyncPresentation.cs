@@ -10,6 +10,7 @@ internal interface ISyncPresentation
     global::System.Collections.ObjectModel.ObservableCollection<global::Stacker.Desktop.ViewModels.StackGroupViewModel> LocalGroups { get; }
     global::System.Threading.Tasks.Task RefreshAsync();
     global::System.Threading.Tasks.Task RefreshGitHubAsync();
+    global::System.Threading.Tasks.Task RefreshGitHubAfterPublicationAsync();
     global::System.Threading.Tasks.Task<(bool Ok, string Message)> RefreshWorkingTreeAsync(global::System.Threading.CancellationToken @ct = default);
     global::System.Threading.Tasks.Task<global::System.Boolean> SaveStackAsync(global::Stacker.Core.StackDefinition @stack);
     global::System.String Status { get; set; }

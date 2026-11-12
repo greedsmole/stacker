@@ -15,17 +15,15 @@ public sealed class CommandBus(CommandRunner runner, IDiagnosticSink? diagnostic
     /// released in one <c>finally</c> after <see cref="_active"/> is cleared, which keeps <see cref="IsBusy"/> and the
     /// quiesce handshake consistent with the command that actually ran.</remarks>
     private readonly SemaphoreSlim _gate = new(1, 1);
-    /// <summary>Guards the two refusal flags and the active cancellation source as one admission decision.</summary>
+    /// <summary>Guards the admission state and the active cancellation source as one decision.</summary>
     /// <remarks>The semaphore cannot be held across an await while admission is decided, so the lock orders the
     /// stopping/paused check, the permit attempt and the assignment of <see cref="_active"/> atomically. Nothing
     /// inside the lock awaits.</remarks>
     private readonly object _sync = new();
-    /// <summary>Set once by <see cref="StopAsync"/>; from then on every command is refused and
-    /// <see cref="Resume"/> can no longer lift a pause.</summary>
-    private bool _stopping;
-    /// <summary>Set by <see cref="PauseAsync"/> and cleared by <see cref="Resume"/>; refuses new commands while the
-    /// process keeps running.</summary>
-    private bool _paused;
+    /// <summary>Admission policy, independent of whether the active command has drained.</summary>
+    private enum Admission { Accepting, Paused, Stopped }
+    /// <summary>Current admission policy, read and changed under <see cref="_sync"/>.</summary>
+    private Admission _admission = Admission.Accepting;
     /// <summary>Linked cancellation source of the command holding the permit, or null between commands.</summary>
     /// <remarks>Pause and stop cancel this source, and the command runs on the same token, so cancellation reaches
     /// adapter work and journal writes instead of only marking the bus as stopping.</remarks>
@@ -101,7 +99,7 @@ public sealed class CommandBus(CommandRunner runner, IDiagnosticSink? diagnostic
         CancellationTokenSource? linked = null; string? refusal = null;
         lock (_sync)
         {
-            if (_stopping || _paused) refusal = "The workspace is stopping operations.";
+            if (_admission != Admission.Accepting) refusal = "The workspace is stopping operations.";
             else if (!_gate.Wait(0)) refusal = "An operation is already running.";
             else _active = linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdown.Token);
         }
@@ -138,7 +136,11 @@ public sealed class CommandBus(CommandRunner runner, IDiagnosticSink? diagnostic
     /// <summary>Allows commands again after a pause, unless shutdown has already begun.</summary>
     /// <remarks>Does nothing when <see cref="StopAsync"/> has run, which is what makes stopping permanent. It only
     /// clears the refusal flag; the command cancelled by the pause has already received its cancellation.</remarks>
-    public void Resume() { lock (_sync) { if (!_stopping) _paused = false; } }
+    public void Resume()
+    {
+        lock (_sync)
+            if (_admission == Admission.Paused) _admission = Admission.Accepting;
+    }
     /// <summary>Permanently refuses new commands and cancels the running one through the shutdown signal.</summary>
     /// <param name="timeout">Budget shared by the cancellation acknowledgement and the wait for the permit.</param>
     /// <returns>True when the bus is quiescent; false when the budget expired first.</returns>
@@ -163,7 +165,8 @@ public sealed class CommandBus(CommandRunner runner, IDiagnosticSink? diagnostic
         var started = TimeProvider.System.GetTimestamp(); Task cancellation;
         lock (_sync)
         {
-            _paused = true; if (permanent) _stopping = true;
+            if (permanent) _admission = Admission.Stopped;
+            else if (_admission == Admission.Accepting) _admission = Admission.Paused;
             cancellation = permanent ? _shutdown.CancelAsync() : _active?.CancelAsync() ?? Task.CompletedTask;
         }
         try { await cancellation.WaitAsync(timeout); } catch (TimeoutException) { return false; }

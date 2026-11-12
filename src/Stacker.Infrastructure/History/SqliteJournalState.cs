@@ -37,8 +37,7 @@ public sealed class SqliteJournalState(SqliteHistoryStore database, IJournal? le
         {
             using var query = c.CreateCommand(); query.Transaction = tx; query.CommandText = "SELECT phase FROM publication_operations WHERE id=$i"; query.Parameters.AddWithValue("$i", journal.Entries[i].Id);
             if (query.ExecuteScalar() is not long phase) continue;
-            if ((PublicationPhase)phase is PublicationPhase.Confirmed or PublicationPhase.Rejected)
-                journal.Entries[i] = journal.Entries[i] with { Phase = (PublicationPhase)phase == PublicationPhase.Confirmed ? JournalPhase.Applied : JournalPhase.Dismissed };
+            journal.Entries[i] = SqliteHistoryStore.ReconcilePublication(journal.Entries[i], (PublicationPhase)phase);
         }
         return journal;
     }

@@ -57,12 +57,9 @@ public sealed class LocalGitClient : IGitBranchWriter
             return (T)(object)new RestackOutcome(RestackStatus.Refused, null, [], outcome.Message, null);
         throw new StackerException(outcome.Message);
     }
-    private async Task<RestackOutcome> Resolve(string root, string action, string? editor, CancellationToken ct)
-    {
-        var target = await _recoveryEffects.ActiveJournalAsync(root, ct);
-        return await Run(root, new ResolveConflictCommand(action, (_, token) => Capture(() => action == "continue"
-            ? _restackEffects.ContinueAsync(root, editor, token, target) : _restackEffects.SkipAsync(root, token, target))), ct);
-    }
+    private Task<RestackOutcome> Resolve(string root, string action, string? editor, CancellationToken ct) =>
+        Run(root, new ResolveConflictCommand(action, (context, token) => Capture(() => action == "continue"
+            ? _restackEffects.ContinueAsync(root, editor, context.Entry, token) : _restackEffects.SkipAsync(root, context.Entry, token))), ct);
     public Task<Result<IReadOnlyList<SavedStash>>> SavedStashesAsync(string root, CancellationToken ct = default) => _journal.StashesAsync(root, ct);
     public Task<Result<WorkingTreeState>> RestoreRecordedStashAsync(string root, string sha, CancellationToken ct = default) =>
         Boundary.CaptureAsync(() => RestoreStash(root, ct, sha), ProblemCodes.GitFailed);
@@ -75,11 +72,8 @@ public sealed class LocalGitClient : IGitBranchWriter
             : (await _journal.ByIdAsync(root, selected.EntryId, ct)).OrThrow()! with { StashRef = selected.Sha };
         return await Run(root, new RestoreStashCommand((_, token) => Capture(() => _workingTreeEffects.RestoreStashAsync(root, token, target))), ct);
     }
-    private async Task<RestackOutcome> Recover(string root, CancellationToken ct)
-    {
-        var target = await _recoveryEffects.ActiveJournalAsync(root, ct);
-        return await Run(root, new RecoverCommand((_, token) => Capture(() => _recoveryEffects.AbortAsync(root, token, target))), ct);
-    }
+    private Task<RestackOutcome> Recover(string root, CancellationToken ct, string? entryId = null) =>
+        Run(root, new RecoverCommand((_, token) => Capture(() => _recoveryEffects.AbortAsync(root, token, entryId))), ct);
     private async Task Dismiss(string root, CancellationToken ct)
     {
         var target = await _recoveryEffects.ActiveJournalAsync(root, ct);
@@ -131,6 +125,9 @@ public sealed class LocalGitClient : IGitBranchWriter
     Task<Result<RestackOutcome>> IGitBranchWriter.SkipAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => SkipAsync(root, ct), ProblemCodes.GitFailed);
 
     Task<Result<RestackOutcome>> IGitBranchWriter.AbortAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => AbortAsync(root, ct), ProblemCodes.GitFailed);
+
+    Task<Result<RestackOutcome>> IGitBranchWriter.RestoreInterruptedRestackAsync(string root, string entryId, CancellationToken ct) =>
+        Boundary.CaptureAsync(() => Recover(root, ct, entryId), ProblemCodes.GitFailed);
 
     Task<Result<JournalEntry?>> IGitBranchWriter.ActiveJournalAsync(string root, CancellationToken ct) => Boundary.CaptureAsync(() => ActiveJournalAsync(root, ct), ProblemCodes.GitFailed);
 

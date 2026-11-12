@@ -28,42 +28,75 @@ internal sealed class RecoveryEffects(GitRunner git, IJournal journal)
 {
     /// <summary>Aborts whatever Git operation is in progress and restores the branches an interrupted restack had
     /// already moved, then closes its entry as rolled back.</summary>
-    /// <remarks>The entry is used only when it is still an unfinished <c>restack</c> that needs attention: an applied
-    /// restack is undoable rather than abortable, and a failed push does not own the repository's terminal state, so
-    /// either is treated as absent and only the Git operation is abandoned. With neither an operation nor an entry
-    /// this refuses instead of reporting a success, because an uncertain effect must be inspected rather than
-    /// dismissed. The branches are restored by <see cref="RestoreAsync"/> without closing the entry, so a failed
-    /// restore leaves it open for a second attempt rather than claiming a rollback.</remarks>
+    /// <remarks>An unfinished restack owns a stopped rebase only when its recorded branch and commits match Git's
+    /// worktree markers. A separate Git operation is aborted on its own. With no Git operation, the unfinished restack
+    /// can still restore its recorded refs. A failed restore leaves the entry available for another attempt.</remarks>
     /// <param name="root">Repository root to recover.</param>
     /// <param name="ct">Cancels the abort and the restore.</param>
-    /// <param name="target">Entry to recover, or null to use the journal's active entry.</param>
+    /// <param name="entryId">The restack selected for restore, or null to abort the current Git operation.</param>
     /// <returns>A rolled-back outcome whose message counts the branches that were actually restored, with the closed
     /// entry or null when no entry was involved.</returns>
     /// <exception cref="StackerException">The working tree gained tracked changes, or a ref cannot be proven to belong
     /// to the operation.</exception>
-    public async Task<RestackOutcome> AbortAsync(string root, CancellationToken ct = default, JournalEntry? target = null)
+    public async Task<RestackOutcome> AbortAsync(string root, CancellationToken ct, string? entryId)
     {
         await git.Gate.WaitAsync(ct);
         try
         {
-            var entry = target ?? (await journal.ActiveAsync(root, ct)).OrThrow();
-            var state = await git.StatusAsync(root, ct);
-            // An old applied restack or a failed push does not own a terminal-started operation.
+            var entry = entryId is null ? (await journal.ActiveAsync(root, ct)).OrThrow()
+                : (await journal.ByIdAsync(root, entryId, ct)).OrThrow();
             if (entry is not { Kind: "restack", NeedsAttention: true }) entry = null;
-            if (!state.HasOperation && entry is null)
+            if (entryId is not null && entry is null) return git.Refused("The interrupted restack is no longer available. Refresh the recovery list.");
+            var operation = await git.OperationAsync(root, ct);
+            if (operation != WorkingOperation.None &&
+                (operation != WorkingOperation.Rebase || await FindStoppedRebaseAsync(root, entry, ct) is null))
+            {
+                if (entryId is not null)
+                    return git.Refused("A separate Git operation is in progress. Finish or abort it before restoring the restack.", entry);
+                await git.Run(root, git.AbortArgs(operation), ct);
+                return new(RestackStatus.RolledBack, null, [], "The Git operation was aborted.", null);
+            }
+            if (entry is null)
                 return git.Refused("There is no interrupted restack to restore. Inspect any uncertain effects before dismissing their record.");
-            var restored = await RestoreAsync(root, entry, entry is null ? "" : git.OriginalBranch(entry), ct, close: false);
+            int restored;
+            try { restored = await RestoreAsync(root, entry, git.OriginalBranch(entry), ct, close: false); }
+            catch (Exception ex)
+            {
+                return git.Refused($"Could not complete restack recovery. {ex.Message}", entry);
+            }
             var message = restored == 0 ? "The operation was aborted." : $"The operation was aborted and {restored} branch(es) were restored.";
-            if (entry is not null) entry = (await journal.CloseAsync(entry, JournalPhase.RolledBack, message: message, ct: ct)).OrThrow();
-            return new(RestackStatus.RolledBack, null, [], message, entry);
+            return await CompleteRecoveryAsync(entry, JournalPhase.RolledBack, message);
         }
         finally { git.Gate.Release(); }
     }
 
+    /// <summary>Finds the interrupted layer using Git's worktree markers, even if the pending id was never saved.</summary>
+    internal async Task<JournalStep?> FindStoppedRebaseAsync(string root, JournalEntry? entry, CancellationToken ct)
+    {
+        if (entry is not { Kind: "restack", NeedsAttention: true }) return null;
+        foreach (var step in entry.Steps)
+        {
+            if (step.Kind != "rebase" || step.OldSha is null) continue;
+            var legacyPending = entry.SchemaVersion == 2 && step.Id == entry.PendingStepId && step.State == StepState.Planned;
+            if (!legacyPending && step.State is not (StepState.Started or StepState.Unknown)) continue;
+            string? onto = null;
+            if (entry.RestackPlan is { } plan)
+            {
+                var approved = plan.Steps.FirstOrDefault(layer => layer.Branch == step.Target && layer.NeedsRebase && !layer.Blocked);
+                if (approved is null || (onto = ExpectedParent(entry, approved)) is null) continue;
+            }
+            if (await git.MatchesRebaseAsync(root, step, onto, ct)) return step;
+        }
+        return null;
+    }
+
+    internal static string? ExpectedParent(JournalEntry entry, RestackStep step) =>
+        entry.Moved.LastOrDefault(moved => moved.Target == step.ParentRef)?.NewSha ?? step.OldParentTip;
+
     /// <summary>Restores every branch the entry records as moved, after proving ownership of each one, in a single ref
     /// transaction.</summary>
     /// <remarks>Callers must hold the write gate; this method does not take it, so <see cref="AbortAsync"/> can restore
-    /// inside one gate acquisition. The sequence matters. The unfinished operation is aborted first, so the index is
+    /// inside one gate acquisition. The owned rebase is aborted first, so the index is
     /// clean and a checkout can follow. The tree is then checked again for tracked changes, because an abort can leave
     /// edits behind, and recovery refuses rather than carrying them onto another commit. Branches checked out in
     /// another worktree are collected once, before the loop, so the same snapshot decides every step. A step whose ref
@@ -75,7 +108,7 @@ internal sealed class RecoveryEffects(GitRunner git, IJournal journal)
     /// either every branch moves or none does; the checkout afterwards returns the user to the branch they started
     /// on.</para></remarks>
     /// <param name="root">Repository root whose refs are restored.</param>
-    /// <param name="entry">Entry holding the recorded moves, or null to only abort the Git operation.</param>
+    /// <param name="entry">Entry holding the recorded moves.</param>
     /// <param name="originalBranch">Branch to check out afterwards; an empty value keeps the current branch.</param>
     /// <param name="ct">Cancels the abort, the checks and the restore.</param>
     /// <param name="close">Whether to close the entry as rolled back once the refs are restored; false leaves it to
@@ -84,15 +117,20 @@ internal sealed class RecoveryEffects(GitRunner git, IJournal journal)
     /// </returns>
     /// <exception cref="StackerException">The working tree has tracked changes, or a ref cannot be proven to belong to
     /// the operation.</exception>
-    public async Task<int> RestoreAsync(string root, JournalEntry? entry, string originalBranch, CancellationToken ct, bool close = true)
+    public async Task<int> RestoreAsync(string root, JournalEntry entry, string originalBranch, CancellationToken ct, bool close = true)
     {
         var operation = await git.OperationAsync(root, ct);
-        if (operation != WorkingOperation.None) await git.Run(root, git.AbortArgs(operation), ct);
+        if (operation != WorkingOperation.None)
+        {
+            if (operation != WorkingOperation.Rebase || await FindStoppedRebaseAsync(root, entry, ct) is null)
+                throw new StackerException("A separate Git operation is in progress. Finish or abort it before restoring the restack.");
+            await git.Run(root, git.AbortArgs(operation), ct);
+        }
         if ((await git.StatusAsync(root, ct)).HasTrackedChanges)
             throw new StackerException("Recovery stopped: the working tree contains new changes. Commit or stash them first.");
         var moves = new List<JournalStep>();
         var elsewhere = await git.OtherWorktreeBranchesAsync(root, ct);
-        foreach (var step in entry?.Restorable ?? [])
+        foreach (var step in entry.Restorable)
         {
             var sha = await git.ShaAsync(root, step.Target, ct);
             if (sha == step.OldSha) continue;
@@ -101,7 +139,7 @@ internal sealed class RecoveryEffects(GitRunner git, IJournal journal)
             moves.Add(step);
         }
         await git.RestoreRefsAsync(root, moves, originalBranch, ct);
-        if (close && entry is not null)
+        if (close)
             (await journal.CloseAsync(entry, JournalPhase.RolledBack, message: $"Every branch was restored ({moves.Count}).", ct: ct)).OrThrow();
         return moves.Count;
     }
@@ -147,15 +185,10 @@ internal sealed class RecoveryEffects(GitRunner git, IJournal journal)
 
     /// <summary>Reverses a restack that finished successfully by putting every branch back on the commit recorded before
     /// it, then closes the entry as undone.</summary>
-    /// <remarks>Only completed <c>rebase</c> steps that recorded both commits are candidates, because undo is about the
-    /// local rewrite the user approved; planned layers and remote writes are excluded. The guards exist to prevent
-    /// discarding work created after the restack: uncommitted changes or an operation in progress refuse the undo, a
-    /// branch checked out in another worktree refuses it, and a branch whose commit is no longer the recorded new
-    /// commit refuses it with the message that nothing was changed. Every candidate is checked before the single ref
-    /// transaction runs, so one moved branch prevents all of them from being touched. The entry closes as
-    /// <see cref="JournalPhase.Undone"/> rather than rolled back, which keeps a deliberate undo distinguishable from
-    /// automatic recovery, and the message states that remote branches were not changed — the undo restores local
-    /// refs only.</remarks>
+    /// <remarks>Undo inspects every rebase that may have run. Refs already restored to their old commit can be skipped
+    /// on retry. A changed ref must match the recorded new commit before it can be restored. Every candidate is checked
+    /// before the single ref transaction runs, so an unproven rewrite prevents partial undo. The entry closes as
+    /// <see cref="JournalPhase.Undone"/> after the local refs and checkout are restored.</remarks>
     /// <param name="root">Repository root whose branches are restored.</param>
     /// <param name="ct">Cancels the checks and the restore.</param>
     /// <returns>A rolled-back outcome mentioning the branch count, with the closed entry attached.</returns>
@@ -166,25 +199,47 @@ internal sealed class RecoveryEffects(GitRunner git, IJournal journal)
         await git.Gate.WaitAsync(ct);
         try
         {
-            var entry = (await journal.UndoableAsync(root, ct)).OrThrow() ?? throw new StackerException("There is no restack to undo in this repository.");
+            var entry = (await journal.UndoableAsync(root, ct)).OrThrow() ?? throw UndoBlocked("There is no restack to undo in this repository.");
             var state = await git.StatusAsync(root, ct);
-            if (state.HasTrackedChanges) throw new StackerException("The working tree has uncommitted changes. Commit or stash them before undoing.");
-            if (state.HasOperation) throw new StackerException($"{WorkingOperations.Noun(state.Operation)} is in progress. Finish or abort it before undoing.");
+            if (state.HasTrackedChanges) throw UndoBlocked("The working tree has uncommitted changes. Commit or stash them before undoing.");
+            if (state.HasOperation) throw UndoBlocked($"{WorkingOperations.Noun(state.Operation)} is in progress. Finish or abort it before undoing.");
             var elsewhere = await git.OtherWorktreeBranchesAsync(root, ct);
-            var moves = entry.Moved.Where(step => step.Kind == "rebase" && step.NewSha is not null).ToArray();
-            foreach (var step in moves)
+            var moves = new List<JournalStep>();
+            foreach (var step in entry.Restorable)
             {
-                if (elsewhere.Contains(step.Target)) throw new StackerException($"{StackRefs.Short(step.Target)} is checked out in another worktree.");
                 var sha = await git.ShaAsync(root, step.Target, ct);
-                if (sha != step.NewSha)
-                    throw new StackerException($"{StackRefs.Short(step.Target)} moved after the restack. Undo would discard that work, so nothing was changed.");
+                if (sha == step.OldSha) continue;
+                if (elsewhere.Contains(step.Target)) throw UndoBlocked($"{StackRefs.Short(step.Target)} is checked out in another worktree.");
+                if (sha is null || step.NewSha is null || sha != step.NewSha)
+                    throw UndoBlocked($"Undo cannot prove ownership of {StackRefs.Short(step.Target)}. Inspect the repository before restoring any branches.");
+                moves.Add(step);
             }
-            await git.RestoreRefsAsync(root, moves, git.OriginalBranch(entry), ct);
-            entry = (await journal.CloseAsync(entry, JournalPhase.Undone,
-                message: $"Restored {entry.Moved.Count} branch(es) to their commits before the restack. Remote branches were not changed.", ct: ct)).OrThrow();
-            return new(RestackStatus.RolledBack, null, [],
-                $"Restored {entry.Moved.Count} branch(es) to their commits before the restack. Remote branches were not changed.", entry);
+            try { await git.RestoreRefsAsync(root, moves, git.OriginalBranch(entry), ct); }
+            catch (Exception ex)
+            {
+                return git.Refused($"Could not complete Undo. Check the repository and retry Undo to finish recovery. {ex.Message}", entry);
+            }
+            return await CompleteRecoveryAsync(entry, JournalPhase.Undone,
+                $"Restored {entry.Moved.Count} branch(es) to their commits before the restack. Remote branches were not changed.");
         }
         finally { git.Gate.Release(); }
+    }
+
+    private static StackerException UndoBlocked(string message) => new(Problem.Of(ProblemCodes.GitFailed, message)
+        with { Certainty = EffectCertainty.NotStarted });
+
+    private async Task<RestackOutcome> CompleteRecoveryAsync(JournalEntry entry, JournalPhase phase, string message)
+    {
+        using var completion = new CancellationTokenSource(GitRunner.RecoveryTimeout);
+        try { entry = (await journal.CloseAsync(entry, phase, message: message, ct: completion.Token)).OrThrow(); }
+        catch (Exception ex)
+        {
+            var stored = (await journal.ByIdAsync(entry.Repository, entry.Id, completion.Token)).OrThrow();
+            if (stored is null) throw;
+            if (stored.Phase != phase)
+                return git.Refused($"{message} Could not finish recording recovery. Retry recovery. {ex.Message}", stored);
+            entry = stored;
+        }
+        return new(RestackStatus.RolledBack, null, [], message, entry);
     }
 }

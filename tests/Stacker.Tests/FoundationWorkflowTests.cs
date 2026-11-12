@@ -98,6 +98,94 @@ public sealed class FoundationWorkflowTests
     }
 
     [AvaloniaFact]
+    public async Task A_confirmed_comment_retries_local_save_without_sending_again()
+    {
+        await using var f = new GitFixture();
+        var reader = new FakeGitHub();
+        var state = new FailingConfirmationStore(new ApplicationStore(f.Root));
+        var journal = f.CreateJournal();
+        var process = new ScriptedRunner(_ => new(0, "{}", ""));
+        var writer = new CommandGitHubWriter(new(process, new(), new()), new(new(journal)));
+        var pr = reader.Current;
+        using var section = new DiffSectionViewModel(f.Reader, f.Root, new("feature", "main", pr.BaseSha, pr.HeadSha, null, [])) { IsPrSnapshot = true };
+        using var review = new ReviewViewModel(reader, writer, state, f.Reader, FakeGitHub.Context, pr, section, false);
+        await review.InitializeAsync();
+        review.Composer = "Send once";
+
+        await review.PostCommentCommand.ExecuteAsync(null);
+
+        Assert.Contains("GitHub confirmed the action", review.ReviewStatus);
+        Assert.False(review.HasPendingPublication);
+        var entry = Assert.Single(journal.Recent("github:" + FakeGitHub.Context.Identity).OrThrow());
+        Assert.Equal(JournalPhase.Applied, entry.Phase);
+        state.FailConfirmation = false;
+        await review.RetrySaveAsync();
+        using var reopened = new ReviewViewModel(reader, writer, state, f.Reader, FakeGitHub.Context, pr, section, false);
+        await reopened.InitializeAsync();
+        await reopened.FlushAsync();
+
+        Assert.Single(process.Calls);
+        Assert.Empty(reopened.Composer);
+        Assert.False(reopened.HasPendingPublication);
+        Assert.Equal(entry.Id, state.ConfirmedId);
+    }
+
+    private sealed class FailingConfirmationStore(IApplicationState inner) : IApplicationState
+    {
+        public bool FailConfirmation { get; set; } = true;
+        public string? ConfirmedId { get; private set; }
+        public string Root => inner.Root;
+        public string? LastProblem => inner.LastProblem;
+        public Task<Result<T?>> ReadAsync<T>(string kind, string identity, CancellationToken ct = default) where T : class =>
+            inner.ReadAsync<T>(kind, identity, ct);
+
+        public Task<Result<Unit>> WriteAsync<T>(string kind, string identity, T value, CancellationToken ct = default) where T : class
+        {
+            if (value is ReviewDraft draft && draft.PublicationHistory.LastOrDefault() is { Phase: PublicationPhase.Confirmed } confirmed)
+            {
+                if (FailConfirmation) return Task.FromResult(Result<Unit>.Fail(ProblemCodes.StoreWrite, "injected local save failure"));
+                ConfirmedId = confirmed.Id;
+            }
+            return inner.WriteAsync(kind, identity, value, ct);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task A_remote_acknowledgement_repairs_the_matching_execution_record_after_a_local_failure()
+    {
+        await using var f = new GitFixture();
+        var reader = new FakeGitHub(); var pr = reader.Current;
+        var database = new SqliteHistoryStore(f.Root);
+        var state = new ReviewApplicationState(new(f.Root), database);
+        var journal = new JsonJournal(new FailingDoneJournalState(new SqliteJournalState(database)), new SystemClock());
+        var process = new ScriptedRunner(_ => new(0, "{}", ""));
+        var writer = new CommandGitHubWriter(new(process, new(), new()), new(new(journal)));
+        using var section = new DiffSectionViewModel(f.Reader, f.Root, new("feature", "main", pr.BaseSha, pr.HeadSha, null, [])) { IsPrSnapshot = true };
+        using var review = new ReviewViewModel(reader, writer, state, f.Reader, FakeGitHub.Context, pr, section, false);
+        await review.InitializeAsync();
+        review.Composer = "Confirmed by GitHub";
+
+        await review.PostCommentCommand.ExecuteAsync(null);
+
+        Assert.Single(process.Calls);
+        Assert.Contains("GitHub confirmed the action", review.ReviewStatus);
+        Assert.False(review.HasPendingPublication);
+        Assert.Empty(review.Composer);
+        var entry = Assert.Single(journal.Recent("github:" + FakeGitHub.Context.Identity));
+        Assert.Equal(JournalPhase.Applied, entry.Phase);
+    }
+
+    private sealed class FailingDoneJournalState(IStateStore<JournalLog> inner) : IStateStore<JournalLog>
+    {
+        public Result<string> Quarantine(string identity) => inner.Quarantine(identity);
+        public Result<JournalLog?> Read(string identity) => inner.Read(identity);
+        public Task<Result<Unit>> WriteAsync(string identity, JournalLog value, CancellationToken ct = default) =>
+            value.Entries.Any(entry => entry.Steps.Any(step => step.State == StepState.Done))
+                ? Task.FromResult(Result<Unit>.Fail(ProblemCodes.StoreWrite, "injected execution record failure"))
+                : inner.WriteAsync(identity, value, ct);
+    }
+
+    [AvaloniaFact]
     public async Task Embedded_history_shares_layer_selection_and_restores_navigation()
     {
         await using var f = new GitFixture(); await f.Linear(); var root = Directory.CreateTempSubdirectory("foundation-ui-").FullName;
@@ -134,9 +222,16 @@ public sealed class FoundationWorkflowTests
             var window = new MainWindow { DataContext = vm }; window.Show(); await vm.OpenRepositoryAsync(f.Root);
             var blocker = Path.Combine(root, "workspace"); if (Directory.Exists(blocker)) Directory.Delete(blocker, true); await File.WriteAllTextAsync(blocker, "blocked");
             var asked = new TaskCompletionSource<IReadOnlyList<string>>(TaskCreationOptions.RunContinuationsAsynchronously);
-            window.CloseFailureHandler = errors => { asked.TrySetResult(errors); return Task.FromResult(UnsavedCloseChoice.ContinueEditing); };
+            var decision = new TaskCompletionSource<UnsavedCloseChoice>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var prompts = 0;
+            window.CloseFailureHandler = errors => { prompts++; asked.TrySetResult(errors); return decision.Task; };
             window.Close(); var problems = await asked.Task.WaitAsync(TimeSpan.FromSeconds(10)); Assert.Contains(problems, e => e.StartsWith("Workspace:"));
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => { }); Assert.True(window.IsVisible);
+            window.Close();
+            Assert.True(window.IsVisible);
+            Assert.Equal(1, prompts);
+            decision.SetResult(UnsavedCloseChoice.ContinueEditing);
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => { }, Avalonia.Threading.DispatcherPriority.Background);
+            Assert.True(window.IsVisible);
             File.Delete(blocker); window.CloseFailureHandler = _ => Task.FromResult(UnsavedCloseChoice.Discard); window.Close();
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10)); while (window.IsVisible) await Task.Delay(10, timeout.Token);
         }

@@ -156,6 +156,56 @@ public sealed class StackSyncUiTests
         Assert.Contains("already has an open pull request", second);
     }
 
+    [AvaloniaTheory]
+    [InlineData(1, "A")]
+    [InlineData(2, "B")]
+    public async Task An_unknown_pull_request_write_stops_the_batch_and_requires_a_fresh_plan(int attempt, string layer)
+    {
+        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
+        var github = new FakeGitHub([DiscoveryTests.Pr(8, "main", "B")]) { LoseResponseOnWrite = attempt };
+        using var vm = CreateVm(f, github, github);
+        await vm.OpenRepositoryAsync(f.Root);
+        var (plan, _) = await vm.CheckPullRequestsAsync("test");
+        Assert.NotNull(plan); Assert.Equal(3, plan.PendingCount);
+
+        var (ok, message) = await vm.PublishPullRequestsAsync(plan);
+
+        Assert.False(ok);
+        Assert.Contains($"outcome for layer {layer} is unknown", message);
+        if (attempt == 1) Assert.StartsWith("The publication outcome", message);
+        else Assert.StartsWith("Published #100 A → main.", message);
+        Assert.Equal(attempt, github.Calls.Count);
+        var (stale, staleMessage) = await vm.PublishPullRequestsAsync(plan);
+        Assert.False(stale); Assert.Contains("changed since the check", staleMessage);
+        Assert.Equal(attempt, github.Calls.Count);
+
+        var (fresh, _) = await vm.CheckPullRequestsAsync("test");
+        Assert.NotNull(fresh); Assert.Equal(3 - attempt, fresh.PendingCount);
+        github.LoseResponseOnWrite = null;
+        Assert.True((await vm.PublishPullRequestsAsync(fresh)).Ok);
+        Assert.Equal(3, github.Calls.Count);
+    }
+
+    [AvaloniaFact]
+    public async Task Confirmed_pull_request_writes_remain_successful_when_the_refresh_fails()
+    {
+        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
+        var github = new FakeGitHub([DiscoveryTests.Pr(7, "main", "A"), DiscoveryTests.Pr(8, "main", "B"), DiscoveryTests.Pr(9, "B", "C")])
+        { FailSnapshotAfterWrite = true };
+        using var vm = CreateVm(f, github, github);
+        await vm.OpenRepositoryAsync(f.Root);
+        var (plan, _) = await vm.CheckPullRequestsAsync("test");
+        Assert.NotNull(plan); Assert.Equal(1, plan.PendingCount);
+
+        var (ok, message) = await vm.PublishPullRequestsAsync(plan);
+
+        Assert.True(ok, message);
+        Assert.StartsWith("Published #8 base → A.", message);
+        Assert.Contains("Could not refresh GitHub after publication", vm.Error);
+        Assert.Contains("injected refresh failure", message);
+        Assert.Equal("base #8 → A", Assert.Single(github.Calls));
+    }
+
     // Scenario: Starting a layer creates the branch, checks it out, and appends it to the stack definition.
     [AvaloniaFact]
     public async Task Adding_a_layer_creates_the_branch_and_appends_it_to_the_stack()
@@ -398,17 +448,24 @@ public sealed class StackSyncUiTests
         public FakeGitHub(IReadOnlyList<PullRequest> pullRequests) => _pullRequests = [.. pullRequests];
         public GitHubRepositoryContext Context { get; } = new("github.com", 1, "team", "repo", "https://github.com/team/repo.git", "alice", "main");
         public List<string> Calls { get; } = [];
+        public int? LoseResponseOnWrite { get; set; }
+        public bool FailSnapshotAfterWrite { get; init; }
         /// <summary>Stands in for someone else opening a pull request while the preview is open.</summary>
         public void AddPullRequest(PullRequest pullRequest) => _pullRequests.Add(pullRequest);
         public Task<GitHubRepositoryContext> ConnectAsync(string root, string? repositoryOverride, CancellationToken ct = default) => Task.FromResult(Context);
-        public Task<GitHubSnapshot> SnapshotAsync(GitHubRepositoryContext context, CancellationToken ct = default) => Task.FromResult(new GitHubSnapshot(context, _pullRequests.ToArray(), DateTimeOffset.UtcNow));
+        public Task<GitHubSnapshot> SnapshotAsync(GitHubRepositoryContext context, CancellationToken ct = default)
+        {
+            if (FailSnapshotAfterWrite && Calls.Count > 0) throw new StackerException("injected refresh failure");
+            return Task.FromResult(new GitHubSnapshot(context, _pullRequests.ToArray(), DateTimeOffset.UtcNow));
+        }
         public Task VerifyAccessAsync(GitHubRepositoryContext context, CancellationToken ct = default) => Task.CompletedTask;
         public Task<PullRequest> CreatePullRequestAsync(GitHubRepositoryContext context, string headBranch, string baseBranch, string title, string body, bool draft, CancellationToken ct = default)
         {
             Calls.Add($"create {headBranch} → {baseBranch}: {title}");
-            var created = new PullRequest(100, title, context.RepositoryId, baseBranch, new('a', 40), context.RepositoryId, headBranch, new('b', 40), draft, "https://example.invalid/pr/100");
+            var number = 100 + _pullRequests.Count(pr => pr.Number >= 100);
+            var created = new PullRequest(number, title, context.RepositoryId, baseBranch, new('a', 40), context.RepositoryId, headBranch, new('b', 40), draft, $"https://example.invalid/pr/{number}");
             _pullRequests.Add(created);
-            return Task.FromResult(created);
+            return AcknowledgeAsync(created);
         }
         public Task<PullRequest> UpdatePullRequestBaseAsync(GitHubRepositoryContext context, long number, string baseBranch, CancellationToken ct = default)
         {
@@ -416,8 +473,11 @@ public sealed class StackSyncUiTests
             var index = _pullRequests.FindIndex(pr => pr.Number == number);
             var updated = _pullRequests[index] with { BaseRef = baseBranch };
             _pullRequests[index] = updated;
-            return Task.FromResult(updated);
+            return AcknowledgeAsync(updated);
         }
+        private Task<PullRequest> AcknowledgeAsync(PullRequest pr) => Calls.Count == LoseResponseOnWrite
+            ? throw new StackerException(Problem.Of(ProblemCodes.GitHubRequest, "injected response loss"))
+            : Task.FromResult(pr);
         public Task<PullRequest> PullRequestAsync(GitHubRepositoryContext context, long number, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<ReviewDiscussion> DiscussionAsync(GitHubRepositoryContext context, PullRequest pr, CancellationToken ct = default) => throw new NotSupportedException();
         public Task ValidateAnchorsAsync(GitHubRepositoryContext context, PullRequest pr, IReadOnlyList<ReviewAnchor> anchors, CancellationToken ct = default) => throw new NotSupportedException();

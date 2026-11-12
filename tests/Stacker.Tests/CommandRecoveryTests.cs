@@ -28,6 +28,7 @@ public sealed class CommandRecoveryTests
             [JournalStep.Planned("one", "publish", "A"), JournalStep.Planned("two", "publish", "B")]));
         public async Task<CommandOutcome> ExecuteAsync(CommandContext context, CancellationToken ct = default)
         {
+            (await context.Journal.StepAsync(context.Entry, context.Entry.Steps[0] with { State = StepState.Started }, ct)).OrThrow();
             (await context.Journal.StepAsync(context.Entry, context.Entry.Steps[0] with { State = StepState.Done }, ct)).OrThrow();
             return CommandOutcome.Failed(Problem.Of(ProblemCodes.GitHubRequest, "second write failed"));
         }

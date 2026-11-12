@@ -95,8 +95,7 @@ public sealed class ReviewSessionService(IApplicationState store, IGitHubReader 
     private static void NormalizeInterrupted(ReviewDraft? draft)
     {
         if (draft?.Operation?.Phase == PublicationPhase.Sending) Transition(draft, PublicationPhase.Uncertain);
-        else if (draft?.Operation?.Phase == PublicationPhase.Prepared)
-        { Transition(draft, PublicationPhase.Rejected); draft.PendingOperation = null; draft.PendingFilePath = null; }
+        else if (draft?.Operation?.Phase == PublicationPhase.Prepared) Reject(draft);
     }
     /// <summary>Persists the draft and advances the revision used by the next save.</summary>
     /// <remarks>
@@ -190,16 +189,77 @@ public sealed class ReviewSessionService(IApplicationState store, IGitHubReader 
     public static void Transition(ReviewDraft draft, PublicationPhase phase)
     {
         if (draft.Operation is not { } operation) return; // Legacy uncertain drafts retain their original marker protocol.
-        var allowed = (operation.Phase, phase) switch
-        {
-            (PublicationPhase.Prepared, PublicationPhase.Sending or PublicationPhase.Rejected) => true,
-            (PublicationPhase.Sending, PublicationPhase.Confirmed or PublicationPhase.Uncertain or PublicationPhase.Rejected) => true,
-            (PublicationPhase.Uncertain, PublicationPhase.Confirmed or PublicationPhase.Rejected) => true,
-            _ => operation.Phase == phase
-        };
-        if (!allowed) throw new StackerException("Invalid publication transition.");
+        if (!CanTransition(operation.Phase, phase)) throw new StackerException("Invalid publication transition.");
         draft.Operation = operation with { Phase = phase };
         if (phase is PublicationPhase.Confirmed or PublicationPhase.Rejected)
         { draft.PublicationHistory.Add(draft.Operation); draft.Operation = null; }
     }
+
+    /// <summary>Uses a matching, durable command result to settle an interrupted publication on load.</summary>
+    public static void ReconcileExecution(ReviewDraft draft, JournalEntry execution)
+    {
+        if (draft.Operation is not { Phase: PublicationPhase.Sending or PublicationPhase.Uncertain } operation ||
+            execution.Id != operation.Id || execution.Repository != "github:" + operation.ContextIdentity) return;
+        if (!HasAcknowledgedExecution(execution))
+        {
+            if (execution.Phase == JournalPhase.Dismissed) Reject(draft);
+            return;
+        }
+        PendingKind? kind = PendingOperation.TryParse(draft.PendingOperation, out var pending) &&
+            (pending.Kind == PendingKind.Resolve || pending.Marker == operation.Id) ? pending.Kind : null;
+        Confirm(draft, kind);
+    }
+
+    /// <summary>Recognizes an acknowledged review write, including a crash before the journal close.</summary>
+    public static bool HasAcknowledgedExecution(JournalEntry execution) =>
+        execution.Phase == JournalPhase.Applied || execution.Steps is [{ State: StepState.Done }];
+
+    /// <summary>Archives a confirmation and clears the exact text and comments included in the send.</summary>
+    public static void Confirm(ReviewDraft draft, PendingKind? kind)
+    {
+        Transition(draft, PublicationPhase.Confirmed);
+        switch (kind)
+        {
+            case PendingKind.Review when draft.PendingReviewComments is { } comments:
+                if (draft.Summary == draft.PendingSummary) draft.Summary = "";
+                draft.Comments.RemoveAll(comments.Contains);
+                break;
+            case PendingKind.FileComment when draft.PendingFilePath is { } path && draft.PendingBody is { } body:
+                if (draft.FileComposers.GetValueOrDefault(path) == body) draft.FileComposers[path] = "";
+                break;
+            case PendingKind.Comment or PendingKind.Inline or PendingKind.Reply
+                when draft.PendingComposerKey is { } key && draft.PendingBody is { } sent:
+                if (draft.ContextComposers.GetValueOrDefault(key, key == "pr" ? draft.Composer : "") != sent) break;
+                draft.ContextComposers[key] = "";
+                if (key == "pr") draft.Composer = "";
+                break;
+        }
+        ClearPending(draft);
+    }
+
+    /// <summary>Archives a rejected attempt and preserves the unsent draft for a later send.</summary>
+    public static void Reject(ReviewDraft draft)
+    {
+        Transition(draft, PublicationPhase.Rejected);
+        ClearPending(draft);
+    }
+
+    private static void ClearPending(ReviewDraft draft)
+    {
+        draft.PendingOperation = null;
+        draft.PendingFilePath = null;
+        draft.PendingComposerKey = null;
+        draft.PendingBody = null;
+        draft.PendingSummary = null;
+        draft.PendingReviewComments = null;
+    }
+
+    /// <summary>Checks the same publication transitions in memory and against the phase stored in SQLite.</summary>
+    public static bool CanTransition(PublicationPhase current, PublicationPhase next) => (current, next) switch
+    {
+        (PublicationPhase.Prepared, PublicationPhase.Sending or PublicationPhase.Rejected) => true,
+        (PublicationPhase.Sending, PublicationPhase.Confirmed or PublicationPhase.Uncertain or PublicationPhase.Rejected) => true,
+        (PublicationPhase.Uncertain, PublicationPhase.Confirmed or PublicationPhase.Rejected) => true,
+        _ => current == next && Enum.IsDefined(current)
+    };
 }

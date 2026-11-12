@@ -26,6 +26,7 @@ public sealed partial class MainViewModel
     public bool HasOtherGroups => OtherGroups.Count > 0;
     [RelayCommand] public Task OpenDemoAsync() => _gitHubController.OpenDemoAsync();
     [RelayCommand] public Task RefreshGitHubAsync() => _gitHubController.RefreshGitHubAsync();
+    Task ISyncPresentation.RefreshGitHubAfterPublicationAsync() => _gitHubController.RefreshAfterPublicationAsync();
     public Task RefreshGitHubCoreAsync(CancellationToken ct, bool background) => _gitHubController.RefreshGitHubCoreAsync(ct, background);
     public void BuildDiscoveredGroups() => _gitHubController.BuildDiscoveredGroups();
     /// <summary>Projects pull requests into a display group with synthetic local ref snapshots.</summary>

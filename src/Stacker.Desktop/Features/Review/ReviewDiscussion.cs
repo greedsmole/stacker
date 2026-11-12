@@ -39,7 +39,8 @@ public partial class ReviewViewModel
             foreach (var path in discussion.Threads.Select(t => t.Path).OfType<string>().Concat(_draft.FileComposers.Keys).Distinct())
                 if (!ReviewFiles.Contains(path)) ReviewFiles.Add(path);
             UpdateFileThreads();
-            if (_draft.PendingOperation is { } pendingText)
+            if (!IsBusy && _draft.Operation is (null or { Phase: PublicationPhase.Uncertain }) &&
+                _draft.PendingOperation is { } pendingText)
             {
                 if (!PendingOperation.TryParse(pendingText, out var pending))
                 {
@@ -56,12 +57,9 @@ public partial class ReviewViewModel
                           || discussion.Threads.SelectMany(t => t.Comments).Any(c => c.Author == Context.User && c.Body.Contains(marker, StringComparison.Ordinal));
                     if (found)
                     {
-                        ReviewSessionService.Transition(_draft, PublicationPhase.Confirmed);
-                        if (pending.Kind == PendingKind.Review) ClearSubmittedDraft();
-                        else if (pending.Kind == PendingKind.FileComment && _draft.PendingFilePath is { } path) ClearPublishedFile(path);
-                        else if (pending.Kind is PendingKind.Comment or PendingKind.Inline or PendingKind.Reply) ClearPublishedComposer();
-                        _draft.PendingOperation = null; _draft.PendingFilePath = null; PublicationProblem = null;
-                        Message = "Previous publication confirmed on GitHub."; QueueSave();
+                        _reviewPublicationController.Confirm(pending.Kind);
+                        PublicationProblem = null;
+                        Message = "Previous publication confirmed on GitHub.";
                     }
                     else Message = "Publication is still uncertain. Verify the action on GitHub before unlocking a retry.";
                 }

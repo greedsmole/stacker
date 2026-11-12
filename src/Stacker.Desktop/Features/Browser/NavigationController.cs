@@ -144,14 +144,15 @@ internal sealed class NavigationController(INavigationPresentation owner, Worksp
         runtime._suppress = false; await CompareAsync();
     }
 
-    public async Task SelectLayerAsync(LayerViewModel layer, bool toggle)
+    public async Task SelectLayerAsync(LayerViewModel layer, bool toggle, CancellationToken ct = default)
     {
         await owner.SaveWorkspaceAsync();
+        ct.ThrowIfCancellationRequested();
         var group = layer.Group!;
         if (!ReferenceEquals(runtime._activeGroup, group)) { SetActiveGroup(group); runtime._selectedPositions = []; }
         runtime._selectedPositions = toggle ? (runtime._selectedPositions.Contains(layer.Snapshot.Position) ? runtime._selectedPositions.Where(p => p != layer.Snapshot.Position) : runtime._selectedPositions.Append(layer.Snapshot.Position)).Order().ToArray() : [layer.Snapshot.Position];
         runtime._suppress = true; owner.Mode = runtime._selectedPositions.Length == 0 ? DiffMode.FullStack : runtime._selectedPositions.Length == 1 ? DiffMode.Layer : DiffMode.MultiLayer; runtime._suppress = false;
-        await CompareAsync();
+        await CompareAsync(ct);
     }
 
     public void SelectLayers(IEnumerable<LayerViewModel> layers)
@@ -160,10 +161,10 @@ internal sealed class NavigationController(INavigationPresentation owner, Worksp
         runtime._suppress = true; owner.Mode = runtime._selectedPositions.Length > 1 ? DiffMode.MultiLayer : DiffMode.Layer; runtime._suppress = false; _ = CompareAsync();
     }
 
-    public async Task CompareAsync()
+    public async Task CompareAsync(CancellationToken ct = default)
     {
         owner.ResetSearch();
-        runtime._comparison?.Cancel(); var compare = new CancellationTokenSource(); runtime._comparison = compare;
+        runtime._comparison?.Cancel(); var compare = CancellationTokenSource.CreateLinkedTokenSource(ct); runtime._comparison = compare;
         var group = runtime._activeGroup; var repo = runtime._repository; var mode = owner.Mode; var positions = runtime._selectedPositions.ToArray();
         if (repo is null || group is null || runtime._disposed) { compare.Dispose(); if (ReferenceEquals(runtime._comparison, compare)) runtime._comparison = null; return; }
         runtime.Session.Select(new(group.Definition.Id, mode + ":" + string.Join(",", positions), null));

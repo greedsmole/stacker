@@ -167,8 +167,12 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
         finally { owner.IsSyncing = false; }
     }
 
-    public async Task<(bool Ok, string Message)> RestoreRecoveryAsync() => owner.CanRestoreRecovery
-        ? await AbortOperationAsync() : (false, "Only an interrupted restack can restore recorded branches. Inspect uncertain effects before dismissing their record.");
+    public Task<(bool Ok, string Message)> RestoreRecoveryAsync()
+    {
+        if (!owner.CanRestoreRecovery || runtime._activeEntry is not { } entry)
+            return Task.FromResult((false, "Only an interrupted restack can restore recorded branches. Inspect uncertain effects before dismissing their record."));
+        return OperationAsync(async (writer, root, _) => (await writer.RestoreInterruptedRestackAsync(root, entry.Id)).OrThrow());
+    }
 
     public async Task<(bool Ok, string Message)> DismissRecoveryAsync()
     {

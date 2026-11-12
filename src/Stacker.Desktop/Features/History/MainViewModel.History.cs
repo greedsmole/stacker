@@ -7,7 +7,7 @@ public sealed partial class MainViewModel
 {
     [ObservableProperty] private HistoryWorkspaceViewModel? _activeHistory;
     private string? _historyGroup;
-    private bool _synchronizingHistory;
+    private int _historySelectionsInProgress;
     private int _checkpointRevision;
     public bool IsHistoryOpen => ActiveHistory is not null;
     partial void OnActiveHistoryChanged(HistoryWorkspaceViewModel? value) => OnPropertyChanged(nameof(IsHistoryOpen));
@@ -19,17 +19,21 @@ public sealed partial class MainViewModel
         ActiveHistory?.Dispose(); ActiveHistory = next; _historyGroup = _runtime._activeGroup?.Definition.Id;
         next.SelectionChanged = async (node, file) =>
         {
-            if (_synchronizingHistory || _runtime._activeGroup is null) return;
-            _synchronizingHistory = true;
+            if (_runtime._activeGroup is not { } group) return;
+            var token = next.LayerLoadToken;
+            _historySelectionsInProgress++;
             try
             {
-                var layer = _runtime._activeGroup.Layers.FirstOrDefault(l => node.PullRequest is not null ? l.PullRequest?.Number == node.PullRequest : l.Snapshot.Branch == node.Reference);
-                if (layer is not null && (_runtime._selectedPositions.Length != 1 || _runtime._selectedPositions[0] != layer.Snapshot.Position)) await _navigationController.SelectLayerAsync(layer, false);
+                var layer = group.Layers.FirstOrDefault(l => node.PullRequest is not null ? l.PullRequest?.Number == node.PullRequest : l.Snapshot.Branch == node.Reference);
+                if (layer is not null && (!layer.IsSelected || _runtime._comparison is not null ||
+                    _runtime._selectedPositions.Length != 1 || _runtime._selectedPositions[0] != layer.Snapshot.Position))
+                    await _navigationController.SelectLayerAsync(layer, false, token);
+                if (token.IsCancellationRequested || ActiveHistory != next || next.SelectedNode != node || _runtime._activeGroup != group) return;
                 var section = Sections.FirstOrDefault();
                 if (section is not null && file is not null) section.SelectedFile = section.Files.FirstOrDefault(f => f.NewPath == file.NewPath);
                 _runtime.Session.Select(new(node.Id, section is null ? null : ComparisonId.For(node.Id, section.Result.BaseSha, section.Result.HeadSha).Value, file?.NewPath));
             }
-            finally { _synchronizingHistory = false; }
+            finally { _historySelectionsInProgress--; }
         };
         next.CheckpointChanged = async () =>
         {
@@ -46,7 +50,7 @@ public sealed partial class MainViewModel
     [RelayCommand] private void CloseHistory() { ActiveHistory?.Dispose(); ActiveHistory = null; }
     private async Task SynchronizeHistoryAsync()
     {
-        if (ActiveHistory is not { } history || _synchronizingHistory) return;
+        if (ActiveHistory is not { } history || _historySelectionsInProgress > 0) return;
         if (_historyGroup != _runtime._activeGroup?.Definition.Id) { await ShowHistoryAsync(); return; }
         var position = _runtime._selectedPositions.FirstOrDefault();
         if (position >= history.Nodes.Count || history.SelectedNode == history.Nodes[position]) return;

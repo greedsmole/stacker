@@ -29,7 +29,7 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
     }
     partial void OnPreviousVersionChanged(ChangeVersion? value) => NotifySelectionCommands();
     /// <summary>Allows loading only when a layer is selected and no history operation is running.</summary>
-    public bool CanLoadLayer => !IsBusy && SelectedNode is not null;
+    public bool CanLoadLayer => !_disposed && !IsBusy && SelectedNode is not null;
     /// <summary>Requires a selected file from the loaded version of the selected layer.</summary>
     public bool CanReviewFile => CanLoadLayer && _current?.ChangeId == SelectedNode?.Id && SelectedFile is not null;
     public bool CanShowCurrent => CanLoadLayer && _current?.ChangeId == SelectedNode?.Id && Files.Count > 0;
@@ -51,7 +51,14 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
         OnPropertyChanged(nameof(EmptyDocumentMessage));
     }
     private async Task SyncSelectionAsync(ChangeNode node, FileChange? file)
-    { try { if (SelectionChanged is not null) await SelectionChanged(node, file); } catch (Exception ex) { Message = ex.Message; } }
+    {
+        if (_disposed) return;
+        var generation = _generation;
+        var token = LayerLoadToken;
+        try { if (SelectionChanged is not null) await SelectionChanged(node, file); }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception ex) { if (!_disposed && generation == _generation) Message = ex.Message; }
+    }
     private readonly Func<ChangeNode, ChangeVersion, CancellationToken, Task<ReviewDiscussion?>>? _discussion;
     public GraphSnapshot Graph { get; private set; }
     public string Topology => string.Join("\n", Graph.Edges.Select(e => $"{Graph.Nodes.First(n => n.Id == e.Parent).Title} → {Graph.Nodes.First(n => n.Id == e.Child).Title}"));
@@ -86,54 +93,6 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
         HistoricalGraph = GraphHistory.LastOrDefault();
         SelectedNode = Nodes.FirstOrDefault();
         await LoadLayerDataAsync();
-    }
-    partial void OnSelectedNodeChanged(ChangeNode? value)
-    {
-        _generation++; _current = null;
-        // Clearing the old file is local state reset, not navigation to the new layer.
-        var loadingSelection = _loadingSelection; _loadingSelection = true;
-        try { SelectedFile = null; }
-        finally { _loadingSelection = loadingSelection; }
-        PreviousVersion = null;
-        Files.Clear(); Versions.Clear(); Preview = ""; ClearDocument();
-        Message = value is null ? "Select a layer to load its review history." : "Select Load layer to read this layer's files and versions.";
-        NotifySelectionCommands();
-    }
-    [RelayCommand(CanExecute = nameof(CanLoadLayer))]
-    private Task LoadLayerAsync() => LoadCurrentDiffAsync();
-
-    internal async Task LoadCurrentDiffAsync(string? filePath = null)
-    {
-        if (await LoadLayerDataAsync(filePath) && CanShowCurrent) await ShowCurrentAsync();
-    }
-
-    private async Task<bool> LoadLayerDataAsync(string? filePath = null)
-    {
-        if (_disposed || SelectedNode is not { } node) return false;
-        filePath ??= SelectedFile?.Change.NewPath;
-        _loadingSelection = true;
-        var generation = ++_generation;
-        IsBusy = true;
-        try
-        {
-            var versions = (await _store.VersionsAsync(node.Id, _lifetime.Token)).OrThrow();
-            var current = _path.First(p => p.Node.Id == node.Id).Version;
-            var files = (await _git.FilesAsync(_root, current.MergeBase!, current.HeadSha, _lifetime.Token)).OrThrow();
-            var status = await _progress.StatusAsync(_repository, Graph.Scope, current, files, _lifetime.Token);
-            if (_disposed || generation != _generation) return false;
-            _current = current; Versions.Clear();
-            foreach (var version in versions.Where(v => v.Id != current.Id).Reverse()) Versions.Add(version);
-            PreviousVersion = Versions.FirstOrDefault(); Files.Clear();
-            foreach (var file in status) Files.Add(file);
-            SelectedFile = Files.FirstOrDefault(file => file.Change.NewPath == filePath) ?? Files.FirstOrDefault();
-            if (SelectionChanged is not null) await SyncSelectionAsync(node, SelectedFile?.Change);
-            if (_disposed || generation != _generation) return false;
-            Message = $"{status.Count(f => f.State == FileReviewState.Reviewed)}/{status.Count} files reviewed on this layer.";
-            return true;
-        }
-        catch (OperationCanceledException) { return false; }
-        catch (Exception ex) { Message = ex.Message; return false; }
-        finally { IsBusy = false; _loadingSelection = false; }
     }
     [RelayCommand(CanExecute = nameof(CanMarkReviewed))] private async Task MarkReviewedAsync() => await SetReviewedAsync(false);
     [RelayCommand(CanExecute = nameof(CanUseCheckpoint))] private async Task UnmarkReviewedAsync() => await SetReviewedAsync(true);
@@ -271,11 +230,29 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
     }
     private async Task ExecuteAsync(Func<Task> action)
     {
-        if (IsBusy) return; IsBusy = true;
+        if (_disposed || IsBusy) return;
+        _executingCommand = true;
+        UpdateBusy();
         try { await action(); }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { Message = ex.Message; }
-        finally { IsBusy = false; }
+        catch (Exception ex) { if (!_disposed) Message = ex.Message; }
+        finally
+        {
+            _executingCommand = false;
+            UpdateBusy();
+        }
     }
-    public void Dispose() { if (_disposed) return; _disposed = true; _lifetime.Cancel(); _lifetime.Dispose(); ClearDocument(); ContentLease?.Dispose(); ContentLease = null; Preview = ""; }
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _layerLoad = null;
+        _lifetime.Cancel();
+        _lifetime.Dispose();
+        ClearDocument();
+        ContentLease?.Dispose();
+        ContentLease = null;
+        Preview = "";
+        UpdateBusy();
+    }
 }

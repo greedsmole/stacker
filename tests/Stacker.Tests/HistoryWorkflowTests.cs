@@ -16,6 +16,51 @@ namespace Stacker.Tests;
 public sealed class HistoryWorkflowTests
 {
     [AvaloniaFact]
+    public async Task A_stale_history_load_cannot_clear_the_current_loads_busy_state_or_report_an_error()
+    {
+        await using var fixture = new GitFixture(); await fixture.Linear();
+        await new YamlStackStore().SaveAsync(fixture.Root, [fixture.Stack], null);
+        var root = Directory.CreateTempSubdirectory("history-load-").FullName;
+        try
+        {
+            using var services = Composition.Build(root);
+            var vm = services.GetRequiredService<MainViewModel>();
+            await vm.OpenRepositoryAsync(fixture.Root);
+            using var history = await vm.OpenHistoryAsync();
+            Assert.NotNull(history);
+            var first = history.Nodes[0]; var second = history.Nodes[1];
+            var oldEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var newEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var oldResult = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var newResult = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            history.SelectionChanged = (node, _) =>
+            {
+                if (node == first) { oldEntered.TrySetResult(); return oldResult.Task; }
+                newEntered.TrySetResult(); return newResult.Task;
+            };
+            var timeout = TimeSpan.FromSeconds(10);
+            history.SelectedNode = first;
+            var oldLoad = history.LoadLayerCommand.ExecuteAsync(null);
+            await oldEntered.Task.WaitAsync(timeout);
+            history.SelectedNode = second;
+            var newLoad = history.LoadLayerCommand.ExecuteAsync(null);
+            await newEntered.Task.WaitAsync(timeout);
+
+            oldResult.SetException(new InvalidOperationException("stale load error"));
+            await oldLoad.WaitAsync(timeout);
+
+            Assert.True(history.IsBusy);
+            Assert.DoesNotContain("stale load error", history.Message);
+            newResult.SetResult();
+            await newLoad.WaitAsync(timeout);
+            Assert.False(history.IsBusy);
+            Assert.Equal("B.txt", Assert.Single(history.Files).Change.NewPath);
+            Assert.Equal(second, history.SelectedNode);
+        }
+        finally { GitFixture.DeleteDirectory(root); }
+    }
+
+    [AvaloniaFact]
     public async Task File_checkbox_updates_the_shared_checkpoint_without_changing_selection()
     {
         await using var fixture = new GitFixture();

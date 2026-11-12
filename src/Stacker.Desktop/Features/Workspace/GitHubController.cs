@@ -23,7 +23,13 @@ internal sealed class GitHubController(IGitHubPresentation owner, WorkspaceRunti
         catch (Exception ex) { owner.GitHubStatus = ex.Message; }
     }
 
-    public async Task RefreshGitHubCoreAsync(CancellationToken ct, bool background)
+    public Task RefreshGitHubCoreAsync(CancellationToken ct, bool background) =>
+        RefreshGitHubCoreAsync(ct, background, throwOnFailure: background);
+
+    public Task RefreshAfterPublicationAsync() =>
+        RefreshGitHubCoreAsync(default, background: false, throwOnFailure: true);
+
+    private async Task RefreshGitHubCoreAsync(CancellationToken ct, bool background, bool throwOnFailure)
     {
         if (runtime._repository is null) return;
         runtime._githubLoad?.Cancel(); var load = CancellationTokenSource.CreateLinkedTokenSource(ct); runtime._githubLoad = load;
@@ -78,7 +84,7 @@ internal sealed class GitHubController(IGitHubPresentation owner, WorkspaceRunti
                 if (runtime._remoteSnapshot is null && saved is not null) { runtime._remoteSnapshot = saved; BuildDiscoveredGroups(); owner.GitHubStatus += $" · Cached {saved.Context.Display} · {saved.UpdatedAt.LocalDateTime:g}"; }
             }
             catch (Exception cacheError) when (cacheError is not OperationCanceledException) { owner.GitHubStatus += " · Cache unavailable"; }
-            if (background) throw;
+            if (throwOnFailure) throw;
         }
         finally { if (ReferenceEquals(runtime._githubLoad, load)) { runtime._githubLoad = null; owner.GitHubBusy = false; } load.Dispose(); }
     }

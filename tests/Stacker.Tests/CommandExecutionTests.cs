@@ -33,9 +33,113 @@ public sealed class CommandExecutionTests
     {
         await using var f = new GitFixture(); var journal = f.CreateJournal();
         var original = (await journal.OpenAsync(f.Root, "test", [JournalStep.Planned("s", "write", "target")])).OrThrow();
+        (await journal.StepAsync(original, original.Steps[0] with { State = StepState.Started })).OrThrow();
         (await journal.StepAsync(original, original.Steps[0].Finished("old", "new", StepState.Done))).OrThrow();
         (await journal.CloseAsync(original, JournalPhase.Applied)).OrThrow();
         Assert.Equal(StepState.Done, ((await journal.ByIdAsync(f.Root, original.Id)).OrThrow())!.Steps[0].State);
+    }
+
+    [Fact]
+    public async Task The_journal_rejects_invalid_transitions_and_preserves_the_terminal_record()
+    {
+        await using var f = new GitFixture(); var journal = f.CreateJournal();
+        var planned = JournalStep.Planned("s", "write", "target");
+        var original = (await journal.OpenAsync(f.Root, "test", [planned])).OrThrow();
+        var started = planned with { State = StepState.Started };
+        var done = started.Finished("old", "new", StepState.Done);
+
+        Assert.Equal(ProblemCodes.StateInvalid, (await journal.StepAsync(original, done)).Problem?.Code);
+        Assert.Equal(ProblemCodes.StateInvalid, (await journal.StepAsync(original, started with { Id = "missing" })).Problem?.Code);
+        (await journal.StepAsync(original, started)).OrThrow();
+        (await journal.StepAsync(original, done)).OrThrow();
+        var applied = (await journal.CloseAsync(original, JournalPhase.Applied, message: "confirmed")).OrThrow();
+
+        Assert.Equal(ProblemCodes.StateInvalid, (await journal.StepAsync(original, started)).Problem?.Code);
+        Assert.Equal(ProblemCodes.StateInvalid, (await journal.CloseAsync(original, JournalPhase.NeedsUser)).Problem?.Code);
+        Assert.Equal(applied.UpdatedAt, (await journal.StepAsync(original, done)).OrThrow().UpdatedAt);
+        var replay = (await journal.CloseAsync(original, JournalPhase.Applied, message: "stale message")).OrThrow();
+        Assert.Equal(applied.UpdatedAt, replay.UpdatedAt);
+        Assert.Equal("confirmed", replay.Message);
+    }
+
+    [Fact]
+    public async Task A_pause_can_resume_admission_but_a_stop_is_permanent()
+    {
+        await using var f = new GitFixture(); var bus = new CommandBus(new CommandRunner(f.CreateJournal()));
+        var root = RepoRoot.From(f.Root);
+        var timeout = TimeSpan.FromSeconds(5);
+        var calls = 0;
+        CommitCommand Command() => new(CommitMessage.Parse("message").OrThrow(), (_, _) =>
+        {
+            calls++;
+            return Task.FromResult(Result<string>.Ok(new string('a', 40)));
+        });
+
+        Assert.True(await bus.PauseAsync(timeout));
+        Assert.Equal(CommandStatus.Refused, (await bus.RunAsync(root, Command())).Status);
+        bus.Resume();
+        Assert.True((await bus.RunAsync(root, Command())).Ok);
+        Assert.True(await bus.StopAsync(timeout));
+        Assert.True(await bus.PauseAsync(timeout));
+        bus.Resume();
+        Assert.Equal(CommandStatus.Refused, (await bus.RunAsync(root, Command())).Status);
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public async Task Cancellation_after_start_is_recorded_prevents_dispatch()
+    {
+        await using var f = new GitFixture();
+        using var cancellation = new CancellationTokenSource();
+        var store = new JsonStateStore<JournalLog>(new AtomicFile(), f.Root + " journal");
+        IJournal journal = new JsonJournal(new CancelAfterStartStore(store, cancellation), new SystemClock());
+        var calls = 0;
+        var command = new CommitCommand(CommitMessage.Parse("message").OrThrow(), (_, _) =>
+        {
+            calls++;
+            return Task.FromResult(Result<string>.Ok(new string('a', 40)));
+        });
+
+        var outcome = await new CommandRunner(journal).RunAsync(f.Root, command, ct: cancellation.Token);
+
+        Assert.Equal(0, calls);
+        Assert.Equal(CommandStatus.Cancelled, outcome.Status);
+        Assert.Equal(EffectCertainty.NotStarted, outcome.Certainty);
+        Assert.Equal(JournalPhase.Dismissed, Assert.Single(journal.Recent(f.Root).OrThrow()).Phase);
+    }
+
+    private sealed class CancelAfterStartStore(IStateStore<JournalLog> inner, CancellationTokenSource cancellation) : IStateStore<JournalLog>
+    {
+        public Result<JournalLog?> Read(string identity) => inner.Read(identity);
+        public Result<string> Quarantine(string identity) => inner.Quarantine(identity);
+        public async Task<Result<Unit>> WriteAsync(string identity, JournalLog value, CancellationToken ct = default)
+        {
+            var result = await inner.WriteAsync(identity, value, ct);
+            if (result.IsOk && value.Entries.Any(entry => entry.Phase == JournalPhase.Running && entry.Steps.Any(step => step.State == StepState.Started)))
+                cancellation.Cancel();
+            return result;
+        }
+    }
+
+    [Fact]
+    public async Task Cancellation_after_an_acknowledged_effect_preserves_the_result()
+    {
+        await using var f = new GitFixture(); var journal = f.CreateJournal();
+        using var cancellation = new CancellationTokenSource();
+        var sha = new string('a', 40);
+        var command = new CommitCommand(CommitMessage.Parse("message").OrThrow(), (_, _) =>
+        {
+            cancellation.Cancel();
+            return Task.FromResult(Result<string>.Ok(sha));
+        });
+
+        var outcome = await new CommandRunner(journal).RunAsync(f.Root, command, ct: cancellation.Token);
+
+        Assert.Equal(CommandStatus.Applied, outcome.Status);
+        var recorded = Assert.Single(journal.Recent(f.Root).OrThrow());
+        Assert.Equal(JournalPhase.Applied, recorded.Phase);
+        Assert.Equal(StepState.Done, recorded.Steps[0].State);
+        Assert.Equal(sha, recorded.Steps[0].NewSha);
     }
 
     [Fact]

@@ -11,6 +11,7 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
     internal static readonly TimeSpan WriteTimeout = TimeSpan.FromMinutes(5);
     internal static readonly TimeSpan InteractiveTimeout = TimeSpan.FromMinutes(30);
     internal static readonly TimeSpan NetworkTimeout = TimeSpan.FromMinutes(3);
+    internal static readonly TimeSpan RecoveryTimeout = TimeSpan.FromSeconds(30);
     internal static readonly IReadOnlyDictionary<string, string> WriteEnvironment = new Dictionary<string, string>
     {
         ["GIT_TERMINAL_PROMPT"] = "0",
@@ -100,6 +101,24 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
         var path = (await Run(root, ["rev-parse", "--git-path", name], ct, allowFailure: true)).StdOut.Trim();
         if (path.Length == 0) return null;
         return Path.IsPathRooted(path) ? path : Path.Combine(root, path);
+    }
+
+    /// <summary>Matches a stopped rebase to the saved branch, original tip and approved destination in this worktree.</summary>
+    internal async Task<bool> MatchesRebaseAsync(string root, JournalStep pending, string? expectedOnto, CancellationToken ct)
+    {
+        foreach (var name in new[] { "rebase-merge", "rebase-apply" })
+        {
+            var directory = await GitPathAsync(root, name, ct);
+            if (directory is null || !Directory.Exists(directory)) continue;
+            var headName = Path.Combine(directory, "head-name");
+            var originalHead = Path.Combine(directory, "orig-head");
+            var onto = Path.Combine(directory, "onto");
+            return File.Exists(headName) && File.Exists(originalHead) &&
+                (await File.ReadAllTextAsync(headName, ct)).Trim() == pending.Target &&
+                (await File.ReadAllTextAsync(originalHead, ct)).Trim() == pending.OldSha &&
+                (expectedOnto is null || File.Exists(onto) && (await File.ReadAllTextAsync(onto, ct)).Trim() == expectedOnto);
+        }
+        return false;
     }
 
     public async Task<IReadOnlyList<string>> OtherWorktreeBranchesAsync(string root, CancellationToken ct)

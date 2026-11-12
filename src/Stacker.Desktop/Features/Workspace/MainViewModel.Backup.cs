@@ -40,5 +40,12 @@ public sealed partial class MainViewModel
         return problems;
     }
     public void CancelClose() { _runtime._commands?.Resume(); SetWindowActive(true); }
-    public async Task CommitCloseAsync() { if (_runtime._commands is not null) await _runtime._commands.StopAsync(TimeSpan.FromSeconds(5)); ActiveHistory?.Dispose(); ActiveHistory = null; Dispose(); }
+    public async Task CommitCloseAsync()
+    {
+        try
+        {
+            if (_runtime._commands is not null) await _runtime._commands.StopAsync(TimeSpan.FromSeconds(5));
+        }
+        finally { Dispose(); }
+    }
 }

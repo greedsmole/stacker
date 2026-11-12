@@ -31,7 +31,11 @@ public sealed class CommandGitHubWriter(GitHubCli client, CommandBus bus) : IGit
     private async Task<T> Run<T>(GitHubRepositoryContext context, EffectCommand<T> command, CancellationToken ct)
     {
         var outcome = await bus.RunRemoteAsync(context, command, ct);
-        if (outcome.Problem is not null && command.Value is { IsOk: true }) throw new StackerException(Problem.Of(ProblemCodes.GitHubRequest, outcome.Message) with { Certainty = outcome.Certainty });
+        if (!outcome.Ok && command.Value is { IsOk: true })
+        {
+            var problem = outcome.Problem ?? Problem.Of(ProblemCodes.StoreWrite, outcome.Message);
+            throw new StackerException(problem with { Certainty = EffectCertainty.Confirmed });
+        }
         return command.Value is { } value ? value.OrThrow() : throw new StackerException(Problem.Of(ProblemCodes.GitHubRequest, outcome.Message) with { Certainty = outcome.Certainty });
     }
     private static Task<Result<Unit>> Capture(Func<Task> effect) => Capture(async () => { await effect(); return Unit.Value; });
