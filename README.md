@@ -1,6 +1,6 @@
 # Stacker v0.6
 
-A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Release targets: **macOS and Windows on x64 and ARM64**.
+A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Release packages cover **macOS Apple Silicon, macOS Intel, and Windows x64**.
 
 ## Run
 

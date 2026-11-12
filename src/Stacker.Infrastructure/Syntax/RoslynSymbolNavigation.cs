@@ -45,7 +45,8 @@ public sealed class RoslynSymbolNavigation(GitRepositoryReader git) : ISymbolNav
             throw new StackerException("The selected project and file must belong to the checked-out commit.");
 
         using var workspace = MSBuildWorkspace.Create();
-        var entry = Path.Combine(request.Root, project);
+        var root = Path.GetFullPath(request.Root);
+        var entry = Path.GetFullPath(project, root);
         try
         {
             if (HasExtension(entry, ".csproj")) await workspace.OpenProjectAsync(entry, cancellationToken: ct);
@@ -61,7 +62,8 @@ public sealed class RoslynSymbolNavigation(GitRepositoryReader git) : ISymbolNav
             throw new StackerException($"Cannot load {project}. Check the project's .NET SDK and restore its packages. {failure.Message}");
 
         var solution = workspace.CurrentSolution;
-        var file = Path.Combine(request.Root, request.Path);
+        // Git uses forward slashes. Roslyn indexes the native absolute path from MSBuild.
+        var file = Path.GetFullPath(request.Path, root);
         var documents = solution.GetDocumentIdsWithFilePath(file).Select(solution.GetDocument)
             .OfType<Document>().Where(document => document.Project.Language == LanguageNames.CSharp).ToArray();
         if (documents.Length == 0) throw new StackerException($"{request.Path} is not included in {project}.");
@@ -100,7 +102,7 @@ public sealed class RoslynSymbolNavigation(GitRepositoryReader git) : ISymbolNav
             foreach (var location in matches)
             {
                 if (!location.IsInSource || location.SourceTree is not { FilePath.Length: > 0 } tree) continue;
-                var path = Path.GetRelativePath(request.Root, tree.FilePath).Replace(Path.DirectorySeparatorChar, '/');
+                var path = Path.GetRelativePath(root, tree.FilePath).Replace(Path.DirectorySeparatorChar, '/');
                 if (!tracked.Contains(path)) continue;
                 var start = location.GetLineSpan().StartLinePosition;
                 locations.Add(new(path, start.Line + 1, start.Character));
