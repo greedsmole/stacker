@@ -1,10 +1,10 @@
-using Stacker.Core.Framework;
 // Purpose: GitHub integration for connection status, remote snapshots, discovered PR stacks, and remote object-cache preparation.
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Stacker.Core;
+using Stacker.Core.Framework;
 
 namespace Stacker.Desktop.ViewModels;
 

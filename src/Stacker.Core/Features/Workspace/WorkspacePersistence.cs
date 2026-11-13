@@ -44,7 +44,11 @@ public sealed class WorkspacePersistence(IApplicationState store)
     /// are not comparable even when the stack key matches.</remarks>
     public WorkspaceState Snapshot(string root, WorkspaceState state)
     {
-        if (_snapshotRoot != root) { _snapshots.Clear(); _snapshotRoot = root; }
+        if (_snapshotRoot != root)
+        {
+            _snapshots.Clear();
+            _snapshotRoot = root;
+        }
         var copy = new WorkspaceState { ActiveGroup = state.ActiveGroup };
         foreach (var (key, stack) in state.Stacks)
         {
@@ -59,7 +63,10 @@ public sealed class WorkspacePersistence(IApplicationState store)
     /// <remarks>Set by a failing stack or index write and cleared by a successful index write, so it describes the last
     /// attempt rather than a historical failure. Callers gate profile export and the close decision on it, so a
     /// workspace that could not be saved is reported instead of being silently exported or closed.</remarks>
-    public Problem? LastProblem { get; private set; }
+    public Problem? LastProblem
+    {
+        get; private set;
+    }
     /// <summary>Loads one workspace, importing the older document when the current key has no state yet.</summary>
     /// <param name="root">Current workspace key: the worktree identity where one is known, otherwise the repository
     /// path.</param>
@@ -85,29 +92,40 @@ public sealed class WorkspacePersistence(IApplicationState store)
     public async Task<Result<WorkspaceState>> LoadAsync(string root, CancellationToken ct = default, string? legacyRoot = null)
     {
         _snapshots.Clear();
-        foreach (var key in _saved.Keys.Where(key => key.Root == root).ToArray()) _saved.Remove(key);
+        foreach (var key in _saved.Keys.Where(key => key.Root == root).ToArray())
+            _saved.Remove(key);
         var result = await store.ReadAsync<WorkspaceState>("workspace", root, ct);
         var source = root;
         if (result.IsOk && result.Value is null && legacyRoot is not null && legacyRoot != root)
-        { source = legacyRoot; result = await store.ReadAsync<WorkspaceState>("workspace", source, ct); }
-        if (result.IsFailed) return Result<WorkspaceState>.Fail(result.Problem!);
+        {
+            source = legacyRoot;
+            result = await store.ReadAsync<WorkspaceState>("workspace", source, ct);
+        }
+        if (result.IsFailed)
+            return Result<WorkspaceState>.Fail(result.Problem!);
         var state = result.Value ?? new();
-        if (state.SchemaVersion > 2) return Result<WorkspaceState>.Fail(ProblemCodes.StateInvalid, "This workspace was saved by a newer Stacker version.");
-        state.Stacks ??= []; state.StackKeys ??= [];
+        if (state.SchemaVersion > 2)
+            return Result<WorkspaceState>.Fail(ProblemCodes.StateInvalid, "This workspace was saved by a newer Stacker version.");
+        state.Stacks ??= [];
+        state.StackKeys ??= [];
         if (state.SchemaVersion == 2)
             foreach (var key in state.StackKeys.Distinct())
             {
                 var stack = await store.ReadAsync<StackViewState>("workspace-stacks", source + "|" + key, ct);
-                if (stack.IsFailed) return Result<WorkspaceState>.Fail(stack.Problem!);
+                if (stack.IsFailed)
+                    return Result<WorkspaceState>.Fail(stack.Problem!);
                 state.Stacks[key] = stack.Value ?? new();
-                if (source == root) _saved[(root, key)] = 0;
+                if (source == root)
+                    _saved[(root, key)] = 0;
             }
         foreach (var key in state.Stacks.Keys.ToArray())
         {
             var stack = state.Stacks[key] ??= new();
-            stack.Branches ??= []; stack.Comparisons ??= [];
+            stack.Branches ??= [];
+            stack.Comparisons ??= [];
             stack.Comparisons = stack.Comparisons.Where(pair => pair.Value is not null).TakeLast(40).ToDictionary();
-            if (!Enum.IsDefined(stack.Mode)) stack.Mode = DiffMode.FullStack;
+            if (!Enum.IsDefined(stack.Mode))
+                stack.Mode = DiffMode.FullStack;
         }
         return Result<WorkspaceState>.Ok(state);
     }
@@ -131,9 +149,14 @@ public sealed class WorkspacePersistence(IApplicationState store)
     {
         foreach (var (key, stack) in snapshot.Stacks)
         {
-            if (_saved.TryGetValue((root, key), out var version) && version == stack.Revision) continue;
+            if (_saved.TryGetValue((root, key), out var version) && version == stack.Revision)
+                continue;
             var written = await store.WriteAsync("workspace-stacks", root + "|" + key, stack, ct);
-            if (written.IsFailed) { LastProblem = written.Problem; return written; }
+            if (written.IsFailed)
+            {
+                LastProblem = written.Problem;
+                return written;
+            }
             _saved[(root, key)] = stack.Revision;
         }
         var index = new WorkspaceState { SchemaVersion = 2, ActiveGroup = snapshot.ActiveGroup, StackKeys = snapshot.Stacks.Keys.ToArray() };

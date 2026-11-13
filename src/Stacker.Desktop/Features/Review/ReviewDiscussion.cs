@@ -22,22 +22,27 @@ public partial class ReviewViewModel
     private async Task ReadDiscussionAsync(CancellationToken ct, bool afterPublication = false, bool throwOnFailure = false)
     {
         _discussionLoad?.Cancel();
-        using var load = CancellationTokenSource.CreateLinkedTokenSource(ct); _discussionLoad = load;
+        using var load = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _discussionLoad = load;
         var snapshot = PullRequest;
         try
         {
             var discussion = IsDemo ? DemoReviewData.Discussion(PullRequest) : (await _reader.DiscussionAsync(Context, snapshot, load.Token)).OrThrow();
             load.Token.ThrowIfCancellationRequested();
-            if (snapshot != PullRequest) return;
-            Sync(Comments, discussion.Comments, c => c.Id); Sync(Reviews, discussion.Reviews, r => r.Id);
+            if (snapshot != PullRequest)
+                return;
+            Sync(Comments, discussion.Comments, c => c.Id);
+            Sync(Reviews, discussion.Reviews, r => r.Id);
             var selectedId = SelectedThread?.Id;
             Sync(Threads, discussion.Threads, t => t.Id);
             SelectedThread = Threads.FirstOrDefault(t => t.Id == selectedId);
-            foreach (var view in _sections) view.SetThreads(Threads);
+            foreach (var view in _sections)
+                view.SetThreads(Threads);
             Sync(CodeThreads, Threads.Where(t => !t.IsFileLevel).ToArray(), t => t.Id);
             DiscussionChanged?.Invoke();
             foreach (var path in discussion.Threads.Select(t => t.Path).OfType<string>().Concat(_draft.FileComposers.Keys).Distinct())
-                if (!ReviewFiles.Contains(path)) ReviewFiles.Add(path);
+                if (!ReviewFiles.Contains(path))
+                    ReviewFiles.Add(path);
             UpdateFileThreads();
             if (!IsBusy && _draft.Operation is (null or { Phase: PublicationPhase.Uncertain }) &&
                 _draft.PendingOperation is { } pendingText)
@@ -61,9 +66,11 @@ public partial class ReviewViewModel
                         PublicationProblem = null;
                         Message = "Previous publication confirmed on GitHub.";
                     }
-                    else Message = "Publication is still uncertain. Verify the action on GitHub before unlocking a retry.";
+                    else
+                        Message = "Publication is still uncertain. Verify the action on GitHub before unlocking a retry.";
                 }
-                if (!throwOnFailure && HasPendingPublication) PublicationProblem = Message;
+                if (!throwOnFailure && HasPendingPublication)
+                    PublicationProblem = Message;
             }
             NotifyPublicationState();
         }
@@ -72,20 +79,33 @@ public partial class ReviewViewModel
         catch (Exception ex)
         {
             Message = afterPublication ? "Published on GitHub. Could not refresh the discussion. " + ex.Message : ex.Message;
-            if (afterPublication) PublicationProblem ??= Message;
-            else if (!throwOnFailure && HasPendingPublication) PublicationProblem = "Could not check publication status. " + ex.Message;
-            if (throwOnFailure) throw;
+            if (afterPublication)
+                PublicationProblem ??= Message;
+            else if (!throwOnFailure && HasPendingPublication)
+                PublicationProblem = "Could not check publication status. " + ex.Message;
+            if (throwOnFailure)
+                throw;
         }
         finally { if (ReferenceEquals(_discussionLoad, load)) _discussionLoad = null; }
     }
     internal static void Sync<T>(ObservableCollection<T> target, IReadOnlyList<T> incoming, Func<T, string> key)
     {
-        for (var i = target.Count - 1; i >= 0; i--) if (!incoming.Any(v => key(v) == key(target[i]))) target.RemoveAt(i);
+        for (var i = target.Count - 1; i >= 0; i--)
+            if (!incoming.Any(v => key(v) == key(target[i])))
+                target.RemoveAt(i);
         for (var i = 0; i < incoming.Count; i++)
         {
             var old = target.FirstOrDefault(v => key(v) == key(incoming[i]));
-            if (old is null) target.Insert(i, incoming[i]);
-            else { var index = target.IndexOf(old); if (index != i) target.Move(index, i); if (JsonSerializer.Serialize(old) != JsonSerializer.Serialize(incoming[i])) target[i] = incoming[i]; }
+            if (old is null)
+                target.Insert(i, incoming[i]);
+            else
+            {
+                var index = target.IndexOf(old);
+                if (index != i)
+                    target.Move(index, i);
+                if (JsonSerializer.Serialize(old) != JsonSerializer.Serialize(incoming[i]))
+                    target[i] = incoming[i];
+            }
         }
     }
 }

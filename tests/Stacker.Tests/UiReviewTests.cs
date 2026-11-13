@@ -4,8 +4,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
-using Avalonia.Interactivity;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -53,8 +53,13 @@ public sealed class UiReviewTests
         await Until(() => !section.IsBusy && section.Patch.Contains("new token", StringComparison.Ordinal));
         var initialPatch = section.Patch;
         var view = new DiffSectionView { DataContext = section };
-        var window = new Window { Content = view, Width = 820, Height = 440,
-            RequestedThemeVariant = theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark };
+        var window = new Window
+        {
+            Content = view,
+            Width = 820,
+            Height = 440,
+            RequestedThemeVariant = theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark
+        };
         window.Show();
         try
         {
@@ -171,8 +176,13 @@ public sealed class UiReviewTests
         Assert.Contains(patchRows, line => line.Kind == DiffLineKind.Context && line.NewLineNumber == 34);
 
         var view = new DiffSectionView { DataContext = section, ShowFileNavigator = false };
-        var window = new Window { Content = view, Width = 788, Height = 470,
-            RequestedThemeVariant = theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark };
+        var window = new Window
+        {
+            Content = view,
+            Width = 788,
+            Height = 470,
+            RequestedThemeVariant = theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark
+        };
         window.Show();
         try
         {
@@ -256,28 +266,51 @@ public sealed class UiReviewTests
         var root = Path.Combine(Path.GetTempPath(), "stacker-ui-" + Guid.NewGuid().ToString("N"));
         using var services = Composition.Build(root);
         var vm = services.GetRequiredService<MainViewModel>();
-        vm.Settings.Theme = theme; vm.Settings.WindowWidth = 1060; vm.Settings.WindowHeight = 640;
+        vm.Settings.Theme = theme;
+        vm.Settings.WindowWidth = 1060;
+        vm.Settings.WindowHeight = 640;
         await vm.SaveSettingsAsync();
         var window = new MainWindow { DataContext = vm };
         window.Show();
         await Until(() => (bool)typeof(MainWindow).GetField("_ready", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
         Application.Current!.RequestedThemeVariant = theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark;
-        window.Width = 1060; window.Height = 640;
+        window.Width = 1060;
+        window.Height = 640;
         try
         {
             Capture(window, theme, "empty");
-            vm.IsBusy = true; Assert.False(vm.ShowEmptyState); Capture(window, theme, "loading"); vm.IsBusy = false;
-            vm.OpenSearch("Files"); vm.SearchQuery = "Auth"; await vm.SearchAsync();
-            Assert.Contains("Select a stack", vm.SearchStatus); Capture(window, theme, "search-no-comparison"); vm.CloseSearch();
+            vm.IsBusy = true;
+            Assert.False(vm.ShowEmptyState);
+            Capture(window, theme, "loading");
+            vm.IsBusy = false;
+            vm.OpenSearch("Files");
+            vm.SearchQuery = "Auth";
+            await vm.SearchAsync();
+            Assert.Contains("Select a stack", vm.SearchStatus);
+            Capture(window, theme, "search-no-comparison");
+            vm.CloseSearch();
             await vm.OpenDemoAsync();
             await vm.SelectGroupAsync(vm.LocalGroups[0]);
-            vm.OpenSearch("Files"); vm.SearchQuery = "Auth"; await vm.SearchAsync();
-            Assert.NotEmpty(vm.SearchResults); Capture(window, theme, "search-results");
-            vm.SearchQuery = "no-match-unique"; await vm.SearchAsync(); Assert.Contains("No matches", vm.SearchStatus); Capture(window, theme, "search-empty");
-            vm.SearchRegex = true; vm.SearchQuery = "["; await vm.SearchAsync(); Capture(window, theme, "search-invalid-regex"); vm.CloseSearch();
+            vm.OpenSearch("Files");
+            vm.SearchQuery = "Auth";
+            await vm.SearchAsync();
+            Assert.NotEmpty(vm.SearchResults);
+            Capture(window, theme, "search-results");
+            vm.SearchQuery = "no-match-unique";
+            await vm.SearchAsync();
+            Assert.Contains("No matches", vm.SearchStatus);
+            Capture(window, theme, "search-empty");
+            vm.SearchRegex = true;
+            vm.SearchQuery = "[";
+            await vm.SearchAsync();
+            Capture(window, theme, "search-invalid-regex");
+            vm.CloseSearch();
             vm.Error = "Cannot open the selected repository. The directory is unavailable. Reconnect its drive or use Open repository to choose its current location.\n" + string.Join("\n", Enumerable.Repeat("Git diagnostic details remain selectable and scrollable without hiding workspace actions.", 10));
-            Capture(window, theme, "error"); Click(window, "Dismiss"); Assert.False(vm.HasError);
-            await vm.ShowHistoryAsync(); Assert.NotNull(vm.ActiveHistory);
+            Capture(window, theme, "error");
+            Click(window, "Dismiss");
+            Assert.False(vm.HasError);
+            await vm.ShowHistoryAsync();
+            Assert.NotNull(vm.ActiveHistory);
             await Until(() => !vm.IsBusy && !vm.ActiveHistory!.IsBusy && !vm.ActiveHistory.LoadLayerCommand.IsRunning);
             var history = vm.ActiveHistory!;
             Assert.NotEmpty(history.ActiveDocumentSection?.Lines ?? throw new InvalidOperationException("History did not open the current diff."));
@@ -296,7 +329,8 @@ public sealed class UiReviewTests
             flyout.ShowAt(tools);
             var flyoutBody = Assert.IsType<ScrollViewer>(flyout.Content);
             Assert.Same(history, flyoutBody.DataContext);
-            foreach (var expander in flyoutBody.GetLogicalDescendants().OfType<Expander>()) expander.IsExpanded = true;
+            foreach (var expander in flyoutBody.GetLogicalDescendants().OfType<Expander>())
+                expander.IsExpanded = true;
             Capture(window, theme, "history-tools");
             flyout.Hide();
             await vm.SetWrapCodeAsync(true);
@@ -308,29 +342,60 @@ public sealed class UiReviewTests
             Assert.False(history.MarkReviewedCommand.CanExecute(null));
             Assert.False(history.ShowCurrentCommand.CanExecute(null));
             Assert.False(history.CompareVersionsCommand.CanExecute(null));
-            Assert.Null(history.SelectedFile); Assert.Null(history.PreviousVersion); Assert.Null(history.ActiveDocumentSection);
+            Assert.Null(history.SelectedFile);
+            Assert.Null(history.PreviousVersion);
+            Assert.Null(history.ActiveDocumentSection);
             Assert.Contains("Select a layer", history.Message);
-            Capture(window, theme, "history-empty"); vm.CloseHistoryCommand.Execute(null);
+            Capture(window, theme, "history-empty");
+            vm.CloseHistoryCommand.Execute(null);
             await CaptureDialog(window, "SettingsClick", theme, "settings");
             await CaptureDialog(window, "GitHubSettingsClick", theme, "github");
             await CaptureDialog(window, "HelpClick", theme, "help");
             await CaptureDialog(window, "RelocateRepositoryClick", theme, "relocate");
             var unsavedChoice = (Task<UnsavedCloseChoice>)typeof(MainWindow).GetMethod("AskUnsavedAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { new[] { "The review draft could not be saved. The disk is full.", "Free disk space, then retry saving." } })!;
             await Until(() => window.OwnedWindows.Count > 0);
-            var unsaved = window.OwnedWindows.Single(); Minimum(unsaved); Capture(unsaved, theme, "unsaved");
-            Press(unsaved, Key.Escape); Assert.Equal(UnsavedCloseChoice.ContinueEditing, await unsavedChoice);
+            var unsaved = window.OwnedWindows.Single();
+            Minimum(unsaved);
+            Capture(unsaved, theme, "unsaved");
+            Press(unsaved, Key.Escape);
+            Assert.Equal(UnsavedCloseChoice.ContinueEditing, await unsavedChoice);
             var stack = vm.LocalGroups[0].Definition;
             var add = new AddLayerWindow(stack, (_, _, _) => Task.FromResult((false, "Not executed in visual review")));
-            add.Show(window); Minimum(add); Click(add, "Create layer"); Capture(add, theme, "add-layer-validation"); Assert.Contains("Enter a branch", add.FindControl<TextBlock>("ErrorLabel")!.Text); add.Close();
-            var edit = new StackEditorWindow(vm.Repository!, stack, _ => Task.FromResult(false)); edit.Show(window); Minimum(edit); Capture(edit, theme, "stack-editor"); edit.Close();
+            add.Show(window);
+            Minimum(add);
+            Click(add, "Create layer");
+            Capture(add, theme, "add-layer-validation");
+            Assert.Contains("Enter a branch", add.FindControl<TextBlock>("ErrorLabel")!.Text);
+            add.Close();
+            var edit = new StackEditorWindow(vm.Repository!, stack, _ => Task.FromResult(false));
+            edit.Show(window);
+            Minimum(edit);
+            Capture(edit, theme, "stack-editor");
+            edit.Close();
             await vm.RefreshWorkingTreeAsync();
-            var commit = new CommitWindow(vm); commit.Show(window); Minimum(commit); Capture(commit, theme, "commit-clean"); Assert.False(commit.FindControl<Button>("CommitButton")!.IsEnabled); commit.Close();
+            var commit = new CommitWindow(vm);
+            commit.Show(window);
+            Minimum(commit);
+            Capture(commit, theme, "commit-clean");
+            Assert.False(commit.FindControl<Button>("CommitButton")!.IsEnabled);
+            commit.Close();
             await File.AppendAllTextAsync(Path.Combine(vm.Repository!.Root, "Auth.cs"), "\n// visual review fixture\n");
             await vm.RefreshWorkingTreeAsync();
-            var dirtyCommit = new CommitWindow(vm); dirtyCommit.Show(window); Minimum(dirtyCommit); await Task.Delay(30); Click(dirtyCommit, "Commit");
-            Capture(dirtyCommit, theme, "commit-validation"); Assert.Equal("Enter a commit message.", dirtyCommit.FindControl<TextBlock>("ErrorLabel")!.Text); dirtyCommit.Close();
-            var plan = await vm.BuildRestackPlanAsync(); Assert.NotNull(plan);
-            var sync = new SyncPreviewWindow(plan!, vm, false); sync.Show(window); Minimum(sync); Capture(sync, theme, "sync-preview"); sync.Close();
+            var dirtyCommit = new CommitWindow(vm);
+            dirtyCommit.Show(window);
+            Minimum(dirtyCommit);
+            await Task.Delay(30);
+            Click(dirtyCommit, "Commit");
+            Capture(dirtyCommit, theme, "commit-validation");
+            Assert.Equal("Enter a commit message.", dirtyCommit.FindControl<TextBlock>("ErrorLabel")!.Text);
+            dirtyCommit.Close();
+            var plan = await vm.BuildRestackPlanAsync();
+            Assert.NotNull(plan);
+            var sync = new SyncPreviewWindow(plan!, vm, false);
+            sync.Show(window);
+            Minimum(sync);
+            Capture(sync, theme, "sync-preview");
+            sync.Close();
         }
         finally { await vm.PrepareCloseAsync(); window.Close(); }
     }
@@ -352,34 +417,51 @@ public sealed class UiReviewTests
     private static void Press(Window window, Key key)
     {
         window.KeyPress(key, RawInputModifiers.None, PhysicalKey.None, "");
-        if (window.IsVisible) window.KeyRelease(key, RawInputModifiers.None, PhysicalKey.None, "");
+        if (window.IsVisible)
+            window.KeyRelease(key, RawInputModifiers.None, PhysicalKey.None, "");
     }
     private static async Task Until(Func<bool> predicate)
     {
-        for (var i = 0; i < 300; i++) { if (predicate()) return; await Task.Delay(20); }
+        for (var i = 0; i < 300; i++)
+        {
+            if (predicate())
+                return;
+            await Task.Delay(20);
+        }
         Assert.True(predicate(), "UI state did not become available within six seconds.");
     }
     private static async Task CaptureDialog(MainWindow owner, string handler, string theme, string name)
     {
         typeof(MainWindow).GetMethod(handler, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(owner, new object?[] { null, new RoutedEventArgs() });
         await Until(() => owner.OwnedWindows.Count > 0);
-        var dialog = owner.OwnedWindows.Single(); Minimum(dialog); Capture(dialog, theme, name);
+        var dialog = owner.OwnedWindows.Single();
+        Minimum(dialog);
+        Capture(dialog, theme, name);
         var body = dialog.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();
-        if (body is not null) { body.Offset = new Vector(0, 10000); Capture(dialog, theme, name + "-bottom"); }
+        if (body is not null)
+        {
+            body.Offset = new Vector(0, 10000);
+            Capture(dialog, theme, name + "-bottom");
+        }
         Press(dialog, Key.Tab);
         Assert.NotNull(dialog.FocusManager?.GetFocusedElement());
-        if (name == "settings") Capture(dialog, theme, name + "-focus");
-        Press(dialog, Key.Escape); await Until(() => !dialog.IsVisible);
+        if (name == "settings")
+            Capture(dialog, theme, name + "-focus");
+        Press(dialog, Key.Escape);
+        await Until(() => !dialog.IsVisible);
     }
     private static void Capture(Window window, string theme, string name)
     {
-        window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
         Assert.True(window.Bounds.Width > 0 && window.Bounds.Height > 0);
         var directory = Environment.GetEnvironmentVariable("STACKER_UI_CAPTURE_DIR");
-        if (directory is null) return;
+        if (directory is null)
+            return;
         Directory.CreateDirectory(directory);
         AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
-        using var frame = window.CaptureRenderedFrame(); Assert.True(frame is not null, $"No rendered frame for {name}; visible={window.IsVisible}.");
+        using var frame = window.CaptureRenderedFrame();
+        Assert.True(frame is not null, $"No rendered frame for {name}; visible={window.IsVisible}.");
         frame!.Save(Path.Combine(directory, theme + "-" + name + ".png"));
     }
 }

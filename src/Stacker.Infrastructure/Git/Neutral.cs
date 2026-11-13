@@ -39,7 +39,8 @@ public static class Neutral
     private static readonly Lazy<string> EmptyConfig = new(() =>
     {
         var path = Path.Combine(PolicyRoot.Value, "empty-gitconfig");
-        if (!File.Exists(path)) File.WriteAllText(path, "");
+        if (!File.Exists(path))
+            File.WriteAllText(path, "");
         return path;
     });
 

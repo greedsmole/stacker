@@ -1,10 +1,10 @@
-using Stacker.Core.Framework;
 // Purpose: Central screen state and comparison navigation; turns stack/layer selection into explicit diff requests.
 using System.Collections.ObjectModel;
 using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Stacker.Core;
+using Stacker.Core.Framework;
 
 
 namespace Stacker.Desktop.ViewModels;
@@ -60,9 +60,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
         ChangeGraphService? historyGraph = null, VersionComparisonService? historyComparisons = null, ReviewProgressService? historyProgress = null, IWorkspaceBackupService? backupService = null, IChangeIdentityService? identities = null, IDiagnosticSink? diagnostics = null,
         ISymbolNavigation? symbolNavigation = null)
     {
-        _backupService = backupService; _runtime.Identities = identities; _runtime.Diagnostics = diagnostics;
+        _backupService = backupService;
+        _runtime.Identities = identities;
+        _runtime.Diagnostics = diagnostics;
         SymbolNavigation = symbolNavigation;
-        _runtime.HistoryStore = historyStore; _runtime.HistoryObjects = historyObjects; _runtime.HistoryGraph = historyGraph; _runtime.HistoryComparisons = historyComparisons; _runtime.HistoryProgress = historyProgress;
+        _runtime.HistoryStore = historyStore;
+        _runtime.HistoryObjects = historyObjects;
+        _runtime.HistoryGraph = historyGraph;
+        _runtime.HistoryComparisons = historyComparisons;
+        _runtime.HistoryProgress = historyProgress;
         _syncController = new(this, _runtime);
         _workspaceController = new(this, _runtime);
         _gitHubController = new(this, _runtime);
@@ -71,20 +77,44 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
         _navigationController = new(this, _runtime);
         _gitLogController = new(this, _runtime);
 
-        _runtime._git = git; _runtime._store = store; _runtime._settingsStore = settingsStore; _runtime._executable = executable; _runtime._stacks = stacks; _runtime._diff = diff; _runtime._highlighter = highlighter;
-        _runtime._branchWriter = branchWriter; _runtime._pullRequestWriter = pullRequestWriter; _runtime._editorLauncher = editorLauncher;
-        _runtime._github = github; _runtime._writer = writer; _runtime._prObjects = cache; _runtime._applicationStore = applicationStore ?? new MemoryApplicationState(); _runtime._workspacePersistence = new(_runtime._applicationStore); _runtime._demo = demo; _runtime._ghExecutable = ghExecutable;
+        _runtime._git = git;
+        _runtime._store = store;
+        _runtime._settingsStore = settingsStore;
+        _runtime._executable = executable;
+        _runtime._stacks = stacks;
+        _runtime._diff = diff;
+        _runtime._highlighter = highlighter;
+        _runtime._branchWriter = branchWriter;
+        _runtime._pullRequestWriter = pullRequestWriter;
+        _runtime._editorLauncher = editorLauncher;
+        _runtime._github = github;
+        _runtime._writer = writer;
+        _runtime._prObjects = cache;
+        _runtime._applicationStore = applicationStore ?? new MemoryApplicationState();
+        _runtime._workspacePersistence = new(_runtime._applicationStore);
+        _runtime._demo = demo;
+        _runtime._ghExecutable = ghExecutable;
         _runtime._commandLog = commandLog;
         _runtime._commands = commands;
-        if (_runtime._commands is not null) { _runtime._commands.Reported += ReportCommand; _runtime._commands.Starting += CommandStarting; }
-        if (_runtime._commandLog is not null) { foreach (var entry in _runtime._commandLog.Snapshot()) _gitLogController.AddOrUpdate(entry); _runtime._commandLog.Changed += LogChanged; }
+        if (_runtime._commands is not null)
+        {
+            _runtime._commands.Reported += ReportCommand;
+            _runtime._commands.Starting += CommandStarting;
+        }
+        if (_runtime._commandLog is not null)
+        {
+            foreach (var entry in _runtime._commandLog.Snapshot())
+                _gitLogController.AddOrUpdate(entry);
+            _runtime._commandLog.Changed += LogChanged;
+        }
         Sections.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasNoSections));
             OnPropertyChanged(nameof(ShowEmptyState));
             OnPropertyChanged(nameof(ShowLoadingState));
             // Search results point at sections; when the sections go, the results must go with them.
-            if (Sections.Count == 0) ResetSearch();
+            if (Sections.Count == 0)
+                ResetSearch();
         };
     }
     partial void OnErrorChanged(string value) => OnPropertyChanged(nameof(HasError));
@@ -95,23 +125,45 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     }
     partial void OnSelectedStackChanged(StackDefinition? value)
     {
-        if (!_runtime._suppress && value is not null && LocalGroups.FirstOrDefault(g => g.Definition.Id == value.Id) is { } group) _ = SelectGroupAsync(group);
+        if (!_runtime._suppress && value is not null && LocalGroups.FirstOrDefault(g => g.Definition.Id == value.Id) is { } group)
+            _ = SelectGroupAsync(group);
     }
-    partial void OnModeChanged(DiffMode value) { OnPropertyChanged(nameof(IsSingleLayer)); OnPropertyChanged(nameof(IsThroughLayer)); if (!_runtime._suppress) { CaptureWorkspace(); _ = CompareAsync(); } }
+    partial void OnModeChanged(DiffMode value)
+    {
+        OnPropertyChanged(nameof(IsSingleLayer));
+        OnPropertyChanged(nameof(IsThroughLayer));
+        if (!_runtime._suppress)
+        {
+            CaptureWorkspace();
+            _ = CompareAsync();
+        }
+    }
     /// <summary>Restores preferences and the last workspace once when the application starts.</summary>
     public Task InitializeAsync() => _navigationController.InitializeAsync();
     [RelayCommand] public Task OpenAsync() => _navigationController.OpenAsync();
     [RelayCommand] public Task RefreshAsync() => _navigationController.RefreshAsync();
     /// <summary>Starts a new repository workspace; unlike refresh, this intentionally replaces the active repository.</summary>
-    public Task OpenRepositoryAsync(string path) { CloseHistory(); return _navigationController.OpenRepositoryAsync(path); }
+    public Task OpenRepositoryAsync(string path)
+    {
+        CloseHistory();
+        return _navigationController.OpenRepositoryAsync(path);
+    }
     // Opening and refreshing share the data-loading path, but only an explicit open clears workspace state.
     internal Task ReadRepositoryAsync(string path, bool opening) => _navigationController.ReadRepositoryAsync(path, opening);
     public void SetActiveGroup(StackGroupViewModel group) => _navigationController.SetActiveGroup(group);
     /// <summary>Selects a stack overview and requests its final layer as the complete stack comparison.</summary>
-    public async Task SelectGroupAsync(StackGroupViewModel group, bool saveCurrent = true) { await _navigationController.SelectGroupAsync(group, saveCurrent); await SynchronizeHistoryAsync(); }
+    public async Task SelectGroupAsync(StackGroupViewModel group, bool saveCurrent = true)
+    {
+        await _navigationController.SelectGroupAsync(group, saveCurrent);
+        await SynchronizeHistoryAsync();
+    }
     /// <summary>Selects one layer or toggles it into a same-stack multi-layer selection.</summary>
     /// <remarks>Multi-layer comparisons remain independent and keep each selected layer's real parent branch.</remarks>
-    public async Task SelectLayerAsync(LayerViewModel layer, bool toggle) { await _navigationController.SelectLayerAsync(layer, toggle); await SynchronizeHistoryAsync(); }
+    public async Task SelectLayerAsync(LayerViewModel layer, bool toggle)
+    {
+        await _navigationController.SelectLayerAsync(layer, toggle);
+        await SynchronizeHistoryAsync();
+    }
     public void SelectLayers(IEnumerable<LayerViewModel> layers) => _navigationController.SelectLayers(layers);
     /// <summary>Rebuilds visible sections from the selected stack, comparison mode, and captured ref snapshot.</summary>
     /// <remarks>Cancellation and comparison keys prevent a slower previous selection from replacing a newer one.</remarks>
@@ -129,10 +181,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     public Task SaveSettingsAsync() => _navigationController.SaveSettingsAsync();
     public Task SetWrapCodeAsync(bool enabled)
     {
-        if (ActiveHistory is { } history) history.WrapCode = enabled;
+        if (ActiveHistory is { } history)
+            history.WrapCode = enabled;
         return _navigationController.SetWrapCodeAsync(enabled);
     }
     public Task SetGroupFilesByFolderAsync(bool enabled) => _navigationController.SetGroupFilesByFolderAsync(enabled);
     public void DisposeViews() => _navigationController.DisposeViews();
-    public void Dispose() { ActiveHistory?.Dispose(); ActiveHistory = null; _runtime.Session.Suspend(); _navigationController.Dispose(); }
+    public void Dispose()
+    {
+        ActiveHistory?.Dispose();
+        ActiveHistory = null;
+        _runtime.Session.Suspend();
+        _navigationController.Dispose();
+    }
 }

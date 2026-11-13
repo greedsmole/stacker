@@ -59,11 +59,15 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
         await git.Gate.WaitAsync(ct);
         try
         {
-            if (plan.Blockers.Count > 0) return git.Refused(plan.Blockers[0]);
+            if (plan.Blockers.Count > 0)
+                return git.Refused(plan.Blockers[0]);
             var steps = plan.Steps.Where(step => step.NeedsRebase && !step.Blocked).ToArray();
-            if (steps.Length == 0) return new(RestackStatus.NothingToDo, null, [], "Every layer is already based on its parent.", null);
-            if (steps.Any(step => !step.IsLocalBranch)) return git.Refused("Only local branches can be restacked.");
-            if (await git.VerifyPlanAsync(plan, ct) is { } stale) return git.Refused(stale);
+            if (steps.Length == 0)
+                return new(RestackStatus.NothingToDo, null, [], "Every layer is already based on its parent.", null);
+            if (steps.Any(step => !step.IsLocalBranch))
+                return git.Refused("Only local branches can be restacked.");
+            if (await git.VerifyPlanAsync(plan, ct) is { } stale)
+                return git.Refused(stale);
             var root = plan.RepositoryRoot;
             // Write-ahead: an interrupted or crashed run always leaves a record of what it intended and what it did.
             // The first step is not an effect: it keeps the branch the user started on so recovery can return there.
@@ -120,7 +124,8 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
                 ct.ThrowIfCancellationRequested();
                 var step = steps[index];
                 var plannedStep = planned[index + 1];
-                if (plannedStep.State == StepState.Done) continue;
+                if (plannedStep.State == StepState.Done)
+                    continue;
                 layer = step.BranchName;
                 if (await git.ShaAsync(root, step.Branch, ct) != step.BranchTip)
                     throw new StackerException($"{step.BranchName} moved while this restack was interrupted. No further layers were changed.");
@@ -131,7 +136,10 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
                     entry = (await journal.CloseAsync(entry, JournalPhase.NeedsUser, message: drift, ct: ct)).OrThrow();
                     return git.Refused(drift, entry);
                 }
-                entry = (await journal.StepAsync(entry, plannedStep with { State = StepState.Started }, ct)).OrThrow();
+                entry = (await journal.StepAsync(entry, plannedStep with
+                {
+                    State = StepState.Started
+                }, ct)).OrThrow();
                 progress?.Report($"Restacking {step.BranchName} onto {step.ParentName}");
                 await git.Run(root, ["update-ref", $"{GitRunner.BackupRoot}/{stamp}/{StackRefs.Short(step.Branch)}", step.BranchTip!], ct);
                 var rebase = await git.Run(root, git.RebaseArgs(plan, step), ct, allowFailure: true);
@@ -169,15 +177,20 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
         catch (Exception ex)
         {
             var stored = await RecoverFailureAsync(entry, resumeAttempt, ex is OperationCanceledException);
-            if (stored.Phase == JournalPhase.Applied) entry = stored;
+            if (stored.Phase == JournalPhase.Applied)
+                entry = stored;
             else
             {
-                if (stored.Phase != JournalPhase.RolledBack || ex is OperationCanceledException) throw;
+                if (stored.Phase != JournalPhase.RolledBack || ex is OperationCanceledException)
+                    throw;
                 return RestoredAfterFailure(stored, layer, ex);
             }
         }
 
-        try { await git.PruneBackupsAsync(root, ct); }
+        try
+        {
+            await git.PruneBackupsAsync(root, ct);
+        }
         catch (Exception ex)
         {
             return new(RestackStatus.Applied, null, [], $"{entry.Summary} Old backups could not be pruned: {ex.Message}", entry);
@@ -197,13 +210,18 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
         if (stored.NeedsAttention)
         {
             // Keep the observed new SHA available for recovery if the write of Done failed.
-            try { await recovery.RestoreAsync(entry.Repository, entry, git.OriginalBranch(entry), cleanup.Token); }
+            try
+            {
+                await recovery.RestoreAsync(entry.Repository, entry, git.OriginalBranch(entry), cleanup.Token);
+            }
             catch
             {
                 stored = await ReadEntryAsync(entry, cleanup.Token);
-                if (stored.Phase != JournalPhase.RolledBack) throw;
+                if (stored.Phase != JournalPhase.RolledBack)
+                    throw;
             }
-            if (stored.NeedsAttention) stored = await ReadEntryAsync(entry, cleanup.Token);
+            if (stored.NeedsAttention)
+                stored = await ReadEntryAsync(entry, cleanup.Token);
         }
         if (cancelled && stored.Phase == JournalPhase.RolledBack && resumeAttempt is not null)
             (await journal.CloseAsync(resumeAttempt, JournalPhase.RolledBack, message: stored.Summary, ct: cleanup.Token)).OrThrow();
@@ -218,7 +236,10 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
     }
 
     private static JournalEntry WithStep(JournalEntry entry, JournalStep finished) =>
-        entry with { Steps = entry.Steps.Select(step => step.Id == finished.Id ? finished : step).ToArray() };
+        entry with
+        {
+            Steps = entry.Steps.Select(step => step.Id == finished.Id ? finished : step).ToArray()
+        };
 
     private static RestackOutcome RestoredAfterFailure(JournalEntry entry, string? layer, Exception error) =>
         new(RestackStatus.RolledBack, layer, [], $"The restack failed and every branch was restored. {error.Message}", entry);
@@ -241,7 +262,8 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
         try
         {
             var state = await git.StatusAsync(root, ct);
-            if (state.Operation != WorkingOperation.Rebase) return git.Refused("There is no rebase to continue.");
+            if (state.Operation != WorkingOperation.Rebase)
+                return git.Refused("There is no rebase to continue.");
             var entry = await PendingRestackAsync(root, ct);
             if (state.HasConflicts)
                 return new(RestackStatus.Conflicted, null, state.ConflictedFiles, "Resolve and stage these files before continuing.", entry);
@@ -265,11 +287,13 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
         try
         {
             var state = await git.StatusAsync(root, ct);
-            if (state.Operation != WorkingOperation.Rebase) return git.Refused("There is no rebase to skip a commit in.");
+            if (state.Operation != WorkingOperation.Rebase)
+                return git.Refused("There is no rebase to skip a commit in.");
             var entry = await PendingRestackAsync(root, ct);
             return await ResumeAsync(root, entry, attempt, async () =>
             {
-                if (state.HasConflicts) await git.Run(root, ["reset", "--", .. state.ConflictedFiles], ct, allowFailure: true);
+                if (state.HasConflicts)
+                    await git.Run(root, ["reset", "--", .. state.ConflictedFiles], ct, allowFailure: true);
                 return await RunInteractiveRebaseAsync(root, "--skip", null, ct);
             }, ct);
         }
@@ -300,9 +324,13 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
         try
         {
             if (entry?.Pending is { State: StepState.Planned } legacy)
-                entry = (await journal.StepAsync(entry, legacy with { State = StepState.Started }, ct)).OrThrow();
+                entry = (await journal.StepAsync(entry, legacy with
+                {
+                    State = StepState.Started
+                }, ct)).OrThrow();
             var result = await dispatch();
-            if (result.ExitCode != 0) return await ResumeRefusalAsync(root, entry, result, ct);
+            if (result.ExitCode != 0)
+                return await ResumeRefusalAsync(root, entry, result, ct);
             acknowledged = true;
             if (entry?.Pending is { } pending)
             {
@@ -325,9 +353,11 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
             entry = await RecoverFailureAsync(entry, attempt, ex is OperationCanceledException);
             if (entry.Phase == JournalPhase.RolledBack && ex is not OperationCanceledException)
                 return RestoredAfterFailure(entry, null, ex);
-            if (entry.Phase != JournalPhase.Applied) throw;
+            if (entry.Phase != JournalPhase.Applied)
+                throw;
         }
-        if (entry?.RestackPlan is { } plan) return await ExecutePlanAsync(plan, entry, null, ct, attempt);
+        if (entry?.RestackPlan is { } plan)
+            return await ExecutePlanAsync(plan, entry, null, ct, attempt);
         return new(RestackStatus.Applied, null, [], "The layer was completed. Press Restack again to finish any layers above it.", entry);
     }
 
@@ -350,7 +380,8 @@ internal sealed class RestackEffects(GitRunner git, IJournal journal, IClock clo
     private async Task<JournalEntry?> PendingRestackAsync(string root, CancellationToken ct)
     {
         var entry = (await journal.ActiveAsync(root, ct)).OrThrow();
-        if (entry is null || await recovery.FindStoppedRebaseAsync(root, entry, ct) is not { } pending) return null;
+        if (entry is null || await recovery.FindStoppedRebaseAsync(root, entry, ct) is not { } pending)
+            return null;
         return entry.PendingStepId == pending.Id ? entry
             : (await journal.CloseAsync(entry, JournalPhase.NeedsUser, pendingStepId: pending.Id, message: entry.Message, ct: ct)).OrThrow();
     }

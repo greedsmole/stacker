@@ -13,9 +13,12 @@ public sealed class PullRequestPublicationTests
     public void A_stack_without_pull_requests_creates_one_per_layer()
     {
         var plan = PullRequestPlanner.Plan(Stack, [], 1);
-        Assert.True(plan.CanPublish); Assert.Equal(3, plan.PendingCount);
+        Assert.True(plan.CanPublish);
+        Assert.Equal(3, plan.PendingCount);
         Assert.All(plan.Steps, step => Assert.Equal(PullRequestAction.Create, step.Action));
-        Assert.Equal("main", plan.Steps[0].ParentName); Assert.Equal("A", plan.Steps[1].ParentName); Assert.Equal("B", plan.Steps[2].ParentName);
+        Assert.Equal("main", plan.Steps[0].ParentName);
+        Assert.Equal("A", plan.Steps[1].ParentName);
+        Assert.Equal("B", plan.Steps[2].ParentName);
         Assert.Equal("Create a pull request into A", plan.Steps[1].Status);
     }
     // Scenario: Existing pull requests are kept, retargeted only when their base is wrong.
@@ -24,8 +27,10 @@ public sealed class PullRequestPublicationTests
     {
         var plan = PullRequestPlanner.Plan(Stack, [Pr(7, "main", "A"), Pr(8, "main", "B"), Pr(9, "B", "C")], 1);
         Assert.Equal(1, plan.PendingCount);
-        Assert.Equal(PullRequestAction.Unchanged, plan.Steps[0].Action); Assert.Equal(7, plan.Steps[0].Number);
-        Assert.Equal(PullRequestAction.UpdateBase, plan.Steps[1].Action); Assert.Equal("main", plan.Steps[1].CurrentBase);
+        Assert.Equal(PullRequestAction.Unchanged, plan.Steps[0].Action);
+        Assert.Equal(7, plan.Steps[0].Number);
+        Assert.Equal(PullRequestAction.UpdateBase, plan.Steps[1].Action);
+        Assert.Equal("main", plan.Steps[1].CurrentBase);
         Assert.Equal(PullRequestAction.Unchanged, plan.Steps[2].Action);
         Assert.Equal("#8 · base main → A", plan.Steps[1].Status);
     }
@@ -34,17 +39,20 @@ public sealed class PullRequestPublicationTests
     public void Pull_requests_from_a_fork_or_another_branch_are_not_matched()
     {
         var plan = PullRequestPlanner.Plan(Stack, [Pr(7, "main", "A", headRepo: 2), Pr(8, "main", "other")], 1);
-        Assert.Equal(3, plan.PendingCount); Assert.All(plan.Steps, step => Assert.Equal(PullRequestAction.Create, step.Action));
+        Assert.Equal(3, plan.PendingCount);
+        Assert.All(plan.Steps, step => Assert.Equal(PullRequestAction.Create, step.Action));
     }
     // Scenario: Ambiguous and non-local layers are refused instead of guessed.
     [Fact]
     public void Ambiguous_and_non_local_layers_are_refused()
     {
         var duplicates = PullRequestPlanner.Plan(Stack, [Pr(7, "main", "A"), Pr(8, "main", "A")], 1);
-        Assert.False(duplicates.CanPublish); Assert.Contains("2 open pull requests", Assert.Single(duplicates.Blockers));
+        Assert.False(duplicates.CanPublish);
+        Assert.Contains("2 open pull requests", Assert.Single(duplicates.Blockers));
         var remote = new StackDefinition("s", "Stack", "refs/heads/main", ["refs/remotes/origin/A", "refs/heads/B"]);
         var plan = PullRequestPlanner.Plan(remote, [], 1);
-        Assert.False(plan.CanPublish); Assert.Contains("is not a local branch", Assert.Single(plan.Blockers));
+        Assert.False(plan.CanPublish);
+        Assert.Contains("is not a local branch", Assert.Single(plan.Blockers));
         Assert.Equal(PullRequestAction.Unchanged, plan.Steps[0].Action);
     }
     // Scenario: A remote-tracking base is compared and sent as the branch GitHub knows, not as "origin/main".
@@ -63,6 +71,8 @@ public sealed class PullRequestPublicationTests
     public void A_complete_stack_has_nothing_to_publish()
     {
         var plan = PullRequestPlanner.Plan(Stack, [Pr(7, "main", "A"), Pr(8, "A", "B"), Pr(9, "B", "C")], 1);
-        Assert.False(plan.CanPublish); Assert.Equal(0, plan.PendingCount); Assert.Empty(plan.Blockers);
+        Assert.False(plan.CanPublish);
+        Assert.Equal(0, plan.PendingCount);
+        Assert.Empty(plan.Blockers);
     }
 }

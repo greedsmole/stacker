@@ -27,8 +27,11 @@ public sealed partial class MainViewModel
     internal void SetActiveEntry(JournalEntry? entry) => _workingTreeController.SetActiveEntry(entry);
     partial void OnWorkingTreeChanged(WorkingTreeState? value)
     {
-        OnPropertyChanged(nameof(HasOperation)); OnPropertyChanged(nameof(OperationSummary));
-        OnPropertyChanged(nameof(CanContinueOperation)); OnPropertyChanged(nameof(CanAbortOperation)); OnPropertyChanged(nameof(HasConflicts));
+        OnPropertyChanged(nameof(HasOperation));
+        OnPropertyChanged(nameof(OperationSummary));
+        OnPropertyChanged(nameof(CanContinueOperation));
+        OnPropertyChanged(nameof(CanAbortOperation));
+        OnPropertyChanged(nameof(HasConflicts));
     }
 
     /// <summary>Reads the working tree and any stack write that still needs the user.</summary>

@@ -42,10 +42,12 @@ public sealed class FileChangeBadge : Border
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
     {
         base.OnPropertyChanged(e);
-        if (e.Property != ChangeProperty) return;
+        if (e.Property != ChangeProperty)
+            return;
 
         IsVisible = Change is not null;
-        if (Change is not { } file) return;
+        if (Change is not { } file)
+            return;
         _label.Text = file.Kind switch
         {
             FileChangeKind.Added => "A",

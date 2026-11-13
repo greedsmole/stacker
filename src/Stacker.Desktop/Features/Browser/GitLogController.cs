@@ -12,40 +12,48 @@ internal sealed class GitLogController(IGitLogPresentation owner, WorkspaceRunti
     /// <param name="entry">Changed entry, or null to clear all visible entries.</param>
     public void LogChanged(GitCommandEntry? entry) => Dispatcher.UIThread.Post(() =>
     {
-        if (runtime._disposed) return;
+        if (runtime._disposed)
+            return;
         if (entry is null)
         {
             owner.GitLogEntries.Clear();
             owner.GitHubLogEntries.Clear();
         }
-        else AddOrUpdate(entry);
+        else
+            AddOrUpdate(entry);
     });
 
     internal void AddOrUpdate(GitCommandEntry entry)
     {
         Upsert(owner.GitLogEntries, entry);
-        if (entry.IsGitHub) Upsert(owner.GitHubLogEntries, entry);
-        if (owner.GitLogEntries.Count <= 500) return;
+        if (entry.IsGitHub)
+            Upsert(owner.GitHubLogEntries, entry);
+        if (owner.GitLogEntries.Count <= 500)
+            return;
         var evicted = owner.GitLogEntries[^1];
         owner.GitLogEntries.RemoveAt(owner.GitLogEntries.Count - 1);
         if (evicted.IsGitHub)
         {
             var index = Find(owner.GitHubLogEntries, evicted.Id);
-            if (index >= 0) owner.GitHubLogEntries.RemoveAt(index);
+            if (index >= 0)
+                owner.GitHubLogEntries.RemoveAt(index);
         }
     }
 
     private static void Upsert(ObservableCollection<GitCommandEntry> entries, GitCommandEntry entry)
     {
         var index = Find(entries, entry.Id);
-        if (index >= 0) entries[index] = entry;
-        else entries.Insert(0, entry);
+        if (index >= 0)
+            entries[index] = entry;
+        else
+            entries.Insert(0, entry);
     }
 
     private static int Find(ObservableCollection<GitCommandEntry> entries, Guid id)
     {
         for (var i = 0; i < entries.Count; i++)
-            if (entries[i].Id == id) return i;
+            if (entries[i].Id == id)
+                return i;
         return -1;
     }
 

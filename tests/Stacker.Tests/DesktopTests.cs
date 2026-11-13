@@ -1,4 +1,3 @@
-using Stacker.Core.Framework;
 // Purpose: Regression scenarios for view-model navigation and desktop state behavior without starting external services.
 using Avalonia;
 using Avalonia.Controls;
@@ -8,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Stacker.Core;
+using Stacker.Core.Framework;
 using Stacker.Desktop;
 using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
@@ -15,17 +15,8 @@ using Stacker.Infrastructure;
 [assembly: AvaloniaTestApplication(typeof(Stacker.Tests.HeadlessApp))]
 [assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerAssembly)]
 namespace Stacker.Tests;
-
-public static class HeadlessApp
-{
-    public const string CollectionName = "Avalonia UI";
-    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().WithInterFont().UseSkia()
-        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = Environment.GetEnvironmentVariable("STACKER_UI_CAPTURE_DIR") is null });
-}
-[CollectionDefinition(HeadlessApp.CollectionName, DisableParallelization = true)]
-public sealed class HeadlessCollection { }
 [Collection(HeadlessApp.CollectionName)]
-public sealed class DesktopTests
+public sealed partial class DesktopTests
 {
     [AvaloniaTheory]
     [InlineData(false)]
@@ -72,24 +63,31 @@ public sealed class DesktopTests
         var view = new DiffSectionView();
         var grid = view.FindControl<Avalonia.Controls.Grid>("ContentGrid")!;
         var pane = view.FindControl<Avalonia.Controls.Grid>("FilePane")!;
-        view.Measure(new Size(900, 600)); view.Arrange(new Rect(0, 0, 900, 600));
+        view.Measure(new Size(900, 600));
+        view.Arrange(new Rect(0, 0, 900, 600));
         var original = grid.ColumnDefinitions[0].ActualWidth;
         var toggle = Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(view)
             .OfType<Avalonia.Controls.Button>().Single(b => Equals(b.Content, "Files"));
         toggle.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
-        Assert.False(pane.IsVisible); Assert.Equal(0, grid.ColumnDefinitions[0].Width.Value);
+        Assert.False(pane.IsVisible);
+        Assert.Equal(0, grid.ColumnDefinitions[0].Width.Value);
         toggle.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
-        Assert.True(pane.IsVisible); Assert.Equal(original, grid.ColumnDefinitions[0].Width.Value);
+        Assert.True(pane.IsVisible);
+        Assert.Equal(original, grid.ColumnDefinitions[0].Width.Value);
     }
     [AvaloniaFact]
     public async Task Window_loads_repository_stack_and_diff()
     {
-        await using var fixture = new GitFixture(); await fixture.Linear();
-        var store = new YamlStackStore(); await store.SaveAsync(fixture.Root, [fixture.Stack], null);
+        await using var fixture = new GitFixture();
+        await fixture.Linear();
+        var store = new YamlStackStore();
+        await store.SaveAsync(fixture.Root, [fixture.Stack], null);
         using var vm = CreateVm(fixture.Reader, store, fixture.Root);
-        var window = new MainWindow { DataContext = vm }; window.Show();
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
         await vm.OpenRepositoryAsync(fixture.Root);
-        Assert.Equal(3, vm.Layers.Count); Assert.Single(vm.Sections);
+        Assert.Equal(3, vm.Layers.Count);
+        Assert.Single(vm.Sections);
         Assert.Equal(3, vm.Sections[0].Files.Count);
         await vm.SelectLayerAsync(vm.LocalGroups[0].Layers[0], false);
         Assert.Equal("A.txt", Assert.Single(vm.Sections[0].Files).NewPath);
@@ -99,7 +97,8 @@ public sealed class DesktopTests
         vm.Mode = DiffMode.MultiLayer;
         vm.SelectLayers([vm.Layers[0], vm.Layers[2]]);
         await vm.CompareAsync();
-        Assert.Equal(2, vm.Sections.Count); Assert.Equal("refs/heads/B", vm.Sections[1].Result.ParentRef);
+        Assert.Equal(2, vm.Sections.Count);
+        Assert.Equal("refs/heads/B", vm.Sections[1].Result.ParentRef);
         await vm.RefreshAsync();
         Assert.Equal(new[] { 0, 2 }, vm.SelectedPositions);
         Assert.Equal(2, vm.Sections.Count);
@@ -115,32 +114,18 @@ public sealed class DesktopTests
     {
         var reader = new DelayedReader();
         var a = new FileChange("a", "a", FileChangeKind.Added, 1, 0, "000000", "100644");
-        var b = a with { OldPath = "b", NewPath = "b" };
+        var b = a with
+        {
+            OldPath = "b",
+            NewPath = "b"
+        };
         using var section = new DiffSectionViewModel(reader, "root", new("layer", "base", new('a', 40), new('b', 40), null, [a, b]));
         section.SelectedFile = b;
         await section.LoadAsync(b);
         reader.Pending.TrySetResult(new(a, "old", [], [new(DiffLineKind.Added, null, 1, "old")]));
         await Task.Yield();
-        Assert.Equal("new", section.Patch); Assert.DoesNotContain(section.Lines, l => l.Text == "old");
+        Assert.Equal("new", section.Patch);
+        Assert.DoesNotContain(section.Lines, l => l.Text == "old");
     }
     private static MainViewModel CreateVm(IGitRepositoryReader reader, IStackStore store, string path) => new(reader, store, new JsonSettingsStore(Path.Combine(path, "settings")), new GitExecutable(), new(reader), new(reader));
-    private sealed class DelayedReader : IGitRepositoryReader
-    {
-        public TaskCompletionSource<FileDiff> Pending { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public Task<FileDiff> PatchAsync(string root, string @base, string head, FileChange file, CancellationToken ct = default) => file.NewPath == "a" ? Pending.Task : Task.FromResult(new FileDiff(file, "new", [], [new(DiffLineKind.Added, null, 1, "new")]));
-        public Task<RepositorySnapshot> OpenAsync(string path, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<string>> MergeBasesAsync(string root, string left, string right, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<(int Ahead, int Behind)> CountsAsync(string root, string parent, string head, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<FileChange>> FilesAsync(string root, string @base, string head, CancellationToken ct = default) => throw new NotSupportedException();
-
-        Task<Result<RepositorySnapshot>> IGitRepositoryReader.OpenAsync(string path, CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(path, ct), ProblemCodes.GitFailed);
-
-        Task<Result<IReadOnlyList<string>>> IGitRepositoryReader.MergeBasesAsync(string root, string left, string right, CancellationToken ct) => Boundary.CaptureAsync(() => MergeBasesAsync(root, left, right, ct), ProblemCodes.GitFailed);
-
-        Task<Result<(int Ahead, int Behind)>> IGitRepositoryReader.CountsAsync(string root, string parent, string head, CancellationToken ct) => Boundary.CaptureAsync(() => CountsAsync(root, parent, head, ct), ProblemCodes.GitFailed);
-
-        Task<Result<IReadOnlyList<FileChange>>> IGitRepositoryReader.FilesAsync(string root, string @base, string head, CancellationToken ct) => Boundary.CaptureAsync(() => FilesAsync(root, @base, head, ct), ProblemCodes.GitFailed);
-
-        Task<Result<FileDiff>> IGitRepositoryReader.PatchAsync(string root, string @base, string head, FileChange file, CancellationToken ct) => Boundary.CaptureAsync(() => PatchAsync(root, @base, head, file, ct), ProblemCodes.GitFailed);
-    }
 }

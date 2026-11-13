@@ -38,7 +38,14 @@ public sealed class CoalescingWriter<T>(Func<T, Task> write, TimeSpan? delay = n
     /// <see cref="FlushAsync"/>, and used to carry a write failure to both.</summary>
     private Task _drain = Task.CompletedTask;
     /// <summary>Snapshots waiting to be written after coalescing: 0 or 1, never the number of queue calls.</summary>
-    public int PendingCount { get { lock (_sync) return _hasPending ? 1 : 0; } }
+    public int PendingCount
+    {
+        get
+        {
+            lock (_sync)
+                return _hasPending ? 1 : 0;
+        }
+    }
     /// <summary>Publishes a snapshot, replacing any snapshot that has not been taken yet, and starts the drain when idle.</summary>
     /// <param name="snapshot">Newest state to persist, handed over as an immutable snapshot.</param>
     /// <returns>The running drain loop, which completes after every snapshot coalesced into that loop was written; a
@@ -47,7 +54,17 @@ public sealed class CoalescingWriter<T>(Func<T, Task> write, TimeSpan? delay = n
     /// write to start. Callers that must wait for durability await <see cref="FlushAsync"/> instead.</remarks>
     public Task Queue(T snapshot)
     {
-        lock (_sync) { _pending = snapshot; _hasPending = true; if (!_running) { _running = true; _drain = Task.Run(DrainAsync); } return _drain; }
+        lock (_sync)
+        {
+            _pending = snapshot;
+            _hasPending = true;
+            if (!_running)
+            {
+                _running = true;
+                _drain = Task.Run(DrainAsync);
+            }
+            return _drain;
+        }
     }
     /// <summary>Writes the pending snapshot immediately and waits for the drain loop to finish.</summary>
     /// <remarks>Releasing the signal while the loop is busy is still correct: the count stays set and the next wait
@@ -56,7 +73,18 @@ public sealed class CoalescingWriter<T>(Func<T, Task> write, TimeSpan? delay = n
     /// flush does not wait for.</remarks>
     public async Task FlushAsync()
     {
-        Task drain; lock (_sync) { if (_flush.CurrentCount == 0) _flush.Release(); if (!_running && _hasPending) { _running = true; _drain = Task.Run(DrainAsync); } drain = _drain; }
+        Task drain;
+        lock (_sync)
+        {
+            if (_flush.CurrentCount == 0)
+                _flush.Release();
+            if (!_running && _hasPending)
+            {
+                _running = true;
+                _drain = Task.Run(DrainAsync);
+            }
+            drain = _drain;
+        }
         await drain.ConfigureAwait(false);
     }
     /// <summary>Runs the write loop until no snapshot is pending.</summary>
@@ -74,9 +102,26 @@ public sealed class CoalescingWriter<T>(Func<T, Task> write, TimeSpan? delay = n
             {
                 await _flush.WaitAsync(delay ?? TimeSpan.FromMilliseconds(300)).ConfigureAwait(false);
                 T snapshot;
-                lock (_sync) { if (!_hasPending) { _running = false; return; } snapshot = _pending!; _pending = default; _hasPending = false; }
+                lock (_sync)
+                {
+                    if (!_hasPending)
+                    {
+                        _running = false;
+                        return;
+                    }
+                    snapshot = _pending!;
+                    _pending = default;
+                    _hasPending = false;
+                }
                 await write(snapshot).ConfigureAwait(false);
-                lock (_sync) { if (!_hasPending) { _running = false; return; } }
+                lock (_sync)
+                {
+                    if (!_hasPending)
+                    {
+                        _running = false;
+                        return;
+                    }
+                }
             }
         }
         catch { lock (_sync) _running = false; throw; }

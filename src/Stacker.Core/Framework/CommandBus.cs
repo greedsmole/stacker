@@ -8,7 +8,7 @@ namespace Stacker.Core.Framework;
 /// GitHub send blocks a local commit. Admission is decided under <see cref="_sync"/>, so a concurrent
 /// <see cref="PauseAsync"/> or <see cref="StopAsync"/> cannot race a command into starting. Read-only work such as
 /// history, patches, drafts and settings uses its ports directly and never passes through the bus.</remarks>
-public sealed class CommandBus(CommandRunner runner, IDiagnosticSink? diagnostics = null)
+public sealed partial class CommandBus(CommandRunner runner, IDiagnosticSink? diagnostics = null)
 {
     /// <summary>The admission gate: the single permit is held for exactly as long as one foreground command runs.</summary>
     /// <remarks>Acquisition is a non-blocking <c>Wait(0)</c> attempt, so a refusal costs no waiting. The permit is
@@ -20,8 +20,6 @@ public sealed class CommandBus(CommandRunner runner, IDiagnosticSink? diagnostic
     /// stopping/paused check, the permit attempt and the assignment of <see cref="_active"/> atomically. Nothing
     /// inside the lock awaits.</remarks>
     private readonly object _sync = new();
-    /// <summary>Admission policy, independent of whether the active command has drained.</summary>
-    private enum Admission { Accepting, Paused, Stopped }
     /// <summary>Current admission policy, read and changed under <see cref="_sync"/>.</summary>
     private Admission _admission = Admission.Accepting;
     /// <summary>Linked cancellation source of the command holding the permit, or null between commands.</summary>
@@ -96,17 +94,32 @@ public sealed class CommandBus(CommandRunner runner, IDiagnosticSink? diagnostic
     {
         var started = TimeProvider.System.GetTimestamp();
         using var correlation = OperationCorrelation.Enter(OperationCorrelation.Current ?? Guid.NewGuid().ToString("N"));
-        CancellationTokenSource? linked = null; string? refusal = null;
+        CancellationTokenSource? linked = null;
+        string? refusal = null;
         lock (_sync)
         {
-            if (_admission != Admission.Accepting) refusal = "The workspace is stopping operations.";
-            else if (!_gate.Wait(0)) refusal = "An operation is already running.";
-            else _active = linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdown.Token);
+            if (_admission != Admission.Accepting)
+                refusal = "The workspace is stopping operations.";
+            else if (!_gate.Wait(0))
+                refusal = "An operation is already running.";
+            else
+                _active = linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdown.Token);
         }
-        if (refusal is not null) return Report(CommandOutcome.Refused(refusal) with { Scope = scope });
+        if (refusal is not null)
+            return Report(CommandOutcome.Refused(refusal) with
+            {
+                Scope = scope
+            });
         using (linked)
         {
-            try { Starting?.Invoke(); return Report((await runner.RunAsync(scope, command, progress, linked!.Token)) with { Scope = scope }, TimeProvider.System.GetElapsedTime(started).TotalMilliseconds); }
+            try
+            {
+                Starting?.Invoke();
+                return Report((await runner.RunAsync(scope, command, progress, linked!.Token)) with
+                {
+                    Scope = scope
+                }, TimeProvider.System.GetElapsedTime(started).TotalMilliseconds);
+            }
             finally { lock (_sync) { _active = null; _gate.Release(); } }
         }
     }
@@ -119,7 +132,10 @@ public sealed class CommandBus(CommandRunner runner, IDiagnosticSink? diagnostic
     /// the exported metadata log free of user text.</remarks>
     private CommandOutcome Report(CommandOutcome outcome, double durationMs = 0)
     {
-        outcome = outcome with { OperationId = OperationCorrelation.Current };
+        outcome = outcome with
+        {
+            OperationId = OperationCorrelation.Current
+        };
         diagnostics?.Record(new(outcome.OperationId ?? "", outcome.Status.ToString(), outcome.Problem?.Code, durationMs));
         Reported?.Invoke(outcome);
         return outcome;
@@ -139,7 +155,8 @@ public sealed class CommandBus(CommandRunner runner, IDiagnosticSink? diagnostic
     public void Resume()
     {
         lock (_sync)
-            if (_admission == Admission.Paused) _admission = Admission.Accepting;
+            if (_admission == Admission.Paused)
+                _admission = Admission.Accepting;
     }
     /// <summary>Permanently refuses new commands and cancels the running one through the shutdown signal.</summary>
     /// <param name="timeout">Budget shared by the cancellation acknowledgement and the wait for the permit.</param>
@@ -162,16 +179,25 @@ public sealed class CommandBus(CommandRunner runner, IDiagnosticSink? diagnostic
     /// a false result as a warning rather than blocking shutdown.</remarks>
     private async Task<bool> QuiesceAsync(TimeSpan timeout, bool permanent)
     {
-        var started = TimeProvider.System.GetTimestamp(); Task cancellation;
+        var started = TimeProvider.System.GetTimestamp();
+        Task cancellation;
         lock (_sync)
         {
-            if (permanent) _admission = Admission.Stopped;
-            else if (_admission == Admission.Accepting) _admission = Admission.Paused;
+            if (permanent)
+                _admission = Admission.Stopped;
+            else if (_admission == Admission.Accepting)
+                _admission = Admission.Paused;
             cancellation = permanent ? _shutdown.CancelAsync() : _active?.CancelAsync() ?? Task.CompletedTask;
         }
-        try { await cancellation.WaitAsync(timeout); } catch (TimeoutException) { return false; }
+        try
+        {
+            await cancellation.WaitAsync(timeout);
+        }
+        catch (TimeoutException) { return false; }
         var remaining = timeout - TimeProvider.System.GetElapsedTime(started);
-        if (remaining <= TimeSpan.Zero || !await _gate.WaitAsync(remaining)) return false;
-        _gate.Release(); return true;
+        if (remaining <= TimeSpan.Zero || !await _gate.WaitAsync(remaining))
+            return false;
+        _gate.Release();
+        return true;
     }
 }

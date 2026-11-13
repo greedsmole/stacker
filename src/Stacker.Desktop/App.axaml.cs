@@ -5,9 +5,9 @@ using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Stacker.Core;
 using Stacker.Core.Framework;
+using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 using Stacker.Infrastructure.Framework;
-using Stacker.Desktop.ViewModels;
 namespace Stacker.Desktop;
 
 public partial class App : Application

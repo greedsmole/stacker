@@ -11,10 +11,14 @@ public partial class SyncPreviewWindow : Window
     private PullRequestPublicationPlan? _publication;
     private bool _restacked;
     private bool _pushed;
-    public SyncPreviewWindow() { InitializeComponent(); }
+    public SyncPreviewWindow()
+    {
+        InitializeComponent();
+    }
     public SyncPreviewWindow(RestackPlan plan, ISyncActions sync, bool undoAvailable) : this()
     {
-        _plan = plan; _sync = sync;
+        _plan = plan;
+        _sync = sync;
         HeadingText.Text = "Sync · " + plan.StackName;
         BlockerList.ItemsSource = plan.Blockers;
         BlockerList.IsVisible = plan.Blockers.Count > 0;
@@ -24,7 +28,8 @@ public partial class SyncPreviewWindow : Window
         UndoButton.IsVisible = undoAvailable;
         var branches = plan.Steps.Where(step => step.IsLocalBranch).Select(step => step.BranchName).ToArray();
         BranchInput.ItemsSource = branches;
-        if (branches.Length > 0) BranchInput.SelectedIndex = 0;
+        if (branches.Length > 0)
+            BranchInput.SelectedIndex = 0;
         PushButton.IsVisible = plan.HasOrigin && plan.StackPushSteps.Count > 0;
         Render(plan, sync.WorkingTree);
     }
@@ -38,7 +43,8 @@ public partial class SyncPreviewWindow : Window
         RestackButton.Content = _restacked ? "Restacked" : "Restack (local)";
         PushButton.IsVisible = !_pushed && plan.HasOrigin && plan.StackPushSteps.Count > 0;
         PushButton.IsEnabled = state is not { NeedsAttention: true };
-        if (_sync?.UndoAvailable is { } undo) UndoButton.IsVisible = undo;
+        if (_sync?.UndoAvailable is { } undo)
+            UndoButton.IsVisible = undo;
         var selected = BranchInput.SelectedItem as string;
         var branches = plan.Steps.Where(step => step.IsLocalBranch).Select(step => step.BranchName).ToArray();
         BranchInput.ItemsSource = branches;
@@ -74,31 +80,40 @@ public partial class SyncPreviewWindow : Window
     }
     private async Task RefreshPreviewAsync()
     {
-        if (_sync is null || _plan is null) return;
+        if (_sync is null || _plan is null)
+            return;
         InvalidatePublication();
         var fresh = await _sync.BuildRestackPlanAsync(PreserveMergesToggle.IsChecked == true);
         if (fresh is null || fresh.StackId != _plan.StackId || fresh.RepositoryRoot != _plan.RepositoryRoot)
         {
-            RestackButton.IsEnabled = false; PushButton.IsEnabled = false;
+            RestackButton.IsEnabled = false;
+            PushButton.IsEnabled = false;
             MessageLabel.Text += " The preview could not be refreshed. Close it and open the stack again.";
             return;
         }
         _plan = fresh;
-        if (_sync.UndoAvailable == false) _restacked = false;
+        if (_sync.UndoAvailable == false)
+            _restacked = false;
         Render(fresh, _sync.WorkingTree);
     }
     private void PreserveClick(object? sender, RoutedEventArgs e) => _ = ReplanAsync();
     /// <summary>Re-plans with or without merge preservation so the preview never lies about what will run.</summary>
     private async Task ReplanAsync()
     {
-        if (_sync is null || _plan is null) return;
+        if (_sync is null || _plan is null)
+            return;
         var preserve = PreserveMergesToggle.IsChecked == true;
-        if (preserve == _plan.PreserveMerges) return;
+        if (preserve == _plan.PreserveMerges)
+            return;
         IsEnabled = false;
         try
         {
             var plan = await _sync.BuildRestackPlanAsync(preserve);
-            if (plan is null || plan.StackId != _plan.StackId) { MessageLabel.Text = "The stack could not be planned again."; return; }
+            if (plan is null || plan.StackId != _plan.StackId)
+            {
+                MessageLabel.Text = "The stack could not be planned again.";
+                return;
+            }
             _plan = plan;
             InvalidatePublication();
             BlockerList.ItemsSource = plan.Blockers;
@@ -115,10 +130,13 @@ public partial class SyncPreviewWindow : Window
     private void RestackClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
-    if (_plan is null || _sync is null) return;
+    if (_plan is null || _sync is null)
+        return;
     IsEnabled = false;
     _pushed = false;
-    RestackButton.IsEnabled = false; RestackButton.Content = "Restacking…"; MessageLabel.Text = "";
+    RestackButton.IsEnabled = false;
+    RestackButton.Content = "Restacking…";
+    MessageLabel.Text = "";
     try
     {
         var outcome = await _sync.RestackAsync(_plan, new Progress<string>(text => MessageLabel.Text = text));
@@ -131,25 +149,40 @@ public partial class SyncPreviewWindow : Window
             UndoButton.IsVisible = outcome.Applied && outcome.Steps.Count > 0;
             UndoButton.IsEnabled = true;
         }
-        else { RestackButton.Content = "Restack (local)"; RestackButton.IsEnabled = true; }
+        else
+        {
+            RestackButton.Content = "Restack (local)";
+            RestackButton.IsEnabled = true;
+        }
     }
     catch (Exception ex) { MessageLabel.Text = ex.Message; RestackButton.Content = "Restack (local)"; RestackButton.IsEnabled = true; }
     finally
     {
-        try { await RefreshPreviewAsync(); }
+        try
+        {
+            await RefreshPreviewAsync();
+        }
         finally { IsEnabled = true; }
     }
 }, message => AsyncHandler.Report(this, message));
     private void PushClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
-    if (_plan is null || _sync is null) return;
-    PushButton.IsEnabled = false; MessageLabel.Text = "Publishing the branches…";
+    if (_plan is null || _sync is null)
+        return;
+    PushButton.IsEnabled = false;
+    MessageLabel.Text = "Publishing the branches…";
     try
     {
         var (ok, message) = await _sync.PushAsync(_plan, wholeStack: true);
         MessageLabel.Text = message;
-        if (ok) { _pushed = true; PushButton.IsVisible = false; } else PushButton.IsEnabled = true;
+        if (ok)
+        {
+            _pushed = true;
+            PushButton.IsVisible = false;
+        }
+        else
+            PushButton.IsEnabled = true;
         InvalidatePublication();
     }
     catch (Exception ex) { MessageLabel.Text = ex.Message; PushButton.IsEnabled = true; }
@@ -162,11 +195,13 @@ public partial class SyncPreviewWindow : Window
     private void StashClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
-    if (_plan is null || _sync is null) return;
+    if (_plan is null || _sync is null)
+        return;
     await RunAsync(async () =>
     {
         var result = await _sync.StashAndRestackAsync(_plan);
-        if (result.Ok) _restacked = true;
+        if (result.Ok)
+            _restacked = true;
         return result;
     });
 }, message => AsyncHandler.Report(this, message));
@@ -178,32 +213,51 @@ public partial class SyncPreviewWindow : Window
     private void SwitchClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
-    if (_sync is null || BranchInput.SelectedItem is not string branch) { MessageLabel.Text = "Choose a branch to switch to."; return; }
+    if (_sync is null || BranchInput.SelectedItem is not string branch)
+    {
+        MessageLabel.Text = "Choose a branch to switch to.";
+        return;
+    }
     await RunAsync(() => _sync.SwitchToBranchAsync("refs/heads/" + branch));
 }, message => AsyncHandler.Report(this, message));
     private async Task RunAsync(Func<Task<(bool Ok, string Message)>> action)
     {
-        if (_sync is null) return;
+        if (_sync is null)
+            return;
         IsEnabled = false;
         _pushed = false;
-        try { var (_, message) = await action(); MessageLabel.Text = message; }
+        try
+        {
+            var (_, message) = await action();
+            MessageLabel.Text = message;
+        }
         catch (Exception ex) { MessageLabel.Text = ex.Message; }
         finally
         {
-            try { await RefreshPreviewAsync(); }
+            try
+            {
+                await RefreshPreviewAsync();
+            }
             finally { IsEnabled = true; }
         }
     }
     private void CheckPrsClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
-    if (_plan is null || _sync is null) return;
-    CheckPrsButton.IsEnabled = false; MessageLabel.Text = "Reading the open pull requests…";
+    if (_plan is null || _sync is null)
+        return;
+    CheckPrsButton.IsEnabled = false;
+    MessageLabel.Text = "Reading the open pull requests…";
     try
     {
         var (publication, message) = await _sync.CheckPullRequestsAsync(_plan.StackId);
         MessageLabel.Text = message;
-        if (publication is null) { PublishButton.IsVisible = false; PullRequestList.IsVisible = false; return; }
+        if (publication is null)
+        {
+            PublishButton.IsVisible = false;
+            PullRequestList.IsVisible = false;
+            return;
+        }
         _publication = publication;
         PullRequestList.ItemsSource = publication.Steps;
         PullRequestList.IsVisible = true;
@@ -217,14 +271,23 @@ public partial class SyncPreviewWindow : Window
     private void PublishClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
-    if (_sync is null || _publication is null) return;
-    PublishButton.IsEnabled = false; CheckPrsButton.IsEnabled = false; MessageLabel.Text = "Publishing pull requests…";
+    if (_sync is null || _publication is null)
+        return;
+    PublishButton.IsEnabled = false;
+    CheckPrsButton.IsEnabled = false;
+    MessageLabel.Text = "Publishing pull requests…";
     try
     {
         var (ok, message) = await _sync.PublishPullRequestsAsync(_publication);
         MessageLabel.Text = message;
-        if (ok) { PublishButton.IsVisible = false; PullRequestList.IsVisible = false; _publication = null; }
-        else PublishButton.IsEnabled = true;
+        if (ok)
+        {
+            PublishButton.IsVisible = false;
+            PullRequestList.IsVisible = false;
+            _publication = null;
+        }
+        else
+            PublishButton.IsEnabled = true;
     }
     catch (Exception ex) { MessageLabel.Text = ex.Message; PublishButton.IsEnabled = true; }
     finally { CheckPrsButton.IsEnabled = true; }
