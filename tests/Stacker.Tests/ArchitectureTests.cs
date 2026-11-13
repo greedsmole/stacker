@@ -20,7 +20,8 @@ public sealed partial class ArchitectureTests
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Stacker.slnx"))) directory = directory.Parent;
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Stacker.slnx")))
+            directory = directory.Parent;
         Assert.NotNull(directory);
         return directory!.FullName;
     }
@@ -115,7 +116,8 @@ public sealed partial class ArchitectureTests
         var adapters = string.Join("\n", ProductSources("Infrastructure").Select(source => source.Text));
         var commands = Core.GetTypes().Where(type => !type.IsAbstract && !type.IsInterface && typeof(IStackCommand).IsAssignableFrom(type)).ToArray();
         Assert.NotEmpty(commands);
-        foreach (var type in commands) Assert.Contains("new " + type.Name + "(", adapters, StringComparison.Ordinal);
+        foreach (var type in commands)
+            Assert.Contains("new " + type.Name + "(", adapters, StringComparison.Ordinal);
 
     }
 
@@ -131,7 +133,8 @@ public sealed partial class ArchitectureTests
             foreach (var method in port.GetMethods().Where(method => !method.IsSpecialName))
             {
                 var type = method.ReturnType;
-                if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Task<>)) type = type.GetGenericArguments()[0];
+                if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Task<>))
+                    type = type.GetGenericArguments()[0];
                 Assert.True(type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Result<>), $"{port.Name}.{method.Name} must return Result<T>");
             }
     }
@@ -158,9 +161,13 @@ public sealed partial class ArchitectureTests
     public void Object_operations_require_the_selected_repository_and_never_create_a_private_clone()
     {
         foreach (var port in new[] { typeof(IHistoryGit), typeof(IPullRequestObjects) })
-            foreach (var method in port.GetMethods()) Assert.Equal(typeof(RepositoryIdentity), method.GetParameters()[0].ParameterType);
+            foreach (var method in port.GetMethods())
+                Assert.Equal(typeof(RepositoryIdentity), method.GetParameters()[0].ParameterType);
         foreach (var source in ProductSources("Infrastructure").Where(s => s.Path.Contains("History") || s.Path.Contains("Repositories") || s.Path.EndsWith("LocalPullRequestObjects.cs", StringComparison.Ordinal)))
-        { Assert.DoesNotContain("[\"init\", \"--bare\"]", source.Text); Assert.DoesNotContain("[\"clone\"", source.Text); }
+        {
+            Assert.DoesNotContain("[\"init\", \"--bare\"]", source.Text);
+            Assert.DoesNotContain("[\"clone\"", source.Text);
+        }
     }
 
     [GeneratedRegex("Problem\\.Of\\(\"|Result<[^>]+>\\.Fail\\(\"")]

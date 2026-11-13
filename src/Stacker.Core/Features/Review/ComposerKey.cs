@@ -14,7 +14,10 @@ namespace Stacker.Core;
 public sealed record ComposerKey
 {
     /// <summary>The persisted key text, used for equality and for the buffer dictionary lookups.</summary>
-    public string Encoded { get; }
+    public string Encoded
+    {
+        get;
+    }
     /// <summary>Stores an already validated key; validation lives in <see cref="Parse"/> so no other code can mint one.</summary>
     /// <param name="encoded">One of the encoded shapes accepted by <see cref="Parse"/>.</param>
     private ComposerKey(string encoded) => Encoded = encoded;
@@ -45,9 +48,11 @@ public sealed record ComposerKey
     /// empty composer.</returns>
     public static Result<ComposerKey> Parse(string value)
     {
-        if (value is "pr" or "review") return Result<ComposerKey>.Ok(new(value));
+        if (value is "pr" or "review")
+            return Result<ComposerKey>.Ok(new(value));
         if ((value.StartsWith("reply:", StringComparison.Ordinal) && value.Length > 6)
-            || (value.StartsWith("file:", StringComparison.Ordinal) && value.Length > 5)) return Result<ComposerKey>.Ok(new(value));
+            || (value.StartsWith("file:", StringComparison.Ordinal) && value.Length > 5))
+            return Result<ComposerKey>.Ok(new(value));
         if (value.StartsWith("line:", StringComparison.Ordinal))
         {
             try

@@ -6,33 +6,67 @@ namespace Stacker.Desktop;
 
 public partial class MainWindow
 {
-    public Func<IReadOnlyList<string>, Task<UnsavedCloseChoice>>? CloseFailureHandler { get; set; }
+    public Func<IReadOnlyList<string>, Task<UnsavedCloseChoice>>? CloseFailureHandler
+    {
+        get; set;
+    }
     private void ExportDiagnosticsClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () =>
     {
-        var folders = await StorageProvider.OpenFolderPickerAsync(new() { Title = "Export diagnostic metadata", AllowMultiple = false });
-        if (folders.FirstOrDefault()?.TryGetLocalPath() is { } folder) await Vm.ExportDiagnosticsAsync(folder);
+        var folders = await StorageProvider.OpenFolderPickerAsync(new()
+        {
+            Title = "Export diagnostic metadata",
+            AllowMultiple = false
+        });
+        if (folders.FirstOrDefault()?.TryGetLocalPath() is { } folder)
+            await Vm.ExportDiagnosticsAsync(folder);
     }, message => AsyncHandler.Report(this, message));
     private void ExportWorkspaceClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () =>
     {
-        var file = await StorageProvider.SaveFilePickerAsync(new() { Title = "Export workspace", SuggestedFileName = "Stacker-workspace.zip" });
-        if (file?.TryGetLocalPath() is { } path) await Vm.ExportWorkspaceAsync(path);
+        var file = await StorageProvider.SaveFilePickerAsync(new()
+        {
+            Title = "Export workspace",
+            SuggestedFileName = "Stacker-workspace.zip"
+        });
+        if (file?.TryGetLocalPath() is { } path)
+            await Vm.ExportWorkspaceAsync(path);
     }, message => AsyncHandler.Report(this, message));
     private void RestoreWorkspaceClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () =>
     {
-        var files = await StorageProvider.OpenFilePickerAsync(new() { Title = "Choose workspace backup", AllowMultiple = false });
-        if (files.FirstOrDefault()?.TryGetLocalPath() is not { } path) return;
-        var folders = await StorageProvider.OpenFolderPickerAsync(new() { Title = "Choose an empty folder for the restored copy", AllowMultiple = false });
-        if (folders.FirstOrDefault()?.TryGetLocalPath() is { } folder) await Vm.RestoreWorkspaceAsync(path, folder);
+        var files = await StorageProvider.OpenFilePickerAsync(new()
+        {
+            Title = "Choose workspace backup",
+            AllowMultiple = false
+        });
+        if (files.FirstOrDefault()?.TryGetLocalPath() is not { } path)
+            return;
+        var folders = await StorageProvider.OpenFolderPickerAsync(new()
+        {
+            Title = "Choose an empty folder for the restored copy",
+            AllowMultiple = false
+        });
+        if (folders.FirstOrDefault()?.TryGetLocalPath() is { } folder)
+            await Vm.RestoreWorkspaceAsync(path, folder);
     }, message => AsyncHandler.Report(this, message));
     private void OpenRestoredWorkspaceClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () =>
-    { Vm.OpenRestoredWorkspace(); Close(); await Task.CompletedTask; }, message => AsyncHandler.Report(this, message));
+    {
+        Vm.OpenRestoredWorkspace();
+        Close();
+        await Task.CompletedTask;
+    }, message => AsyncHandler.Report(this, message));
     private async Task<UnsavedCloseChoice> AskUnsavedAsync(IReadOnlyList<string> problems)
     {
-        if (CloseFailureHandler is not null) return await CloseFailureHandler(problems);
+        if (CloseFailureHandler is not null)
+            return await CloseFailureHandler(problems);
         var dialog = new Window { Title = "Unsaved work", Width = 620, Height = 420, MinWidth = 500, MinHeight = 340, WindowStartupLocation = WindowStartupLocation.CenterOwner };
         var actions = new List<Control>();
         foreach (var (label, choice) in new[] { ("Retry", UnsavedCloseChoice.Retry), ("Save a text copy and close", UnsavedCloseChoice.SaveCopy), ("Continue editing", UnsavedCloseChoice.ContinueEditing), ("Close without saving", UnsavedCloseChoice.Discard) })
-        { var button = new Button { Content = label, IsCancel = choice == UnsavedCloseChoice.ContinueEditing }; if (choice == UnsavedCloseChoice.Retry) button.Classes.Add("primary"); button.Click += (_, _) => dialog.Close(choice); actions.Add(button); }
+        {
+            var button = new Button { Content = label, IsCancel = choice == UnsavedCloseChoice.ContinueEditing };
+            if (choice == UnsavedCloseChoice.Retry)
+                button.Classes.Add("primary");
+            button.Click += (_, _) => dialog.Close(choice);
+            actions.Add(button);
+        }
         dialog.Content = DialogLayout.Create("Some changes could not be saved", "Retry saving, keep editing, or save a text copy before closing.", new Control[] { new SelectableTextBlock { Text = string.Join("\n", problems), TextWrapping = Avalonia.Media.TextWrapping.Wrap } }, actions.ToArray());
         return await dialog.ShowDialog<UnsavedCloseChoice>(this);
     }
@@ -40,21 +74,34 @@ public partial class MainWindow
     {
         try
         {
-            Vm.Settings.WindowWidth = Width; Vm.Settings.WindowHeight = Height;
+            Vm.Settings.WindowWidth = Width;
+            Vm.Settings.WindowHeight = Height;
             RememberStacksWidth();
             while (true)
             {
                 _closePhase = ClosePhase.Preparing;
                 var problems = await Vm.PrepareCloseAsync();
-                if (problems.Count == 0) break;
+                if (problems.Count == 0)
+                    break;
                 _closePhase = ClosePhase.AwaitingDecision;
                 var choice = await AskUnsavedAsync(problems);
-                if (choice == UnsavedCloseChoice.ContinueEditing) { ResumeEditing(); return; }
-                if (choice == UnsavedCloseChoice.Retry) continue;
-                if (choice == UnsavedCloseChoice.Discard) break;
+                if (choice == UnsavedCloseChoice.ContinueEditing)
+                {
+                    ResumeEditing();
+                    return;
+                }
+                if (choice == UnsavedCloseChoice.Retry)
+                    continue;
+                if (choice == UnsavedCloseChoice.Discard)
+                    break;
                 _closePhase = ClosePhase.SavingCopy;
-                var file = await StorageProvider.SaveFilePickerAsync(new() { Title = "Save unsent review text", SuggestedFileName = "Stacker-unsaved.txt" });
-                if (file?.TryGetLocalPath() is not { } path) continue;
+                var file = await StorageProvider.SaveFilePickerAsync(new()
+                {
+                    Title = "Save unsent review text",
+                    SuggestedFileName = "Stacker-unsaved.txt"
+                });
+                if (file?.TryGetLocalPath() is not { } path)
+                    continue;
                 await Vm.SaveRecoveryCopyAsync(path);
                 break;
             }
@@ -62,7 +109,10 @@ public partial class MainWindow
         catch { ResumeEditing(); throw; }
 
         _closePhase = ClosePhase.Committing;
-        try { await Vm.CommitCloseAsync(); }
+        try
+        {
+            await Vm.CommitCloseAsync();
+        }
         catch (Exception ex) { AsyncHandler.Report(this, ex.Message); }
         finally
         {

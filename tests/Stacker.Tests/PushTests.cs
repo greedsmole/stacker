@@ -11,9 +11,12 @@ public sealed class PushTests
     /// <summary>Publishes the stack, moves the base, and restacks it, leaving a plan whose push steps are ready.</summary>
     private static async Task<(LocalGitClient Writer, RestackPlan Plan)> RestackedStack(GitFixture f)
     {
-        await f.Linear(); await f.AddOrigin();
+        await f.Linear();
+        await f.AddOrigin();
         await f.Git("push", "origin", "main", "A", "B", "C");
-        await f.Git("checkout", "main"); await f.Write("main2.txt", "moved\n"); await f.Commit("base moved");
+        await f.Git("checkout", "main");
+        await f.Write("main2.txt", "moved\n");
+        await f.Commit("base moved");
         var writer = Writer(f);
         var plan = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack);
         Assert.True(plan.CanExecute, string.Join("; ", plan.Blockers));
@@ -54,9 +57,13 @@ public sealed class PushTests
     [Fact]
     public async Task Push_publishes_a_new_branch_without_a_lease()
     {
-        await using var f = new GitFixture(); await f.Linear(); await f.AddOrigin();
+        await using var f = new GitFixture();
+        await f.Linear();
+        await f.AddOrigin();
         await f.Git("push", "origin", "main");
-        await f.Git("checkout", "main"); await f.Write("main2.txt", "moved\n"); await f.Commit("base moved");
+        await f.Git("checkout", "main");
+        await f.Write("main2.txt", "moved\n");
+        await f.Commit("base moved");
         var writer = Writer(f);
         var plan = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack);
         Assert.All(plan.PushSteps, step => Assert.Null(step.RemoteTip));
@@ -70,7 +77,8 @@ public sealed class PushTests
     [Fact]
     public async Task Push_without_an_origin_is_refused()
     {
-        await using var f = new GitFixture(); await f.Linear();
+        await using var f = new GitFixture();
+        await f.Linear();
         var writer = Writer(f);
         var plan = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack);
         Assert.False(plan.HasOrigin);

@@ -16,7 +16,8 @@ public sealed partial class DiffSectionViewModel
         get => _folderTree?.Find(SelectedFileRow);
         set
         {
-            if (GroupFilesByFolder && value?.ReviewRow is { } row) SelectedFileRow = row;
+            if (GroupFilesByFolder && value?.ReviewRow is { } row)
+                SelectedFileRow = row;
         }
     }
 

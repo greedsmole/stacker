@@ -1,5 +1,5 @@
-using Stacker.Core.Features.LocalGit;
 using Stacker.Core;
+using Stacker.Core.Features.LocalGit;
 using Stacker.Core.Framework;
 namespace Stacker.Infrastructure;
 
@@ -18,9 +18,11 @@ public sealed class LocalGitClient : IGitBranchWriter
         _journal = journal;
         _bus = bus ?? new CommandBus(new CommandRunner(journal));
         var git = new GitRunner(runner, executable);
-        _gitPlanReader = new(git, reader); _recoveryEffects = new(git, journal);
+        _gitPlanReader = new(git, reader);
+        _recoveryEffects = new(git, journal);
         _restackEffects = new(git, journal, clock, _recoveryEffects);
-        _pushEffects = new(git, journal); _workingTreeEffects = new(git, journal);
+        _pushEffects = new(git, journal);
+        _workingTreeEffects = new(git, journal);
     }
     public Task<RestackPlan> PlanAsync(RepositorySnapshot repository, StackDefinition stack, bool preserveMerges = false, CancellationToken ct = default) => _gitPlanReader.PlanAsync(repository, stack, preserveMerges, ct);
     public Task<RestackOutcome> RestackAsync(RestackPlan plan, IProgress<string>? progress = null, CancellationToken ct = default) => Run(plan.RepositoryRoot, new RestackCommand(plan, (context, token) => Capture(() => _restackEffects.RestackAsync(plan, progress, token, context.Entry))), ct, progress);
@@ -44,15 +46,18 @@ public sealed class LocalGitClient : IGitBranchWriter
     private static LocalBranch NewBranch(string name)
     {
         name = StackRefs.Short(name.Trim());
-        if (name.Length == 0) throw new StackerException("Enter a branch name for the new layer.");
+        if (name.Length == 0)
+            throw new StackerException("Enter a branch name for the new layer.");
         var branch = LocalBranch.Parse("refs/heads/" + name);
         return branch.IsOk ? branch.Value : throw new StackerException($"'{name}' is not a valid branch name.");
     }
     private async Task<T> Run<T>(string root, EffectCommand<T> command, CancellationToken ct, IProgress<string>? progress = null)
     {
         var outcome = await _bus.RunAsync(RepoRoot.Parse(root).OrThrow(), command, progress, ct);
-        if (outcome.Problem is not null && command.Value is { IsOk: true }) throw new StackerException(outcome.Message);
-        if (command.Value is { } value) return value.OrThrow();
+        if (outcome.Problem is not null && command.Value is { IsOk: true })
+            throw new StackerException(outcome.Message);
+        if (command.Value is { } value)
+            return value.OrThrow();
         if (outcome.Status == CommandStatus.Refused && typeof(T) == typeof(RestackOutcome))
             return (T)(object)new RestackOutcome(RestackStatus.Refused, null, [], outcome.Message, null);
         throw new StackerException(outcome.Message);
@@ -67,9 +72,13 @@ public sealed class LocalGitClient : IGitBranchWriter
     {
         var stashes = (await _journal.StashesAsync(root, ct)).OrThrow();
         var selected = sha is null ? stashes.FirstOrDefault() : stashes.FirstOrDefault(stash => stash.Sha == sha);
-        if (sha is not null && selected is null) throw new StackerException("This stash is no longer recorded. Refresh the saved stash list.");
+        if (sha is not null && selected is null)
+            throw new StackerException("This stash is no longer recorded. Refresh the saved stash list.");
         var target = selected is null ? await _recoveryEffects.ActiveJournalAsync(root, ct)
-            : (await _journal.ByIdAsync(root, selected.EntryId, ct)).OrThrow()! with { StashRef = selected.Sha };
+            : (await _journal.ByIdAsync(root, selected.EntryId, ct)).OrThrow()! with
+            {
+                StashRef = selected.Sha
+            };
         return await Run(root, new RestoreStashCommand((_, token) => Capture(() => _workingTreeEffects.RestoreStashAsync(root, token, target))), ct);
     }
     private Task<RestackOutcome> Recover(string root, CancellationToken ct, string? entryId = null) =>
@@ -86,7 +95,10 @@ public sealed class LocalGitClient : IGitBranchWriter
     }
     private static async Task<Result<T>> Capture<T>(Func<Task<T>> effect)
     {
-        try { return Result<T>.Ok(await effect()); }
+        try
+        {
+            return Result<T>.Ok(await effect());
+        }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { return Result<T>.Fail(Boundary.Problem(ex, ProblemCodes.GitFailed)); }
     }

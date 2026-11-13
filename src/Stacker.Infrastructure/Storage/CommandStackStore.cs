@@ -1,6 +1,6 @@
 using Stacker.Core;
-using Stacker.Core.Framework;
 using Stacker.Core.Features.Workspace;
+using Stacker.Core.Framework;
 namespace Stacker.Infrastructure;
 
 public sealed class CommandStackStore(YamlStackStore store, CommandBus bus) : IStackStore
@@ -11,12 +11,16 @@ public sealed class CommandStackStore(YamlStackStore store, CommandBus bus) : IS
         var repository = RepoRoot.Parse(root).OrThrow();
         var command = new SaveStackCommand(repository, async (_, token) =>
         {
-            try { return Result<StackDocument>.Ok(await store.SaveAsync(root, stacks, expectedRevision, token)); }
+            try
+            {
+                return Result<StackDocument>.Ok(await store.SaveAsync(root, stacks, expectedRevision, token));
+            }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { return Result<StackDocument>.Fail(ProblemCodes.StoreWrite, ex.Message); }
         });
         var outcome = await bus.RunAsync(repository, command, ct: ct);
-        if (outcome.Problem is not null && command.Value is { IsOk: true }) throw new StackerException(outcome.Message);
+        if (outcome.Problem is not null && command.Value is { IsOk: true })
+            throw new StackerException(outcome.Message);
         return command.Value is { } value ? value.OrThrow() : throw new StackerException(outcome.Message);
     }
 

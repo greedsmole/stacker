@@ -23,7 +23,10 @@ public abstract class EffectCommand<T>(string kind, string target,
     /// <see cref="CommandOutcome"/> also carries. The facade that constructed the command unwraps this after
     /// <see cref="CommandBus"/> returns, returning the value or rethrowing the problem inside its own reporting
     /// boundary.</remarks>
-    public Result<T>? Value { get; private set; }
+    public Result<T>? Value
+    {
+        get; private set;
+    }
     /// <summary>User-facing description used when an applied effect has no richer message.</summary>
     /// <returns>The kind by default; subclasses can override with a clearer label.</returns>
     public virtual string Describe() => kind;
@@ -71,7 +74,10 @@ public abstract class EffectCommand<T>(string kind, string target,
         {
             ct.ThrowIfCancellationRequested();
             if (!AdapterJournalsSteps)
-                (await context.Journal.StepAsync(context.Entry, context.Entry.Steps[0] with { State = StepState.Started }, ct)).OrThrow();
+                (await context.Journal.StepAsync(context.Entry, context.Entry.Steps[0] with
+                {
+                    State = StepState.Started
+                }, ct)).OrThrow();
             ct.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException) { return CommandOutcome.CancelledBeforeDispatch(); }
@@ -97,7 +103,8 @@ public abstract class EffectCommand<T>(string kind, string target,
 
     private CommandOutcome DescribeOutcome(Result<T> value, string entryId)
     {
-        if (value.IsFailed) return CommandOutcome.Failed(value.Problem!);
+        if (value.IsFailed)
+            return CommandOutcome.Failed(value.Problem!);
         if (value.Value is RestackOutcome outcome)
         {
             if (outcome.Conflicted || outcome.Status == RestackStatus.Refused && outcome.Journal is { CanUndo: true })

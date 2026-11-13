@@ -26,6 +26,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+      - name: Check embedded SQL formatting
+        run: dotnet run --file scripts/format-sql.cs -- --check
+      - name: Check C# type layout
+        run: dotnet run --file scripts/check-csharp-types.cs
       - name: Test
         run: dotnet test -c Release --logger "trx;LogFileName=results.trx" --logger "console;verbosity=normal" --blame-hang-timeout 2m --blame-hang-dump-type mini
       - uses: actions/upload-artifact@v4

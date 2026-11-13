@@ -9,7 +9,8 @@ public partial class MainWindow
 {
     private void ApplyDiffLineHeight()
     {
-        if (Application.Current is { } app) app.Resources["DiffLineHeight"] = (double)Vm.Settings.DiffLineHeight;
+        if (Application.Current is { } app)
+            app.Resources["DiffLineHeight"] = (double)Vm.Settings.DiffLineHeight;
     }
 
     private void SettingsClick(object? sender, RoutedEventArgs e)
@@ -80,7 +81,8 @@ public partial class MainWindow
             if (themeChanged)
             {
                 ApplyTheme();
-                if (Vm.ActiveHistory is { } history) history.Theme = settings.Theme;
+                if (Vm.ActiveHistory is { } history)
+                    history.Theme = settings.Theme;
                 foreach (var section in Vm.Sections.Concat(Vm.ActiveHistory?.DocumentSections.AsEnumerable() ?? []))
                 {
                     section.Theme = settings.Theme;
@@ -88,7 +90,8 @@ public partial class MainWindow
                 }
             }
             window.Close();
-            if (toolsChanged || themeChanged) await Vm.RefreshAllAsync();
+            if (toolsChanged || themeChanged)
+                await Vm.RefreshAllAsync();
         }, message => AsyncHandler.Report(this, message));
         await window.ShowDialog(this);
     }

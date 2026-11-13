@@ -21,7 +21,11 @@ public sealed class SearchRequest
     /// <summary>Stores an already validated query and its optional pattern; only <see cref="Create"/> may invoke it.</summary>
     /// <param name="query">Non-empty, already trimmed query text.</param>
     /// <param name="pattern">Compiled pattern, or null for a literal search.</param>
-    private SearchRequest(string query, Regex? pattern) { _query = query; _pattern = pattern; }
+    private SearchRequest(string query, Regex? pattern)
+    {
+        _query = query;
+        _pattern = pattern;
+    }
     /// <summary>Validates the user's text and builds a request, returning a user-facing problem instead of throwing.</summary>
     /// <remarks>Blank input is rejected before any regex work (an empty literal would otherwise match every path and line), and the query is trimmed so surrounding spaces do not silently change the search. Regex mode compiles once with <see cref="RegexOptions.IgnoreCase"/> and <see cref="RegexOptions.CultureInvariant"/> and a 100 ms match timeout; a syntax error from the <see cref="Regex"/> constructor becomes "Invalid regex: ...". The pattern is created before any file is read, so a bad pattern costs no diff work.</remarks>
     /// <param name="query">Raw user input; blank input is rejected.</param>
@@ -29,7 +33,8 @@ public sealed class SearchRequest
     /// <returns>The request, or a StateInvalid problem whose message is ready for display.</returns>
     public static Result<SearchRequest> Create(string query, bool regex)
     {
-        if (string.IsNullOrWhiteSpace(query)) return Result<SearchRequest>.Fail(ProblemCodes.StateInvalid, "Enter a file name or text to search.");
+        if (string.IsNullOrWhiteSpace(query))
+            return Result<SearchRequest>.Fail(ProblemCodes.StateInvalid, "Enter a file name or text to search.");
         try
         {
             return Result<SearchRequest>.Ok(new(query.Trim(), regex ? new Regex(query.Trim(),

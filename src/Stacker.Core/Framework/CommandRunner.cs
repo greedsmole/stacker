@@ -55,14 +55,18 @@ public sealed class CommandRunner(IJournal journal)
         {
             ct.ThrowIfCancellationRequested();
             var plan = await command.PlanAsync(ct);
-            if (!plan.CanRun) return CommandOutcome.Refused(string.Join(" ", plan.Blockers));
+            if (!plan.CanRun)
+                return CommandOutcome.Refused(string.Join(" ", plan.Blockers));
             ct.ThrowIfCancellationRequested();
             entry = (await journal.OpenAsync(repository, command.Kind, plan.Effects, ct)).OrThrow();
             returned = ct.IsCancellationRequested ? CommandOutcome.CancelledBeforeDispatch()
                 : await command.ExecuteAsync(new(entry, journal, progress), ct);
             using var completion = new CancellationTokenSource(CompletionTimeout);
             var known = await ReadRecordedAsync(entry, completion.Token);
-            var outcome = returned with { Effects = CompletedEffects(known) };
+            var outcome = returned with
+            {
+                Effects = CompletedEffects(known)
+            };
             returned = outcome;
             var phase = outcome.Status switch
             {
@@ -84,13 +88,17 @@ public sealed class CommandRunner(IJournal journal)
         }
         catch (OperationCanceledException)
         {
-            if (entry is null) return CommandOutcome.CancelledBeforeDispatch();
+            if (entry is null)
+                return CommandOutcome.CancelledBeforeDispatch();
             return await ReverseAsync(command, entry, new(CommandStatus.Cancelled, "The action was cancelled.", null), returned);
         }
         catch (Exception ex)
         {
             var problem = Boundary.Problem(ex, ProblemCodes.Unknown);
-            return entry is null ? CommandOutcome.Failed(problem with { Certainty = EffectCertainty.NotStarted })
+            return entry is null ? CommandOutcome.Failed(problem with
+            {
+                Certainty = EffectCertainty.NotStarted
+            })
                 : await ReverseAsync(command, entry, CommandOutcome.Failed(problem), returned);
         }
     }
@@ -102,7 +110,8 @@ public sealed class CommandRunner(IJournal journal)
         try
         {
             var known = await ReadRecordedAsync(entry, recovery.Token);
-            if (TerminalOutcome(known, failure, returned) is { } terminal) return terminal;
+            if (TerminalOutcome(known, failure, returned) is { } terminal)
+                return terminal;
             if (returned is { Status: CommandStatus.Cancelled, Certainty: EffectCertainty.NotStarted } ||
                 failure.Status == CommandStatus.Cancelled && known.Steps.Count > 0 && known.Steps.All(step => step.State == StepState.Planned))
             {
@@ -116,7 +125,8 @@ public sealed class CommandRunner(IJournal journal)
                 if (outcome.RolledBack || outcome.Ok)
                 {
                     known = await ReadRecordedAsync(entry, recovery.Token);
-                    if (TerminalOutcome(known, failure) is { } restored) return restored;
+                    if (TerminalOutcome(known, failure) is { } restored)
+                        return restored;
                     (await journal.CloseAsync(known, JournalPhase.RolledBack, message: failure.Message, ct: recovery.Token)).OrThrow();
                     return AfterRollback(failure, outcome.Message);
                 }
@@ -124,7 +134,10 @@ public sealed class CommandRunner(IJournal journal)
             (await journal.CloseAsync(known, JournalPhase.NeedsUser, known.StashRef, known.PendingStepId, failure.Message, recovery.Token)).OrThrow();
             var effects = CompletedEffects(known);
             return new CommandOutcome(effects.Length > 0 ? CommandStatus.PartiallyApplied : CommandStatus.NeedsUser, failure.Message, failure.Problem)
-                { Effects = effects, Certainty = failure.Certainty };
+            {
+                Effects = effects,
+                Certainty = failure.Certainty
+            };
         }
         catch (Exception ex)
         {
@@ -134,7 +147,10 @@ public sealed class CommandRunner(IJournal journal)
                     return terminal;
             }
             catch (Exception) { /* The outcome could not be confirmed from storage. */ }
-            return CommandOutcome.Attention($"{failure.Message} Recovery could not be confirmed: {ex.Message}") with { Problem = failure.Problem };
+            return CommandOutcome.Attention($"{failure.Message} Recovery could not be confirmed: {ex.Message}") with
+            {
+                Problem = failure.Problem
+            };
         }
     }
 
@@ -152,7 +168,10 @@ public sealed class CommandRunner(IJournal journal)
 
     /// <summary>Reports cancellation after a successful restore, or reports the restore after any other failure.</summary>
     private static CommandOutcome AfterRollback(CommandOutcome failure, string message) => failure.Status == CommandStatus.Cancelled
-        ? failure with { Message = failure.Message + " " + message }
+        ? failure with
+        {
+            Message = failure.Message + " " + message
+        }
         : CommandOutcome.Restored(message, failure.Problem);
 
     /// <summary>Lists completed effects using the stored steps.</summary>

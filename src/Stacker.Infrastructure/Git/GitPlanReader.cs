@@ -25,7 +25,8 @@ internal sealed class GitPlanReader(GitRunner git, IGitRepositoryReader reader)
     /// showing an executable action.</remarks>
     public async Task<RestackPlan> PlanAsync(RepositorySnapshot repository, StackDefinition stack, bool preserveMerges = false, CancellationToken ct = default)
     {
-        if (stack.Branches.Count == 0) return new(repository.Root, stack.Id, stack.Name, "", false, preserveMerges, [], ["This stack has no layers."]);
+        if (stack.Branches.Count == 0)
+            return new(repository.Root, stack.Id, stack.Name, "", false, preserveMerges, [], ["This stack has no layers."]);
         var preflight = await PreflightAsync(repository, stack, ct);
         return StackSyncPlanner.Plan(repository, stack, preflight, preserveMerges);
     }
@@ -54,7 +55,11 @@ internal sealed class GitPlanReader(GitRunner git, IGitRepositoryReader reader)
             ct.ThrowIfCancellationRequested();
             var branch = stack.Branches[i];
             var parent = i == 0 ? stack.Base : stack.Branches[i - 1];
-            if (!refs.TryGetValue(branch, out var headSha) || !refs.TryGetValue(parent, out var parentSha)) { layers.Add(new(branch, 0, 0, false)); continue; }
+            if (!refs.TryGetValue(branch, out var headSha) || !refs.TryGetValue(parent, out var parentSha))
+            {
+                layers.Add(new(branch, 0, 0, false));
+                continue;
+            }
             var (_, behind) = (await reader.CountsAsync(root, parentSha, headSha, ct)).OrThrow();
             string? cutoff = parentSha;
             if (behind > 0)

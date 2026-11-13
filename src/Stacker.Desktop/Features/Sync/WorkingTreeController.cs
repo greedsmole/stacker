@@ -11,16 +11,21 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
     /// <param name="entry">Current unfinished entry, or null when none exists.</param>
     public void SetActiveEntry(JournalEntry? entry)
     {
-        if (entry == runtime._activeEntry) return;
+        if (entry == runtime._activeEntry)
+            return;
         runtime._activeEntry = entry;
-        owner.Notify(nameof(owner.HasRecovery)); owner.Notify(nameof(owner.RecoverySummary)); owner.Notify(nameof(owner.RecoveryAction)); owner.Notify(nameof(owner.CanRestoreRecovery));
+        owner.Notify(nameof(owner.HasRecovery));
+        owner.Notify(nameof(owner.RecoverySummary));
+        owner.Notify(nameof(owner.RecoveryAction));
+        owner.Notify(nameof(owner.CanRestoreRecovery));
     }
 
     /// <summary>Reads the working tree, active journal and saved stashes as refreshed UI state.</summary>
     /// <param name="ct">Cancellation requested by the owning session.</param>
     public async Task<(bool Ok, string Message)> RefreshWorkingTreeAsync(CancellationToken ct = default)
     {
-        if (runtime._branchWriter is null || runtime._repository is null) return (false, "Open a repository first.");
+        if (runtime._branchWriter is null || runtime._repository is null)
+            return (false, "Open a repository first.");
         try
         {
             owner.WorkingTree = (await runtime._branchWriter.StateAsync(runtime._repository.Root, ct)).OrThrow();
@@ -30,7 +35,10 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
             owner.Notify(nameof(owner.SavedStashes));
             SetActiveEntry(entry);
             owner.Notify(nameof(owner.CanRestoreStash));
-            owner.Notify(nameof(owner.HasRecovery)); owner.Notify(nameof(owner.RecoverySummary)); owner.Notify(nameof(owner.RecoveryAction)); owner.Notify(nameof(owner.CanRestoreRecovery));
+            owner.Notify(nameof(owner.HasRecovery));
+            owner.Notify(nameof(owner.RecoverySummary));
+            owner.Notify(nameof(owner.RecoveryAction));
+            owner.Notify(nameof(owner.CanRestoreRecovery));
             return (true, owner.WorkingTree.Summary);
         }
         catch (Exception ex) { owner.Error = ex.Message; return (false, ex.Message); }
@@ -38,9 +46,11 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
 
     public async Task<(bool Ok, string Message)> OpenConflictsInEditorAsync()
     {
-        if (runtime._editorLauncher is null || runtime._repository is null) return (false, "Open a repository first.");
+        if (runtime._editorLauncher is null || runtime._repository is null)
+            return (false, "Open a repository first.");
         var files = owner.WorkingTree?.ConflictedFiles ?? [];
-        if (files.Count == 0) return (false, "There are no conflicted files to open.");
+        if (files.Count == 0)
+            return (false, "There are no conflicted files to open.");
         try
         {
             var command = (await runtime._editorLauncher.OpenAsync(runtime._repository.Root, files, owner.Settings.EditorCommand)).OrThrow();
@@ -53,9 +63,11 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
 
     public async Task<(bool Ok, string Message)> StageConflictsAsync()
     {
-        if (runtime._branchWriter is null || runtime._repository is null) return (false, "Open a repository first.");
+        if (runtime._branchWriter is null || runtime._repository is null)
+            return (false, "Open a repository first.");
         var files = owner.WorkingTree?.ConflictedFiles ?? [];
-        if (files.Count == 0) return (false, "There are no conflicted files to stage.");
+        if (files.Count == 0)
+            return (false, "There are no conflicted files to stage.");
         try
         {
             (await runtime._branchWriter.StageAsync(runtime._repository.Root, files)).OrThrow();
@@ -78,15 +90,19 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
     /// <param name="action">Operation receiving writer, repository root and resolved editor.</param>
     public async Task<(bool Ok, string Message)> OperationAsync(Func<IGitBranchWriter, string, string?, Task<RestackOutcome>> action)
     {
-        if (runtime._branchWriter is null || runtime._repository is null) return (false, "Open a repository first.");
-        if (owner.IsSyncing) return (false, "A stack operation is already running.");
-        owner.IsSyncing = true; owner.Error = "";
+        if (runtime._branchWriter is null || runtime._repository is null)
+            return (false, "Open a repository first.");
+        if (owner.IsSyncing)
+            return (false, "A stack operation is already running.");
+        owner.IsSyncing = true;
+        owner.Error = "";
         try
         {
             var editor = await ResolveEditorAsync(runtime._repository.Root);
             var outcome = await action(runtime._branchWriter, runtime._repository.Root, editor);
             owner.Status = outcome.Message;
-            if (outcome.Applied || outcome.Conflicted || outcome.RolledBack) await owner.ReloadAsync();
+            if (outcome.Applied || outcome.Conflicted || outcome.RolledBack)
+                await owner.ReloadAsync();
             return outcome.Conflicted ? (false, outcome.Message) : (outcome.Applied || outcome.RolledBack, outcome.Message);
         }
         catch (Exception ex) { owner.Error = ex.Message; return (false, ex.Message); }
@@ -97,9 +113,12 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
     /// <param name="message">Commit message passed to Git.</param><param name="stageAll">Whether all changes are staged first.</param>
     public async Task<(bool Ok, string Message)> CommitAsync(string message, bool stageAll)
     {
-        if (runtime._branchWriter is null || runtime._repository is null) return (false, "Open a repository first.");
-        if (owner.IsSyncing) return (false, "A stack operation is already running.");
-        owner.IsSyncing = true; owner.Error = "";
+        if (runtime._branchWriter is null || runtime._repository is null)
+            return (false, "Open a repository first.");
+        if (owner.IsSyncing)
+            return (false, "A stack operation is already running.");
+        owner.IsSyncing = true;
+        owner.Error = "";
         try
         {
             var sha = (await runtime._branchWriter.CommitAsync(runtime._repository.Root, message, stageAll)).OrThrow();
@@ -114,9 +133,12 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
     /// <param name="branch">Full local branch ref.</param>
     public async Task<(bool Ok, string Message)> SwitchToBranchAsync(string branch)
     {
-        if (runtime._branchWriter is null || runtime._repository is null) return (false, "Open a repository first.");
-        if (owner.IsSyncing) return (false, "A stack operation is already running.");
-        owner.IsSyncing = true; owner.Error = "";
+        if (runtime._branchWriter is null || runtime._repository is null)
+            return (false, "Open a repository first.");
+        if (owner.IsSyncing)
+            return (false, "A stack operation is already running.");
+        owner.IsSyncing = true;
+        owner.Error = "";
         try
         {
             (await runtime._branchWriter.SwitchAsync(runtime._repository.Root, branch)).OrThrow();
@@ -129,17 +151,28 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
 
     public async Task<(bool Ok, string Message)> StashAndRestackAsync(RestackPlan plan)
     {
-        if (runtime._branchWriter is null || runtime._repository is null) return (false, "Open a repository first.");
-        if (owner.IsSyncing) return (false, "A stack operation is already running.");
-        owner.IsSyncing = true; owner.Error = "";
+        if (runtime._branchWriter is null || runtime._repository is null)
+            return (false, "Open a repository first.");
+        if (owner.IsSyncing)
+            return (false, "A stack operation is already running.");
+        owner.IsSyncing = true;
+        owner.Error = "";
         string? stash;
-        try { stash = (await runtime._branchWriter.StashAsync(runtime._repository.Root, $"Stacker: {plan.StackName} before restack")).OrThrow(); }
+        try
+        {
+            stash = (await runtime._branchWriter.StashAsync(runtime._repository.Root, $"Stacker: {plan.StackName} before restack")).OrThrow();
+        }
         catch (Exception ex) { owner.Error = ex.Message; return (false, ex.Message); }
         finally { owner.IsSyncing = false; }
-        if (stash is null) return (false, "There was nothing to stash.");
+        if (stash is null)
+            return (false, "There was nothing to stash.");
         var fresh = await owner.BuildRestackPlanAsync(plan.PreserveMerges);
-        if (fresh is null) return (false, "The stack could not be planned after stashing. Your changes are safe in the stash.");
-        var outcome = await owner.RestackAsync(fresh with { StashRef = stash });
+        if (fresh is null)
+            return (false, "The stack could not be planned after stashing. Your changes are safe in the stash.");
+        var outcome = await owner.RestackAsync(fresh with
+        {
+            StashRef = stash
+        });
         await RefreshWorkingTreeAsync();
         var tail = " Your changes are stashed; restore them once the stack is settled.";
         return outcome is { Conflicted: true } ? (false, (outcome.Message + tail)) : (outcome?.Applied == true, (outcome?.Message ?? "The restack did not run.") + tail);
@@ -149,15 +182,19 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
     /// <param name="sha">Recorded stash id, or null for the normal newest-stash restore.</param>
     public async Task<(bool Ok, string Message)> RestoreStashAsync(string? sha = null)
     {
-        if (runtime._branchWriter is null || runtime._repository is null) return (false, "Open a repository first.");
-        if (owner.IsSyncing) return (false, "A stack operation is already running.");
-        owner.IsSyncing = true; owner.Error = "";
+        if (runtime._branchWriter is null || runtime._repository is null)
+            return (false, "Open a repository first.");
+        if (owner.IsSyncing)
+            return (false, "A stack operation is already running.");
+        owner.IsSyncing = true;
+        owner.Error = "";
         try
         {
             var result = sha is null ? await runtime._branchWriter.RestoreStashAsync(runtime._repository.Root)
                 : await runtime._branchWriter.RestoreRecordedStashAsync(runtime._repository.Root, sha);
             var state = result.OrThrow();
-            runtime._pendingStash = null; owner.Notify(nameof(owner.CanRestoreStash));
+            runtime._pendingStash = null;
+            owner.Notify(nameof(owner.CanRestoreStash));
             await owner.ReloadAsync();
             return state.HasConflicts
                 ? (false, "Your changes are back, but they conflict with the rewritten branches. Resolve and stage the files, then commit.")
@@ -176,7 +213,8 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
 
     public async Task<(bool Ok, string Message)> DismissRecoveryAsync()
     {
-        if (runtime._branchWriter is null || runtime._repository is null) return (false, "Open a repository first.");
+        if (runtime._branchWriter is null || runtime._repository is null)
+            return (false, "Open a repository first.");
         try
         {
             (await runtime._branchWriter.DismissAsync(runtime._repository.Root)).OrThrow();
@@ -190,8 +228,12 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
     /// <param name="root">Repository root used for resolution.</param>
     public async Task<string?> ResolveEditorAsync(string root)
     {
-        if (runtime._editorLauncher is null) return null;
-        try { return (await runtime._editorLauncher.ResolveAsync(root, owner.Settings.EditorCommand)).OrThrow(); }
+        if (runtime._editorLauncher is null)
+            return null;
+        try
+        {
+            return (await runtime._editorLauncher.ResolveAsync(root, owner.Settings.EditorCommand)).OrThrow();
+        }
         catch (Exception ex) { owner.SyncProgress = ex.Message; return null; }
     }
 

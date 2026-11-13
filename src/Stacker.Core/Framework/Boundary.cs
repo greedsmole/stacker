@@ -39,7 +39,10 @@ public static class Boundary
     /// from a failed one, which gets a problem and the recovery path.</remarks>
     public static async Task<Result<T>> CaptureAsync<T>(Func<Task<T>> action, string code)
     {
-        try { return Result<T>.Ok(await action()); }
+        try
+        {
+            return Result<T>.Ok(await action());
+        }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { return Result<T>.Fail(Problem(ex, code)); }
     }
@@ -63,7 +66,10 @@ public static class Boundary
     /// budgets; the translation and cancellation rules are identical to the asynchronous overloads.</remarks>
     public static Result<T> Capture<T>(Func<T> action, string code)
     {
-        try { return Result<T>.Ok(action()); }
+        try
+        {
+            return Result<T>.Ok(action());
+        }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { return Result<T>.Fail(Problem(ex, code)); }
     }

@@ -8,9 +8,15 @@ namespace Stacker.Desktop;
 public interface ISyncActions
 {
     /// <summary>What the working tree holds right now, including any unfinished operation.</summary>
-    WorkingTreeState? WorkingTree { get; }
+    WorkingTreeState? WorkingTree
+    {
+        get;
+    }
     /// <summary>True while a stash taken by Stacker is waiting to be restored.</summary>
-    bool CanRestoreStash { get; }
+    bool CanRestoreStash
+    {
+        get;
+    }
     /// <summary>Whether the active stack has an eligible local undo.</summary>
     bool? UndoAvailable => null;
     /// <summary>Stashes recorded for this repository and available to restore.</summary>

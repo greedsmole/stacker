@@ -6,7 +6,10 @@ namespace Stacker.Desktop;
 public partial class CommitWindow : Window
 {
     private readonly ISyncActions? _sync;
-    public CommitWindow() { InitializeComponent(); }
+    public CommitWindow()
+    {
+        InitializeComponent();
+    }
     public CommitWindow(ISyncActions sync) : this()
     {
         _sync = sync;
@@ -21,14 +24,23 @@ public partial class CommitWindow : Window
     private void CommitClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
-    if (_sync is null) return;
+    if (_sync is null)
+        return;
     var message = MessageInput.Text?.Trim() ?? "";
-    if (message.Length == 0) { ErrorLabel.Text = "Enter a commit message."; return; }
-    IsEnabled = false; ErrorLabel.Text = "";
+    if (message.Length == 0)
+    {
+        ErrorLabel.Text = "Enter a commit message.";
+        return;
+    }
+    IsEnabled = false;
+    ErrorLabel.Text = "";
     try
     {
         var (ok, result) = await _sync.CommitAsync(message, StageAllToggle.IsChecked == true);
-        if (ok) Close(true); else ErrorLabel.Text = result;
+        if (ok)
+            Close(true);
+        else
+            ErrorLabel.Text = result;
     }
     catch (Exception ex) { ErrorLabel.Text = ex.Message; }
     finally { IsEnabled = true; }
