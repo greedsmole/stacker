@@ -93,6 +93,8 @@ public sealed class AppSettings
     /// <remarks>Loading clamps the stored value to 200-600 and falls back to 290 when it is not finite. The pane saves the width the user actually dragged to,
     /// which is why the stored value is re-clamped on the next load.</remarks>
     public double FilesWidth { get; set; } = 290;
+    /// <summary>Hides the file navigator in every Changes comparison section.</summary>
+    public bool FilesHidden { get; set; }
     /// <summary>Initial window width in logical pixels; default 1400.</summary>
     /// <remarks>Loading clamps the stored value to 1000-4000 and falls back to 1400 when it is not finite, so a window cannot be restored below the layout's
     /// minimum or wider than a practical desktop.</remarks>

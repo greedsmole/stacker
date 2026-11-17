@@ -22,6 +22,25 @@ public sealed class SyntaxTests
         Assert.Same(dark, cached);
     }
 
+    [Theory]
+    [InlineData("Counter.razor", "@page \"/counter\"", "@code {", "    private string Title = \"counter\";")]
+    [InlineData("Counter.CSHTML", "@model CounterModel", "@{", "    var title = \"counter\";")]
+    public async Task TextMate_colors_Razor_directives_markup_and_embedded_code(string path, string directive, string block, string code)
+    {
+        var highlighter = new TextMateSyntaxHighlighter();
+        var text = string.Join('\n', directive, "<button class=\"count\">@Count</button>", block, code, "}",
+            "@* opening comment", "closing comment *@");
+
+        foreach (var theme in new[] { "Dark", "Light" })
+        {
+            var lines = await highlighter.HighlightAsync("razor-blob", path, text, theme);
+            Assert.True(lines[1].Select(span => span.Color).Distinct().Count() >= 2);
+            Assert.True(lines[2].Select(span => span.Color).Distinct().Count() >= 3);
+            Assert.True(lines[4].Select(span => span.Color).Distinct().Count() >= 3);
+            Assert.Equal(Assert.Single(lines[6], span => span.Start == 2).Color, lines[7][0].Color);
+        }
+    }
+
     [Fact]
     public async Task An_absent_blob_does_not_prevent_coloring_an_added_or_deleted_file()
     {

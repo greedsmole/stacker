@@ -47,11 +47,11 @@ Use **Folders** in the **Files** pane to switch between a flat list and the fold
 
 The diff displays code, line numbers and compact hunk ranges. Git headers (`diff --git`, `index`, `---/+++`) are omitted; rename/mode/binary/submodule information is shown as file metadata. Missing final newlines remain visible. Text selection copies source text, and Cmd/Ctrl+C on selected diff rows omits markers and line numbers. **Copy patch** in the file menu still copies the original patch.
 
-Click an unchanged-lines row to reveal up to 20 lines beside a change. Between hunks, the up arrow reveals lines above the next hunk. Choose **Show full file** or **Collapse unchanged lines** from the file menu to switch between the full comparison and its compact view.
+Click an unchanged-lines row to reveal up to 20 lines beside a change. Between hunks, the up arrow reveals lines above the next hunk. Click **Show full file** in the diff header to reveal every unchanged line. The button then reads **Collapse unchanged lines**.
 
 Use **Wrap code** above a diff to fit long lines to the pane; the preference is saved. For a multi-line comment, Shift-click adjacent code rows and choose **Comment on selected lines**. The editor shows the line range before you add it to a review or post it. Mixed added/removed sides are rejected with an explanation.
 
-Use the sidebar button next to **stacker** to hide or show the stack list. **Settings → Diff line height** controls code spacing. In a single-layer or pull-request diff, the checkbox beside each file records a personal review checkpoint in **History**.
+Use **Stacks & PRs** and **Files** in the Changes toolbar to show or hide either sidebar. **Files** controls the file list in every comparison section. Stacker remembers both choices. **Settings → Diff line height** controls code spacing. In a single-layer or pull-request diff, the checkbox beside each file records a personal review checkpoint in **History**.
 
 ## Reproducible demo
 
@@ -154,7 +154,7 @@ The **Command log** tab records the Git and GitHub CLI calls these actions run.
 
 ## Syntax highlighting
 
-TextMateSharp tokenizes the old and new Git blobs separately, preserving multiline lexical state. Token spans map back to unified diff line numbers; patch markers are not treated as code. Supported initial extensions include C#, JSON, YAML, XML/XAML, JS/TS, HTML/CSS, SQL, shell and Markdown.
+TextMateSharp tokenizes the old and new Git blobs separately, preserving multiline lexical state. Token spans cover the original source text and map back to unified diff line numbers. Supported languages include C#, Razor (`.razor` and `.cshtml`), JSON, YAML, XML/XAML, JS/TS, HTML/CSS, SQL, shell and Markdown.
 
 The diff appears first. Highlighting runs in the background with cancellation and a blob/language/theme cache. Unknown languages, grammar failures, blobs above 2 MiB / 50,000 lines or tokenization exceeding the time budget fall back to plain text.
 

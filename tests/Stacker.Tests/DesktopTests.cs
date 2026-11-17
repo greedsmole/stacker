@@ -61,19 +61,31 @@ public sealed partial class DesktopTests
     public void File_navigator_can_collapse_and_restore_its_width()
     {
         var view = new DiffSectionView();
-        var grid = view.FindControl<Avalonia.Controls.Grid>("ContentGrid")!;
-        var pane = view.FindControl<Avalonia.Controls.Grid>("FilePane")!;
-        view.Measure(new Size(900, 600));
-        view.Arrange(new Rect(0, 0, 900, 600));
-        var original = grid.ColumnDefinitions[0].ActualWidth;
-        var toggle = Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(view)
-            .OfType<Avalonia.Controls.Button>().Single(b => Equals(b.Content, "Files"));
-        toggle.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
-        Assert.False(pane.IsVisible);
-        Assert.Equal(0, grid.ColumnDefinitions[0].Width.Value);
-        toggle.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
-        Assert.True(pane.IsVisible);
-        Assert.Equal(original, grid.ColumnDefinitions[0].Width.Value);
+        var window = new Window { Content = view, Width = 900, Height = 600 };
+        window.Show();
+        try
+        {
+            var grid = view.FindControl<Grid>("ContentGrid")!;
+            var pane = view.FindControl<Grid>("FilePane")!;
+            var splitter = view.FindControl<GridSplitter>("FileSplitter")!;
+            var original = grid.ColumnDefinitions[0].ActualWidth;
+            Assert.True(original > 0);
+
+            view.ShowFileNavigator = false;
+            window.UpdateLayout();
+            Assert.False(pane.IsVisible);
+            Assert.False(splitter.IsVisible);
+            Assert.Equal(0, grid.ColumnDefinitions[0].ActualWidth);
+            Assert.Equal(0, grid.ColumnDefinitions[1].ActualWidth);
+
+            view.ShowFileNavigator = true;
+            window.UpdateLayout();
+            Assert.True(pane.IsVisible);
+            Assert.True(splitter.IsVisible);
+            Assert.Equal(original, grid.ColumnDefinitions[0].ActualWidth);
+            Assert.Equal(1, grid.ColumnDefinitions[1].ActualWidth);
+        }
+        finally { window.Close(); }
     }
     [AvaloniaFact]
     public async Task Window_loads_repository_stack_and_diff()

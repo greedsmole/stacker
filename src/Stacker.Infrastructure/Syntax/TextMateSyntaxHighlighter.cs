@@ -17,7 +17,11 @@ public sealed class TextMateSyntaxHighlighter : ISyntaxHighlighter
     private const long MaxCacheBytes = 32L * 1024 * 1024;
     private static long Size(IReadOnlyDictionary<int, IReadOnlyList<SyntaxSpan>> spans) =>
         spans.Sum(line => 48L + line.Value.Sum(span => 32L + 2L * span.Color.Length));
-    private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase) { ".cs", ".json", ".yaml", ".yml", ".xml", ".axaml", ".csproj", ".js", ".jsx", ".ts", ".tsx", ".html", ".css", ".sql", ".sh", ".bash", ".md" };
+    private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".cs", ".razor", ".cshtml", ".json", ".yaml", ".yml", ".xml", ".axaml", ".csproj",
+        ".js", ".jsx", ".ts", ".tsx", ".html", ".css", ".sql", ".sh", ".bash", ".md"
+    };
     /// <summary>Tokenizes a source blob, carrying grammar state line-to-line for multiline strings and comments.</summary>
     /// <remarks>Unsupported extensions, oversized input, and tokenizer failures return no spans so plain text stays usable.</remarks>
     public async Task<IReadOnlyDictionary<int, IReadOnlyList<SyntaxSpan>>> HighlightAsync(string blobId, string path, string text, string theme, CancellationToken ct = default)
