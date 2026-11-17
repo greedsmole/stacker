@@ -106,7 +106,11 @@ public sealed partial class ClassDiagramUiTests
             Assert.Contains(overviewModes.Items.Cast<object>(), item => item.ToString() == "This layer");
             overview.Close();
         }
-        finally { window.Close(); }
+        finally
+        {
+            window.Close();
+            await UntilAsync(() => !window.IsVisible);
+        }
     }
 
     [AvaloniaFact]
@@ -144,8 +148,9 @@ public sealed partial class ClassDiagramUiTests
         }
         finally
         {
+            // The window flushes workspace and draft writes before its asynchronous close completes.
             window.Close();
-            await vm.FlushReviewsAsync();
+            await UntilAsync(() => !window.IsVisible);
             services.Dispose();
             GitFixture.DeleteDirectory(root.FullName);
         }
