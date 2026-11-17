@@ -1,7 +1,7 @@
+using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Microsoft.Extensions.DependencyInjection;
-using System.Text.Json;
 using Stacker.Core;
 using Stacker.Core.Framework;
 using Stacker.Desktop;
@@ -11,7 +11,7 @@ using Stacker.Infrastructure.Framework;
 namespace Stacker.Tests;
 
 [Collection(HeadlessApp.CollectionName)]
-public sealed class FoundationWorkflowTests
+public sealed partial class FoundationWorkflowTests
 {
     [AvaloniaFact]
     public async Task Comments_can_be_posted_in_sequence_and_as_one_review_while_discussion_refresh_waits()
@@ -33,17 +33,21 @@ public sealed class FoundationWorkflowTests
         var added = new RenderedDiffLine(new(DiffLineKind.Added, null, 1, "+new"));
         var removed = new RenderedDiffLine(new(DiffLineKind.Removed, 1, null, "-old"));
 
-        review.SetSelection([added]); review.Composer = "First inline comment";
+        review.SetSelection([added]);
+        review.Composer = "First inline comment";
         await review.PostInlineCommand.ExecuteAsync(null).WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(review.CanPublish);
         Assert.False(discussion.Task.IsCompleted);
-        review.SetSelection([removed]); review.Composer = "Second inline comment";
+        review.SetSelection([removed]);
+        review.Composer = "Second inline comment";
         await review.PostInlineCommand.ExecuteAsync(null).WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(review.CanPublish);
 
-        review.SetSelection([added]); review.Composer = "First review comment";
+        review.SetSelection([added]);
+        review.Composer = "First review comment";
         await review.AddToDraftCommand.ExecuteAsync(null);
-        review.SetSelection([removed]); review.Composer = "Second review comment";
+        review.SetSelection([removed]);
+        review.Composer = "Second review comment";
         await review.AddToDraftCommand.ExecuteAsync(null);
         Assert.Equal("Review (2)", review.ReviewLabel);
         await review.SubmitReviewCommand.ExecuteAsync(null).WaitAsync(TimeSpan.FromSeconds(5));
@@ -77,23 +81,34 @@ public sealed class FoundationWorkflowTests
     [InlineData("HTTP 503", false)]
     public async Task Publication_distinguishes_a_server_rejection_from_an_unknown_result(string response, bool retryAllowed)
     {
-        await using var f = new GitFixture(); var reader = new FakeGitHub();
-        var app = new ApplicationStore(f.Root); var database = new SqliteHistoryStore(f.Root);
-        var state = new ReviewApplicationState(app, database); var journal = f.CreateJournal();
+        await using var f = new GitFixture();
+        var reader = new FakeGitHub();
+        var app = new ApplicationStore(f.Root);
+        var database = new SqliteHistoryStore(f.Root);
+        var state = new ReviewApplicationState(app, database);
+        var journal = f.CreateJournal();
         var bus = new CommandBus(new(journal));
         var writer = new CommandGitHubWriter(new(new ScriptedRunner(_ => new(1, "{}", response)), new(), new()), bus);
         using var section = new DiffSectionViewModel(f.Reader, f.Root, new("feature", "main", reader.Current.BaseSha, reader.Current.HeadSha, null, [])) { IsPrSnapshot = true };
         using (var review = new ReviewViewModel(reader, writer, state, f.Reader, FakeGitHub.Context, reader.Current, section, false))
         {
-            await review.InitializeAsync(); review.Composer = "Preserve this text";
+            await review.InitializeAsync();
+            review.Composer = "Preserve this text";
             await review.PostCommentCommand.ExecuteAsync(null);
-            if (retryAllowed) { await review.PostCommentCommand.ExecuteAsync(null); Assert.Equal(2, journal.Recent("github:" + FakeGitHub.Context.Identity).OrThrow().Count); }
+            if (retryAllowed)
+            {
+                await review.PostCommentCommand.ExecuteAsync(null);
+                Assert.Equal(2, journal.Recent("github:" + FakeGitHub.Context.Identity).OrThrow().Count);
+            }
             await review.FlushAsync();
-            Assert.Equal(retryAllowed, review.CanPublish); Assert.Equal("Preserve this text", review.Composer);
+            Assert.Equal(retryAllowed, review.CanPublish);
+            Assert.Equal("Preserve this text", review.Composer);
             Assert.DoesNotContain("Invalid publication transition", review.Message);
         }
         using var reopened = new ReviewViewModel(reader, writer, state, f.Reader, FakeGitHub.Context, reader.Current, section, false);
-        await reopened.InitializeAsync(); Assert.Equal(retryAllowed, reopened.CanPublish); Assert.Equal("Preserve this text", reopened.Composer);
+        await reopened.InitializeAsync();
+        Assert.Equal(retryAllowed, reopened.CanPublish);
+        Assert.Equal("Preserve this text", reopened.Composer);
         await reopened.FlushAsync();
     }
 
@@ -130,31 +145,12 @@ public sealed class FoundationWorkflowTests
         Assert.Equal(entry.Id, state.ConfirmedId);
     }
 
-    private sealed class FailingConfirmationStore(IApplicationState inner) : IApplicationState
-    {
-        public bool FailConfirmation { get; set; } = true;
-        public string? ConfirmedId { get; private set; }
-        public string Root => inner.Root;
-        public string? LastProblem => inner.LastProblem;
-        public Task<Result<T?>> ReadAsync<T>(string kind, string identity, CancellationToken ct = default) where T : class =>
-            inner.ReadAsync<T>(kind, identity, ct);
-
-        public Task<Result<Unit>> WriteAsync<T>(string kind, string identity, T value, CancellationToken ct = default) where T : class
-        {
-            if (value is ReviewDraft draft && draft.PublicationHistory.LastOrDefault() is { Phase: PublicationPhase.Confirmed } confirmed)
-            {
-                if (FailConfirmation) return Task.FromResult(Result<Unit>.Fail(ProblemCodes.StoreWrite, "injected local save failure"));
-                ConfirmedId = confirmed.Id;
-            }
-            return inner.WriteAsync(kind, identity, value, ct);
-        }
-    }
-
     [AvaloniaFact]
     public async Task A_remote_acknowledgement_repairs_the_matching_execution_record_after_a_local_failure()
     {
         await using var f = new GitFixture();
-        var reader = new FakeGitHub(); var pr = reader.Current;
+        var reader = new FakeGitHub();
+        var pr = reader.Current;
         var database = new SqliteHistoryStore(f.Root);
         var state = new ReviewApplicationState(new(f.Root), database);
         var journal = new JsonJournal(new FailingDoneJournalState(new SqliteJournalState(database)), new SystemClock());
@@ -175,37 +171,36 @@ public sealed class FoundationWorkflowTests
         Assert.Equal(JournalPhase.Applied, entry.Phase);
     }
 
-    private sealed class FailingDoneJournalState(IStateStore<JournalLog> inner) : IStateStore<JournalLog>
-    {
-        public Result<string> Quarantine(string identity) => inner.Quarantine(identity);
-        public Result<JournalLog?> Read(string identity) => inner.Read(identity);
-        public Task<Result<Unit>> WriteAsync(string identity, JournalLog value, CancellationToken ct = default) =>
-            value.Entries.Any(entry => entry.Steps.Any(step => step.State == StepState.Done))
-                ? Task.FromResult(Result<Unit>.Fail(ProblemCodes.StoreWrite, "injected execution record failure"))
-                : inner.WriteAsync(identity, value, ct);
-    }
-
     [AvaloniaFact]
     public async Task Embedded_history_shares_layer_selection_and_restores_navigation()
     {
-        await using var f = new GitFixture(); await f.Linear(); var root = Directory.CreateTempSubdirectory("foundation-ui-").FullName;
+        await using var f = new GitFixture();
+        await f.Linear();
+        var root = Directory.CreateTempSubdirectory("foundation-ui-").FullName;
         try
         {
             await new YamlStackStore().SaveAsync(f.Root, [f.Stack], null);
-            using var services = Composition.Build(root); var vm = services.GetRequiredService<MainViewModel>();
-            await vm.OpenRepositoryAsync(f.Root); await vm.ShowHistoryAsync(); var history = vm.ActiveHistory!;
-            Assert.True(vm.IsHistoryOpen); await history.ShowCurrentCommand.ExecuteAsync(null);
+            using var services = Composition.Build(root);
+            var vm = services.GetRequiredService<MainViewModel>();
+            await vm.OpenRepositoryAsync(f.Root);
+            await vm.ShowHistoryAsync();
+            var history = vm.ActiveHistory!;
+            Assert.True(vm.IsHistoryOpen);
+            await history.ShowCurrentCommand.ExecuteAsync(null);
             Assert.Equal("A.txt", Assert.Single(history.DocumentSections).SelectedFile!.NewPath);
             var selection = vm.Session.Selection;
             history.SelectedNode = history.Nodes[1];
             Assert.Equal(selection, vm.Session.Selection);
-            await history.LoadLayerCommand.ExecuteAsync(null); await history.ShowCurrentCommand.ExecuteAsync(null);
+            await history.LoadLayerCommand.ExecuteAsync(null);
+            await history.ShowCurrentCommand.ExecuteAsync(null);
             Assert.Equal("B.txt", Assert.Single(vm.Sections).SelectedFile!.NewPath);
             Assert.Equal(history.SelectedNode.Id, vm.Session.Selection.ChangeId);
             await history.BackCommand.ExecuteAsync(null);
-            Assert.Equal(history.Nodes[0], history.SelectedNode); Assert.Equal("A.txt", Assert.Single(history.DocumentSections).SelectedFile!.NewPath);
+            Assert.Equal(history.Nodes[0], history.SelectedNode);
+            Assert.Equal("A.txt", Assert.Single(history.DocumentSections).SelectedFile!.NewPath);
             Assert.Equal("A.txt", Assert.Single(vm.Sections).SelectedFile!.NewPath);
-            await history.ForwardCommand.ExecuteAsync(null); Assert.Equal(history.Nodes[1], history.SelectedNode);
+            await history.ForwardCommand.ExecuteAsync(null);
+            Assert.Equal(history.Nodes[1], history.SelectedNode);
             Assert.All(history.DocumentSections.SelectMany(s => s.Lines), line => Assert.False(line.IsLineCommentVisible));
             await vm.ShutdownAsync();
         }
@@ -215,25 +210,39 @@ public sealed class FoundationWorkflowTests
     [AvaloniaFact]
     public async Task Close_failure_can_return_to_editing_and_then_retry()
     {
-        await using var f = new GitFixture(); await f.Linear(); var root = Directory.CreateTempSubdirectory("foundation-close-").FullName;
+        await using var f = new GitFixture();
+        await f.Linear();
+        var root = Directory.CreateTempSubdirectory("foundation-close-").FullName;
         try
         {
-            using var services = Composition.Build(root); var vm = services.GetRequiredService<MainViewModel>();
-            var window = new MainWindow { DataContext = vm }; window.Show(); await vm.OpenRepositoryAsync(f.Root);
-            var blocker = Path.Combine(root, "workspace"); if (Directory.Exists(blocker)) Directory.Delete(blocker, true); await File.WriteAllTextAsync(blocker, "blocked");
+            using var services = Composition.Build(root);
+            var vm = services.GetRequiredService<MainViewModel>();
+            var window = new MainWindow { DataContext = vm };
+            window.Show();
+            await vm.OpenRepositoryAsync(f.Root);
+            var blocker = Path.Combine(root, "workspace");
+            if (Directory.Exists(blocker))
+                Directory.Delete(blocker, true);
+            await File.WriteAllTextAsync(blocker, "blocked");
             var asked = new TaskCompletionSource<IReadOnlyList<string>>(TaskCreationOptions.RunContinuationsAsynchronously);
             var decision = new TaskCompletionSource<UnsavedCloseChoice>(TaskCreationOptions.RunContinuationsAsynchronously);
             var prompts = 0;
             window.CloseFailureHandler = errors => { prompts++; asked.TrySetResult(errors); return decision.Task; };
-            window.Close(); var problems = await asked.Task.WaitAsync(TimeSpan.FromSeconds(10)); Assert.Contains(problems, e => e.StartsWith("Workspace:"));
+            window.Close();
+            var problems = await asked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Contains(problems, e => e.StartsWith("Workspace:"));
             window.Close();
             Assert.True(window.IsVisible);
             Assert.Equal(1, prompts);
             decision.SetResult(UnsavedCloseChoice.ContinueEditing);
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => { }, Avalonia.Threading.DispatcherPriority.Background);
             Assert.True(window.IsVisible);
-            File.Delete(blocker); window.CloseFailureHandler = _ => Task.FromResult(UnsavedCloseChoice.Discard); window.Close();
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10)); while (window.IsVisible) await Task.Delay(10, timeout.Token);
+            File.Delete(blocker);
+            window.CloseFailureHandler = _ => Task.FromResult(UnsavedCloseChoice.Discard);
+            window.Close();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            while (window.IsVisible)
+                await Task.Delay(10, timeout.Token);
         }
         finally { Directory.Delete(root, true); }
     }

@@ -12,7 +12,7 @@ using Stacker.Infrastructure;
 namespace Stacker.Tests;
 
 [Collection(HeadlessApp.CollectionName)]
-public sealed class SymbolNavigationTests
+public sealed partial class SymbolNavigationTests
 {
     [AvaloniaFact]
     public async Task Keyboard_commands_pass_the_exact_side_and_position_from_the_diff()
@@ -59,18 +59,6 @@ public sealed class SymbolNavigationTests
             }
         }
         finally { window.Close(); }
-    }
-
-    private sealed class RecordingNavigation : ISymbolNavigation
-    {
-        public List<SymbolNavigationRequest> Requests { get; } = [];
-        public Task<Result<IReadOnlyList<string>>> ProjectsAsync(SymbolNavigationRequest request, CancellationToken ct)
-        {
-            Requests.Add(request);
-            return Task.FromResult(Result<IReadOnlyList<string>>.Ok(["Code.csproj"]));
-        }
-        public Task<Result<SymbolNavigationResult>> FindAsync(SymbolNavigationRequest request, string project, CancellationToken ct) =>
-            Task.FromResult(Result<SymbolNavigationResult>.Ok(new("Code", [], false)));
     }
 
     [Fact]
@@ -126,10 +114,16 @@ public sealed class SymbolNavigationTests
         Assert.Equal("Library/Calculator.cs", definition.Path);
         Assert.Equal(4, definition.Line);
 
-        var references = (await navigator.FindAsync(request with { Kind = SymbolNavigationKind.References }, project, timeout.Token)).OrThrow();
+        var references = (await navigator.FindAsync(request with
+        {
+            Kind = SymbolNavigationKind.References
+        }, project, timeout.Token)).OrThrow();
         Assert.Equal([3, 5], references.Locations.Select(location => location.Line));
         Assert.All(references.Locations, location => Assert.Equal("Client/Call.cs", location.Path));
-        var wrongCommit = await navigator.ProjectsAsync(request with { Commit = prior }, timeout.Token);
+        var wrongCommit = await navigator.ProjectsAsync(request with
+        {
+            Commit = prior
+        }, timeout.Token);
         Assert.Contains(prior[..8], wrongCommit.Problem!.Message);
         await fixture.Write("Client/Call.cs", "local changes");
         var dirty = await navigator.FindAsync(request, project, timeout.Token);

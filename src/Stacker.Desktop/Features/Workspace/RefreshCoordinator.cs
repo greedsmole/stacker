@@ -11,16 +11,30 @@ public sealed class RefreshCoordinator(Func<CancellationToken, Task> refresh, Ti
     /// <summary>Delay before the next refresh; failures back off up to eight minutes.</summary>
     public TimeSpan Interval { get; private set; } = TimeSpan.FromMinutes(1);
     /// <summary>Whether authentication failure suspended polling until reset.</summary>
-    public bool Suspended { get; private set; }
+    public bool Suspended
+    {
+        get; private set;
+    }
     /// <summary>Starts one polling loop while active, or cancels it when the window is inactive.</summary>
     public void SetActive(bool active)
     {
-        if (!active) { _loop?.Cancel(); _loop = null; return; }
-        if (_loop is not null || Suspended) return;
-        _loop = new(); _ = RunAsync(_loop);
+        if (!active)
+        {
+            _loop?.Cancel();
+            _loop = null;
+            return;
+        }
+        if (_loop is not null || Suspended)
+            return;
+        _loop = new();
+        _ = RunAsync(_loop);
     }
     /// <summary>Clears suspension and restores the one-minute interval.</summary>
-    public void Reset() { Suspended = false; Interval = TimeSpan.FromMinutes(1); }
+    public void Reset()
+    {
+        Suspended = false;
+        Interval = TimeSpan.FromMinutes(1);
+    }
     // One loop owns the timer and awaits each refresh, so slow GHES requests never overlap with another poll.
     /// <summary>Runs sequential delayed refreshes with cancellation and exponential backoff.</summary>
     private async Task RunAsync(CancellationTokenSource source)
@@ -30,7 +44,11 @@ public sealed class RefreshCoordinator(Func<CancellationToken, Task> refresh, Ti
             while (!source.IsCancellationRequested)
             {
                 await Task.Delay(Interval, _clock, source.Token);
-                try { await refresh(source.Token); Interval = TimeSpan.FromMinutes(1); }
+                try
+                {
+                    await refresh(source.Token);
+                    Interval = TimeSpan.FromMinutes(1);
+                }
                 catch (OperationCanceledException) when (source.IsCancellationRequested) { return; }
                 catch (Stacker.Core.GitHubAuthenticationException) { if (source.IsCancellationRequested) return; Suspended = true; return; }
                 catch { if (source.IsCancellationRequested) return; Interval = TimeSpan.FromMinutes(Math.Min(8, Interval.TotalMinutes * 2)); }

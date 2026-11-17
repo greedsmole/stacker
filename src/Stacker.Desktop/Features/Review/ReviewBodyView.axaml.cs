@@ -11,16 +11,28 @@ public partial class ReviewBodyView : UserControl
     public static readonly StyledProperty<string> BodyProperty = AvaloniaProperty.Register<ReviewBodyView, string>(nameof(Body), "");
     public static readonly StyledProperty<string?> OriginalCodeProperty = AvaloniaProperty.Register<ReviewBodyView, string?>(nameof(OriginalCode));
     public static readonly StyledProperty<bool> HasOriginalCodeProperty = AvaloniaProperty.Register<ReviewBodyView, bool>(nameof(HasOriginalCode));
-    public string Body { get => GetValue(BodyProperty); set => SetValue(BodyProperty, value); }
-    public string? OriginalCode { get => GetValue(OriginalCodeProperty); set => SetValue(OriginalCodeProperty, value); }
+    public string Body
+    {
+        get => GetValue(BodyProperty); set => SetValue(BodyProperty, value);
+    }
+    public string? OriginalCode
+    {
+        get => GetValue(OriginalCodeProperty); set => SetValue(OriginalCodeProperty, value);
+    }
     public bool HasOriginalCode => GetValue(HasOriginalCodeProperty);
 
-    public ReviewBodyView() { InitializeComponent(); Render(); }
+    public ReviewBodyView()
+    {
+        InitializeComponent();
+        Render();
+    }
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == BodyProperty && BodyBlocks is not null) Render();
-        if (change.Property == OriginalCodeProperty && BodyBlocks is not null) Render();
+        if (change.Property == BodyProperty && BodyBlocks is not null)
+            Render();
+        if (change.Property == OriginalCodeProperty && BodyBlocks is not null)
+            Render();
     }
     private void Render()
     {
@@ -33,8 +45,13 @@ public partial class ReviewBodyView : UserControl
     private void CopySuggestionClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
-    if (sender is not Button { DataContext: ReviewContentBlock block } button || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard) return;
-    try { await clipboard.SetTextAsync(block.Text); button.Content = "Copied"; }
+    if (sender is not Button { DataContext: ReviewContentBlock block } button || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+        return;
+    try
+    {
+        await clipboard.SetTextAsync(block.Text);
+        button.Content = "Copied";
+    }
     catch { button.Content = "Copy failed"; }
 }, message => AsyncHandler.Report(this, message));
 }

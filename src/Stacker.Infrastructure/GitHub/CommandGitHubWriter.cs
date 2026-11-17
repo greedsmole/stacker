@@ -1,6 +1,6 @@
 using Stacker.Core;
-using Stacker.Core.Framework;
 using Stacker.Core.Features.Review;
+using Stacker.Core.Framework;
 namespace Stacker.Infrastructure;
 
 /// <summary>Serializes explicit GitHub mutations and durably records attempted sends; never retries them.</summary>
@@ -34,14 +34,23 @@ public sealed class CommandGitHubWriter(GitHubCli client, CommandBus bus) : IGit
         if (!outcome.Ok && command.Value is { IsOk: true })
         {
             var problem = outcome.Problem ?? Problem.Of(ProblemCodes.StoreWrite, outcome.Message);
-            throw new StackerException(problem with { Certainty = EffectCertainty.Confirmed });
+            throw new StackerException(problem with
+            {
+                Certainty = EffectCertainty.Confirmed
+            });
         }
-        return command.Value is { } value ? value.OrThrow() : throw new StackerException(Problem.Of(ProblemCodes.GitHubRequest, outcome.Message) with { Certainty = outcome.Certainty });
+        return command.Value is { } value ? value.OrThrow() : throw new StackerException(Problem.Of(ProblemCodes.GitHubRequest, outcome.Message) with
+        {
+            Certainty = outcome.Certainty
+        });
     }
     private static Task<Result<Unit>> Capture(Func<Task> effect) => Capture(async () => { await effect(); return Unit.Value; });
     private static async Task<Result<T>> Capture<T>(Func<Task<T>> effect)
     {
-        try { return Result<T>.Ok(await effect()); }
+        try
+        {
+            return Result<T>.Ok(await effect());
+        }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { return Result<T>.Fail(Boundary.Problem(ex, ProblemCodes.GitHubRequest)); }
     }

@@ -1,25 +1,18 @@
-using Stacker.Core.Framework;
 // Purpose: Real-Git checks for the local commands — editor resolution, working-tree state, commit, stash, switch and stack push.
 using Stacker.Core;
+using Stacker.Core.Framework;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 
-public sealed class LocalGitTests
+public sealed partial class LocalGitTests
 {
     private static LocalGitClient Writer(GitFixture f) => f.Writer();
 
     private static async Task MoveBase(GitFixture f)
     {
-        await f.Git("checkout", "main"); await f.Write("main2.txt", "moved\n"); await f.Commit("base moved");
-    }
-
-    /// <summary>Records launches so an editor can be checked without opening one.</summary>
-    private sealed class FakeLauncher : IProcessLauncher
-    {
-        public List<ProcessRequest> Started { get; } = [];
-        public void Start(ProcessRequest request) => Started.Add(request);
-
-        Result<Unit> IProcessLauncher.Start(ProcessRequest request) => Boundary.Capture(() => Start(request), ProblemCodes.GitFailed);
+        await f.Git("checkout", "main");
+        await f.Write("main2.txt", "moved\n");
+        await f.Commit("base moved");
     }
 
     // Scenario: Porcelain v1 output decides staged, untracked, renamed and conflicted entries.
@@ -28,7 +21,8 @@ public sealed class LocalGitTests
     {
         var entries = WorkingTreeParser.Parse(" M a.txt\0M  b.txt\0?? new.txt\0R  moved.txt\0old.txt\0UU both.txt\0 M ü file.cs\0");
         Assert.Equal(6, entries.Count);
-        Assert.False(entries[0].IsStaged); Assert.False(entries[0].IsUntracked);
+        Assert.False(entries[0].IsStaged);
+        Assert.False(entries[0].IsUntracked);
         Assert.True(entries[1].IsStaged);
         Assert.True(entries[2].IsUntracked);
         Assert.Equal("moved.txt", entries[3].Path);
@@ -41,9 +35,11 @@ public sealed class LocalGitTests
     public void Editor_commands_split_without_a_shell()
     {
         var plain = CommandLine.Split("code --wait");
-        Assert.Equal("code", plain.Program); Assert.Equal(["--wait"], plain.Arguments);
+        Assert.Equal("code", plain.Program);
+        Assert.Equal(["--wait"], plain.Arguments);
         var quoted = CommandLine.Split("\"/Applications/My Editor/bin/edit\" -w");
-        Assert.Equal("/Applications/My Editor/bin/edit", quoted.Program); Assert.Equal(["-w"], quoted.Arguments);
+        Assert.Equal("/Applications/My Editor/bin/edit", quoted.Program);
+        Assert.Equal(["-w"], quoted.Arguments);
         Assert.Throws<StackerException>(() => CommandLine.Split("   "));
     }
 
@@ -84,9 +80,11 @@ public sealed class LocalGitTests
     [Fact]
     public async Task Staging_names_exactly_what_it_takes()
     {
-        await using var f = new GitFixture(); await f.Init();
+        await using var f = new GitFixture();
+        await f.Init();
         var writer = Writer(f);
-        await f.Write("a.txt", "a\n"); await f.Write("b.txt", "b\n");
+        await f.Write("a.txt", "a\n");
+        await f.Write("b.txt", "b\n");
         Assert.Equal(new[] { "a.txt" }, await writer.StageAsync(f.Root, ["a.txt"]));
         var state = await writer.StateAsync(f.Root);
         Assert.True(state.Entries.Single(entry => entry.Path == "a.txt").IsStaged);
@@ -99,7 +97,8 @@ public sealed class LocalGitTests
     [Fact]
     public async Task A_commit_needs_a_message_and_runs_the_users_hooks()
     {
-        await using var f = new GitFixture(); await f.Init();
+        await using var f = new GitFixture();
+        await f.Init();
         var writer = Writer(f);
         Assert.Contains("commit message", (await Assert.ThrowsAsync<StackerException>(() => writer.CommitAsync(f.Root, "  ", true))).Message);
         Assert.Contains("Nothing is staged", (await Assert.ThrowsAsync<StackerException>(() => writer.CommitAsync(f.Root, "message", false))).Message);
@@ -117,14 +116,16 @@ public sealed class LocalGitTests
         await writer.CommitAsync(f.Root, "Add a file", stageAll: true);
         Assert.Equal("Add a file", await f.Git("log", "-1", "--format=%s"));
         Assert.Empty((await f.Git("status", "--porcelain")).Trim());
-        if (!OperatingSystem.IsWindows()) Assert.True(File.Exists(marker), "the user's pre-commit hook must run");
+        if (!OperatingSystem.IsWindows())
+            Assert.True(File.Exists(marker), "the user's pre-commit hook must run");
     }
 
     // Scenario: Switching branches moves only when the tracked working tree is clean.
     [Fact]
     public async Task Switching_branches_refuses_a_dirty_tree()
     {
-        await using var f = new GitFixture(); await f.Linear();
+        await using var f = new GitFixture();
+        await f.Linear();
         var writer = Writer(f);
         await writer.SwitchAsync(f.Root, "refs/heads/A");
         Assert.Equal("A", await f.Git("branch", "--show-current"));
@@ -140,8 +141,10 @@ public sealed class LocalGitTests
     [Fact]
     public async Task A_configured_git_binary_is_still_logged()
     {
-        if (OperatingSystem.IsWindows()) return; // creating a symlink needs privileges there
-        await using var f = new GitFixture(); await f.Init();
+        if (OperatingSystem.IsWindows())
+            return; // creating a symlink needs privileges there
+        await using var f = new GitFixture();
+        await f.Init();
         var directory = Path.Combine(Path.GetTempPath(), "stacker-git-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(directory);
         var renamed = Path.Combine(directory, "git-custom");
@@ -162,19 +165,26 @@ public sealed class LocalGitTests
     [Fact]
     public async Task Pushing_the_stack_publishes_every_layer()
     {
-        await using var f = new GitFixture(); await f.Linear(); await f.AddOrigin();
+        await using var f = new GitFixture();
+        await f.Linear();
+        await f.AddOrigin();
         await f.Git("push", "origin", "main", "A", "B", "C");
         var writer = Writer(f);
         // New work on the top layer leaves every parent relationship intact, so nothing needs a rebase.
-        await f.Git("checkout", "C"); await f.Write("C2.txt", "c2\n"); await f.Commit("C again");
+        await f.Git("checkout", "C");
+        await f.Write("C2.txt", "c2\n");
+        await f.Commit("C again");
         var plan = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack);
         Assert.False(plan.CanExecute);
         Assert.Empty(plan.PushSteps);
         Assert.Equal(3, plan.StackPushSteps.Count);
         Assert.Equal(new[] { "A", "B", "C" }, await writer.PushStackAsync(plan));
-        foreach (var branch in new[] { "A", "B", "C" }) Assert.Equal(await f.Git("rev-parse", branch), await f.RemoteSha("refs/heads/" + branch));
+        foreach (var branch in new[] { "A", "B", "C" })
+            Assert.Equal(await f.Git("rev-parse", branch), await f.RemoteSha("refs/heads/" + branch));
         // Rewriting a published layer makes the remote tip a non-ancestor, so the same action must force.
-        await f.Write("C.txt", "amended\n"); await f.Git("add", "-A"); await f.Git("commit", "--amend", "-m", "C amended");
+        await f.Write("C.txt", "amended\n");
+        await f.Git("add", "-A");
+        await f.Git("commit", "--amend", "-m", "C amended");
         var rewritten = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack);
         Assert.Equal(new[] { "A", "B", "C" }, await writer.PushStackAsync(rewritten));
         Assert.Equal(await f.Git("rev-parse", "C"), await f.RemoteSha("refs/heads/C"));
@@ -184,9 +194,15 @@ public sealed class LocalGitTests
     [Fact]
     public async Task Merge_commits_are_preserved_when_the_user_asks()
     {
-        await using var f = new GitFixture(); await f.Init();
-        await f.Git("checkout", "-b", "side"); await f.Write("side.txt", "s\n"); await f.Commit("side");
-        await f.Git("checkout", "main"); await f.Git("checkout", "-b", "A"); await f.Write("A.txt", "a\n"); await f.Commit("A");
+        await using var f = new GitFixture();
+        await f.Init();
+        await f.Git("checkout", "-b", "side");
+        await f.Write("side.txt", "s\n");
+        await f.Commit("side");
+        await f.Git("checkout", "main");
+        await f.Git("checkout", "-b", "A");
+        await f.Write("A.txt", "a\n");
+        await f.Commit("A");
         await f.Git("merge", "--no-ff", "-m", "merge side", "side");
         var stack = new StackDefinition("t", "T", "refs/heads/main", ["refs/heads/A"]);
         await MoveBase(f);

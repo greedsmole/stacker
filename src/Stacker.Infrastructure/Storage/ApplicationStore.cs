@@ -9,7 +9,10 @@ namespace Stacker.Infrastructure;
 public sealed class ApplicationStore : IApplicationState
 {
     /// <summary>Root directory containing application-owned state.</summary>
-    public string Root { get; }
+    public string Root
+    {
+        get;
+    }
     /// <summary>Atomic file abstraction used to preserve documents during replacement.</summary>
     private readonly IAtomicFile _files;
     /// <summary>Serializes writes so snapshots cannot replace one another concurrently.</summary>
@@ -24,7 +27,10 @@ public sealed class ApplicationStore : IApplicationState
         ImportLegacy(Root);
     }
     /// <summary>Set when a damaged document was moved aside, so the UI can mention it once.</summary>
-    public string? LastProblem { get; private set; }
+    public string? LastProblem
+    {
+        get; private set;
+    }
 
     /// <summary>Converts an identity into the stable filename-safe key used by state stores.</summary>
     /// <param name="identity">Repository, workspace or user identity.</param>
@@ -38,13 +44,15 @@ public sealed class ApplicationStore : IApplicationState
             var legacy = Path.Combine(Path.GetDirectoryName(root)!, "v2");
             var marker = Path.Combine(root, ".imported-v2");
             var oldSettings = Path.Combine(Path.GetDirectoryName(root)!, "settings.json");
-            if (File.Exists(marker) || Path.GetFileName(root) != "v3" || (!Directory.Exists(legacy) && !File.Exists(oldSettings))) return;
+            if (File.Exists(marker) || Path.GetFileName(root) != "v3" || (!Directory.Exists(legacy) && !File.Exists(oldSettings)))
+                return;
             Directory.CreateDirectory(root);
             foreach (var file in Directory.Exists(legacy) ? Directory.EnumerateFiles(legacy, "*.json", SearchOption.AllDirectories) : [])
             {
                 var target = Path.Combine(root, Path.GetRelativePath(legacy, file));
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                if (!File.Exists(target)) File.Copy(file, target, false);
+                if (!File.Exists(target))
+                    File.Copy(file, target, false);
             }
             var settingsTarget = Path.Combine(root, "settings", "settings.json");
             if (File.Exists(oldSettings) && !File.Exists(settingsTarget))
@@ -63,7 +71,8 @@ public sealed class ApplicationStore : IApplicationState
     {
         await Task.CompletedTask;
         var result = Store<T>(kind).Read(identity);
-        if (result.IsFailed) LastProblem = result.Problem!.Message;
+        if (result.IsFailed)
+            LastProblem = result.Problem!.Message;
         return result.Value;
     }
 
@@ -75,7 +84,11 @@ public sealed class ApplicationStore : IApplicationState
         try
         {
             var result = await Store<T>(kind).WriteAsync(identity, value, ct);
-            if (result.IsFailed) { LastProblem = result.Problem!.Message; result.OrThrow(); }
+            if (result.IsFailed)
+            {
+                LastProblem = result.Problem!.Message;
+                result.OrThrow();
+            }
         }
         finally { _gate.Release(); }
     }
@@ -84,7 +97,8 @@ public sealed class ApplicationStore : IApplicationState
     {
         ct.ThrowIfCancellationRequested();
         var result = Store<T>(kind).Read(identity);
-        if (result.IsFailed) LastProblem = result.Problem!.Message;
+        if (result.IsFailed)
+            LastProblem = result.Problem!.Message;
         return Task.FromResult(result);
     }
     async Task<Result<Unit>> IApplicationState.WriteAsync<T>(string kind, string identity, T value, CancellationToken ct)
@@ -93,7 +107,8 @@ public sealed class ApplicationStore : IApplicationState
         try
         {
             var result = await Store<T>(kind).WriteAsync(identity, value, ct);
-            if (result.IsFailed) LastProblem = result.Problem!.Message;
+            if (result.IsFailed)
+                LastProblem = result.Problem!.Message;
             return result;
         }
         finally { _gate.Release(); }

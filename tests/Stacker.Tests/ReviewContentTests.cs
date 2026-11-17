@@ -12,7 +12,8 @@ public sealed class ReviewContentTests
         var blocks = ReviewContent.Parse("Explain why\n```suggestion\n    return true;\n```\nThen remove this\n```suggestion\n```\nAfter");
         Assert.Equal(5, blocks.Count);
         Assert.Equal("Explain why", blocks[0].Text);
-        Assert.Equal("    return true;", blocks[1].Text); Assert.True(blocks[1].IsSuggestion);
+        Assert.Equal("    return true;", blocks[1].Text);
+        Assert.True(blocks[1].IsSuggestion);
         Assert.Equal("Then remove this", blocks[2].Text);
         Assert.True(blocks[3].IsDeletion);
         Assert.Equal("After", blocks[4].Text);
@@ -26,14 +27,17 @@ public sealed class ReviewContentTests
     public void Ordinary_code_examples_and_incomplete_fences_stay_plain_text(string body)
     {
         var block = Assert.Single(ReviewContent.Parse(body));
-        Assert.False(block.IsSuggestion); Assert.Equal(body, block.Text);
+        Assert.False(block.IsSuggestion);
+        Assert.Equal(body, block.Text);
     }
     [Fact]
     /// <summary>Parses GitLab offsets and CRLF text without changing replacement content.</summary>
     public void GitLab_offsets_and_CRLF_are_recognized_without_losing_code()
     {
         var block = Assert.Single(ReviewContent.Parse("```suggestion:-2+3\r\n  replacement\r\n```"));
-        Assert.True(block.IsSuggestion); Assert.Equal(2, block.LinesAbove); Assert.Equal(3, block.LinesBelow);
+        Assert.True(block.IsSuggestion);
+        Assert.Equal(2, block.LinesAbove);
+        Assert.Equal(3, block.LinesBelow);
         Assert.Equal("  replacement", block.Text);
     }
     [Theory]
@@ -45,7 +49,8 @@ public sealed class ReviewContentTests
     public void Generated_suggestions_round_trip_with_backticks_and_deletion(string code)
     {
         var block = Assert.Single(ReviewContent.Parse(ReviewContent.Suggestion(code)));
-        Assert.True(block.IsSuggestion); Assert.Equal(code, block.Text);
+        Assert.True(block.IsSuggestion);
+        Assert.Equal(code, block.Text);
     }
     [Fact]
     /// <summary>Uses RIGHT anchors for context and LEFT anchors for deleted lines.</summary>
@@ -54,7 +59,8 @@ public sealed class ReviewContentTests
         var pr = DiscoveryTests.Pr(1, "main", "feature");
         var context = new DiffLine(DiffLineKind.Context, 10, 12, " same");
         Assert.True(ReviewSelection.TryCreateAnchor(pr, "a.cs", [context], null, out var anchor, out _));
-        Assert.Equal("RIGHT", anchor!.Side); Assert.Equal(12, anchor.Line);
+        Assert.Equal("RIGHT", anchor!.Side);
+        Assert.Equal(12, anchor.Line);
         Assert.False(ReviewSelection.TryCreateAnchor(pr, "a.cs", [context], "LEFT", out _, out _));
         Assert.True(ReviewSelection.TryCreateAnchor(pr, "a.cs", [new(DiffLineKind.Removed, 10, null, "-old")], null, out anchor, out _));
         Assert.Equal("LEFT", anchor!.Side);

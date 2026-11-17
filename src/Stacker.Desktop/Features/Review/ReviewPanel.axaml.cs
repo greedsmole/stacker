@@ -9,11 +9,23 @@ public partial class ReviewPanel : UserControl
 {
     public ReviewPanel() => InitializeComponent();
     private void TabChanged(object? sender, SelectionChangedEventArgs e)
-    { if (ReferenceEquals(sender, e.Source) && DataContext is ReviewViewModel vm && vm.PanelTab == 0) vm.BeginPrComment(); }
+    {
+        if (ReferenceEquals(sender, e.Source) && DataContext is ReviewViewModel vm && vm.PanelTab == 0)
+            vm.BeginPrComment();
+    }
     private void EditDraftClick(object? sender, RoutedEventArgs e)
-    { if (sender is Control { DataContext: DraftComment draft } && DataContext is ReviewViewModel vm) vm.EditDraftCommentCommand.Execute(draft); }
+    {
+        if (sender is Control { DataContext: DraftComment draft } && DataContext is ReviewViewModel vm)
+            vm.EditDraftCommentCommand.Execute(draft);
+    }
     private void ReanchorClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () =>
-    { if (sender is Control { DataContext: DraftComment draft } && DataContext is ReviewViewModel vm) await vm.ProposeReanchorAsync(draft); }, message => AsyncHandler.Report(this, message));
+    {
+        if (sender is Control { DataContext: DraftComment draft } && DataContext is ReviewViewModel vm)
+            await vm.ProposeReanchorAsync(draft);
+    }, message => AsyncHandler.Report(this, message));
     private void RemoveDraftClick(object? sender, RoutedEventArgs e)
-    { if (sender is Control { DataContext: DraftComment draft } && DataContext is ReviewViewModel vm) vm.RemoveDraftCommentCommand.Execute(draft); }
+    {
+        if (sender is Control { DataContext: DraftComment draft } && DataContext is ReviewViewModel vm)
+            vm.RemoveDraftCommentCommand.Execute(draft);
+    }
 }

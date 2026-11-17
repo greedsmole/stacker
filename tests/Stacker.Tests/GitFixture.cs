@@ -10,13 +10,27 @@ public sealed class GitFixture : IAsyncDisposable
     public string Root { get; } = Path.Combine(Path.GetTempPath(), "Stacker tests ü " + Guid.NewGuid().ToString("N"));
     public RepositoryIdentity Identity => new(new(StableIdentity.For(Path.Combine(Root, ".git"))[..32]), new(StableIdentity.For(Root)[..32]), Root, Path.Combine(Root, ".git"));
     public ProcessRunner Runner { get; } = new();
-    public GitRepositoryReader Reader { get; }
+    public GitRepositoryReader Reader
+    {
+        get;
+    }
     /// <summary>Local bare repository used as origin so push tests never touch the network.</summary>
-    public string? RemoteRoot { get; private set; }
+    public string? RemoteRoot
+    {
+        get; private set;
+    }
     private readonly List<string> _worktrees = [];
     private static readonly Dictionary<string, string> IsolatedEnvironment = new()
-    { ["GIT_CONFIG_NOSYSTEM"] = "1", ["GIT_CONFIG_GLOBAL"] = Stacker.Infrastructure.Framework.Neutral.EmptyConfigFile, ["GIT_TERMINAL_PROMPT"] = "0" };
-    public GitFixture() { Directory.CreateDirectory(Root); Reader = new(Runner, new()); }
+    {
+        ["GIT_CONFIG_NOSYSTEM"] = "1",
+        ["GIT_CONFIG_GLOBAL"] = Stacker.Infrastructure.Framework.Neutral.EmptyConfigFile,
+        ["GIT_TERMINAL_PROMPT"] = "0"
+    };
+    public GitFixture()
+    {
+        Directory.CreateDirectory(Root);
+        Reader = new(Runner, new());
+    }
     public async Task<string> Git(params string[] args)
     {
         var result = await Runner.RunAsync(new(new GitExecutable().Resolve(), args, Root, Environment: IsolatedEnvironment));
@@ -53,38 +67,68 @@ public sealed class GitFixture : IAsyncDisposable
     public Task MoveRemote(string reference, string sha) => GitAt(RemoteRoot!, "update-ref", reference, sha);
     public async Task Init()
     {
-        await Git("init", "-b", "main"); await Git("config", "user.email", "test@example.invalid"); await Git("config", "user.name", "Stacker tests");
+        await Git("init", "-b", "main");
+        await Git("config", "user.email", "test@example.invalid");
+        await Git("config", "user.name", "Stacker tests");
         await Git("config", "core.autocrlf", "false");
-        await Write("base.txt", "base\n"); await Commit("base");
+        await Write("base.txt", "base\n");
+        await Commit("base");
     }
-    public async Task Write(string path, string text) { var full = Path.Combine(Root, path); Directory.CreateDirectory(Path.GetDirectoryName(full)!); await File.WriteAllTextAsync(full, text); }
-    public async Task Commit(string message) { await Git("add", "--all"); await Git("commit", "-m", message); }
+    public async Task Write(string path, string text)
+    {
+        var full = Path.Combine(Root, path);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        await File.WriteAllTextAsync(full, text);
+    }
+    public async Task Commit(string message)
+    {
+        await Git("add", "--all");
+        await Git("commit", "-m", message);
+    }
     public async Task Linear()
     {
         await Init();
-        foreach (var branch in new[] { "A", "B", "C" }) { await Git("checkout", "-b", branch); await Write(branch + ".txt", branch + "\n"); await Commit(branch); }
+        foreach (var branch in new[] { "A", "B", "C" })
+        {
+            await Git("checkout", "-b", branch);
+            await Write(branch + ".txt", branch + "\n");
+            await Commit(branch);
+        }
     }
     public StackDefinition Stack => new("test", "Test", "refs/heads/main", ["refs/heads/A", "refs/heads/B", "refs/heads/C"]);
     public async Task<string> AddWorktree()
     {
-        var path = Root + " worktree"; await Git("worktree", "add", "--detach", path); _worktrees.Add(path); return path;
+        var path = Root + " worktree";
+        await Git("worktree", "add", "--detach", path);
+        _worktrees.Add(path);
+        return path;
     }
     public async ValueTask DisposeAsync()
     {
-        foreach (var path in _worktrees) { await Git("worktree", "remove", "--force", path); }
+        foreach (var path in _worktrees)
+        {
+            await Git("worktree", "remove", "--force", path);
+        }
         // Cancelled ViewModel loads release their process working directories asynchronously.
         for (var attempt = 0; ; attempt++)
         {
-            try { DeleteDirectory(Root); break; }
+            try
+            {
+                DeleteDirectory(Root);
+                break;
+            }
             catch (IOException) when (OperatingSystem.IsWindows() && attempt < 20) { await Task.Delay(100); }
         }
-        if (RemoteRoot is not null) DeleteDirectory(RemoteRoot);
+        if (RemoteRoot is not null)
+            DeleteDirectory(RemoteRoot);
     }
     public static void DeleteDirectory(string path)
     {
-        if (!Directory.Exists(path)) return;
+        if (!Directory.Exists(path))
+            return;
         // Git marks object files read-only, including in bare remotes and demo repositories.
-        foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)) File.SetAttributes(file, FileAttributes.Normal);
+        foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+            File.SetAttributes(file, FileAttributes.Normal);
         Directory.Delete(path, true);
     }
 }

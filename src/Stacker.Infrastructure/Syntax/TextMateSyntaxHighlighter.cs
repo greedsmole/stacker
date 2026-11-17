@@ -1,8 +1,8 @@
-using Stacker.Core.Framework;
 // Purpose: Optional TextMate tokenization for source blobs; caches bounded results and falls back to plain text on unsupported input.
 using System.Diagnostics;
 using System.Text;
 using Stacker.Core;
+using Stacker.Core.Framework;
 using TextMateSharp.Grammars;
 using TextMateSharp.Registry;
 namespace Stacker.Infrastructure;
@@ -23,25 +23,31 @@ public sealed class TextMateSyntaxHighlighter : ISyntaxHighlighter
     public async Task<IReadOnlyDictionary<int, IReadOnlyList<SyntaxSpan>>> HighlightAsync(string blobId, string path, string text, string theme, CancellationToken ct = default)
     {
         var extension = Path.GetExtension(path).ToLowerInvariant();
-        if (!Extensions.Contains(extension) || Encoding.UTF8.GetByteCount(text) > 2 * 1024 * 1024 || text.Count(c => c == '\n') > 50_000) return new Dictionary<int, IReadOnlyList<SyntaxSpan>>();
-        if (extension is ".axaml" or ".csproj") extension = ".xml";
+        if (!Extensions.Contains(extension) || Encoding.UTF8.GetByteCount(text) > 2 * 1024 * 1024 || text.Count(c => c == '\n') > 50_000)
+            return new Dictionary<int, IReadOnlyList<SyntaxSpan>>();
+        if (extension is ".axaml" or ".csproj")
+            extension = ".xml";
         var key = blobId + "|" + extension + "|" + theme;
         await _gate.WaitAsync(ct);
         try
         {
-            if (_cache.TryGetValue(key, out var cached)) return cached;
+            if (_cache.TryGetValue(key, out var cached))
+                return cached;
             var result = await Task.Run<IReadOnlyDictionary<int, IReadOnlyList<SyntaxSpan>>>(() =>
             {
                 var output = new Dictionary<int, IReadOnlyList<SyntaxSpan>>();
                 if (!_registries.TryGetValue(theme, out var registry))
                 {
                     var options = new RegistryOptions(theme == "Light" ? ThemeName.LightPlus : ThemeName.DarkPlus);
-                    registry = (options, new Registry(options)); _registries[theme] = registry;
+                    registry = (options, new Registry(options));
+                    _registries[theme] = registry;
                 }
                 var language = registry.Options.GetLanguageByExtension(extension);
-                if (language is null) return output;
+                if (language is null)
+                    return output;
                 var grammar = registry.Registry.LoadGrammar(registry.Options.GetScopeByLanguageId(language.Id));
-                if (grammar is null) return output;
+                if (grammar is null)
+                    return output;
                 // Tokenizing an empty line yields the initial rule stack that the first real line continues from.
                 var state = grammar.TokenizeLine("", null, TimeSpan.FromMilliseconds(100)).RuleStack;
                 var palette = registry.Registry.GetTheme();
@@ -50,18 +56,27 @@ public sealed class TextMateSyntaxHighlighter : ISyntaxHighlighter
                 for (var index = 0; index < lines.Length; index++)
                 {
                     ct.ThrowIfCancellationRequested();
-                    if (watch.Elapsed > TimeSpan.FromSeconds(2)) return new Dictionary<int, IReadOnlyList<SyntaxSpan>>();
-                    var line = lines[index]; var lineWatch = Stopwatch.StartNew();
-                    var tokenized = grammar.TokenizeLine(line, state, TimeSpan.FromMilliseconds(100)); state = tokenized.RuleStack;
-                    if (lineWatch.Elapsed > TimeSpan.FromMilliseconds(150)) return new Dictionary<int, IReadOnlyList<SyntaxSpan>>();
+                    if (watch.Elapsed > TimeSpan.FromSeconds(2))
+                        return new Dictionary<int, IReadOnlyList<SyntaxSpan>>();
+                    var line = lines[index];
+                    var lineWatch = Stopwatch.StartNew();
+                    var tokenized = grammar.TokenizeLine(line, state, TimeSpan.FromMilliseconds(100));
+                    state = tokenized.RuleStack;
+                    if (lineWatch.Elapsed > TimeSpan.FromMilliseconds(150))
+                        return new Dictionary<int, IReadOnlyList<SyntaxSpan>>();
                     var spans = new List<SyntaxSpan>();
                     foreach (var token in tokenized.Tokens)
                     {
-                        var start = Math.Clamp(token.StartIndex, 0, line.Length); var end = Math.Clamp(token.EndIndex, start, line.Length);
+                        var start = Math.Clamp(token.StartIndex, 0, line.Length);
+                        var end = Math.Clamp(token.EndIndex, start, line.Length);
                         foreach (var rule in palette.Match(token.Scopes))
                         {
                             var color = palette.GetColor(rule.foreground);
-                            if (end > start && !string.IsNullOrEmpty(color)) { spans.Add(new(start, end - start, color)); break; }
+                            if (end > start && !string.IsNullOrEmpty(color))
+                            {
+                                spans.Add(new(start, end - start, color));
+                                break;
+                            }
                         }
                     }
                     output[index + 1] = spans;
@@ -76,9 +91,12 @@ public sealed class TextMateSyntaxHighlighter : ISyntaxHighlighter
                 {
                     while (_cache.Count >= 24 || _cacheBytes + size > MaxCacheBytes)
                     {
-                        var oldest = _cache.Keys.First(); _cacheBytes -= Size(_cache[oldest]); _cache.Remove(oldest);
+                        var oldest = _cache.Keys.First();
+                        _cacheBytes -= Size(_cache[oldest]);
+                        _cache.Remove(oldest);
                     }
-                    _cache[key] = result; _cacheBytes += size;
+                    _cache[key] = result;
+                    _cacheBytes += size;
                 }
             }
             return result;

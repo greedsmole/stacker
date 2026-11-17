@@ -1,6 +1,6 @@
+using System.Collections.ObjectModel;
 using Stacker.Core;
 using Stacker.Core.Framework;
-using System.Collections.ObjectModel;
 namespace Stacker.Desktop.ViewModels;
 
 internal sealed partial class WorkspaceRuntime
@@ -14,7 +14,16 @@ internal sealed partial class WorkspaceRuntime
     internal SemaphoreSlim _syncGate = new(1, 1);
     internal string? _displayedStateKey = default!;
     internal bool _applyingChanges = default!;
-    internal GitHubSnapshot? _pendingRemote { get => Session.Pending?.Remote; set { if (value is null) Session.DiscardPending(); else Session.Offer(value, _historyRemoteGraph); } }
+    internal GitHubSnapshot? _pendingRemote
+    {
+        get => Session.Pending?.Remote; set
+        {
+            if (value is null)
+                Session.DiscardPending();
+            else
+                Session.Offer(value, _historyRemoteGraph);
+        }
+    }
     internal bool _pendingLocal = default!;
     internal RefreshCoordinator? _coordinator = default!;
     internal bool _windowActive = default!;

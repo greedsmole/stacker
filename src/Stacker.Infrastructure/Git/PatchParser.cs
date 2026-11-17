@@ -42,12 +42,14 @@ public static partial class PatchParser
         var lines = new List<DiffLine>();
         var hunks = new List<DiffHunk>();
         List<DiffLine>? current = null;
-        var oldLine = 0; var newLine = 0;
+        var oldLine = 0;
+        var newLine = 0;
         var textLines = patch.Split('\n');
         for (var i = 0; i < textLines.Length; i++)
         {
             var text = textLines[i];
-            if (i == textLines.Length - 1 && text.Length == 0) break;
+            if (i == textLines.Length - 1 && text.Length == 0)
+                break;
             var match = HunkHeader().Match(text);
             DiffLine line;
             if (match.Success)
@@ -58,12 +60,17 @@ public static partial class PatchParser
                 hunks.Add(new(text, current, oldLine, match.Groups[2].Success ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : 1, newLine, match.Groups[4].Success ? int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture) : 1, match.Groups[5].Value.Trim()));
                 line = new(DiffLineKind.Header, null, null, text);
             }
-            else if (current is not null && text.StartsWith('+')) line = new(DiffLineKind.Added, null, newLine++, text);
-            else if (current is not null && text.StartsWith('-')) line = new(DiffLineKind.Removed, oldLine++, null, text);
-            else if (current is not null && text.StartsWith(' ')) line = new(DiffLineKind.Context, oldLine++, newLine++, text);
-            else line = new(DiffLineKind.Notice, null, null, text);
+            else if (current is not null && text.StartsWith('+'))
+                line = new(DiffLineKind.Added, null, newLine++, text);
+            else if (current is not null && text.StartsWith('-'))
+                line = new(DiffLineKind.Removed, oldLine++, null, text);
+            else if (current is not null && text.StartsWith(' '))
+                line = new(DiffLineKind.Context, oldLine++, newLine++, text);
+            else
+                line = new(DiffLineKind.Notice, null, null, text);
             lines.Add(line);
-            if (line.Kind != DiffLineKind.Header) current?.Add(line);
+            if (line.Kind != DiffLineKind.Header)
+                current?.Add(line);
         }
         return new(file, patch, hunks, lines);
     }

@@ -39,10 +39,12 @@ public static class WorkingTreeParser
         for (var index = 0; index < fields.Length; index++)
         {
             var field = fields[index];
-            if (field.Length < 3) continue;
+            if (field.Length < 3)
+                continue;
             var staged = field[0];
             var worktree = field[1];
-            if (staged is 'R' or 'C' || worktree is 'R' or 'C') index++;
+            if (staged is 'R' or 'C' || worktree is 'R' or 'C')
+                index++;
             var code = new string([staged, worktree]);
             var conflicted = Unmerged.Contains(code);
             var untracked = staged == '?' && worktree == '?';

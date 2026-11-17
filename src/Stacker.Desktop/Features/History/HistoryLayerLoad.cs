@@ -4,7 +4,6 @@ namespace Stacker.Desktop.ViewModels;
 
 public sealed partial class HistoryWorkspaceViewModel
 {
-    private sealed record LayerLoad(int Generation, CancellationTokenSource Cancellation);
 
     private LayerLoad? _layerLoad;
     private bool _executingCommand;
@@ -22,7 +21,10 @@ public sealed partial class HistoryWorkspaceViewModel
         // Resetting the selection must not navigate the main comparison.
         var wasLoading = _loadingSelection;
         _loadingSelection = true;
-        try { SelectedFile = null; }
+        try
+        {
+            SelectedFile = null;
+        }
         finally { _loadingSelection = wasLoading; }
         PreviousVersion = null;
         Files.Clear();
@@ -39,12 +41,14 @@ public sealed partial class HistoryWorkspaceViewModel
 
     internal async Task LoadCurrentDiffAsync(string? filePath = null)
     {
-        if (await LoadLayerDataAsync(filePath) && CanShowCurrent) await ShowCurrentAsync();
+        if (await LoadLayerDataAsync(filePath) && CanShowCurrent)
+            await ShowCurrentAsync();
     }
 
     private async Task<bool> LoadLayerDataAsync(string? filePath = null)
     {
-        if (_disposed || SelectedNode is not { } node) return false;
+        if (_disposed || SelectedNode is not { } node)
+            return false;
         filePath ??= SelectedFile?.Change.NewPath;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         var previous = _layerLoad;
@@ -59,29 +63,35 @@ public sealed partial class HistoryWorkspaceViewModel
             var current = _path.First(p => p.Node.Id == node.Id).Version;
             var files = (await _git.FilesAsync(_root, current.MergeBase!, current.HeadSha, token)).OrThrow();
             var status = await _progress.StatusAsync(_repository, Graph.Scope, current, files, token);
-            if (!OwnsLoad(load)) return false;
+            if (!OwnsLoad(load))
+                return false;
             var wasLoading = _loadingSelection;
             _loadingSelection = true;
             try
             {
                 _current = current;
                 Versions.Clear();
-                foreach (var version in versions.Where(v => v.Id != current.Id).Reverse()) Versions.Add(version);
+                foreach (var version in versions.Where(v => v.Id != current.Id).Reverse())
+                    Versions.Add(version);
                 PreviousVersion = Versions.FirstOrDefault();
                 Files.Clear();
-                foreach (var file in status) Files.Add(file);
+                foreach (var file in status)
+                    Files.Add(file);
                 SelectedFile = Files.FirstOrDefault(file => file.Change.NewPath == filePath) ?? Files.FirstOrDefault();
             }
             finally { _loadingSelection = wasLoading; }
-            if (SelectionChanged is not null) await SyncSelectionAsync(node, SelectedFile?.Change);
-            if (!OwnsLoad(load)) return false;
+            if (SelectionChanged is not null)
+                await SyncSelectionAsync(node, SelectedFile?.Change);
+            if (!OwnsLoad(load))
+                return false;
             Message = $"{status.Count(f => f.State == FileReviewState.Reviewed)}/{status.Count} files reviewed on this layer.";
             return true;
         }
         catch (OperationCanceledException) { return false; }
         catch (Exception ex)
         {
-            if (OwnsLoad(load)) Message = ex.Message;
+            if (OwnsLoad(load))
+                Message = ex.Message;
             return false;
         }
         finally

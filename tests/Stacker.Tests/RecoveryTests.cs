@@ -5,74 +5,22 @@ using Stacker.Infrastructure;
 using Stacker.Infrastructure.Framework;
 namespace Stacker.Tests;
 
-public sealed class RecoveryTests
+public sealed partial class RecoveryTests
 {
-    /// <summary>A journal that fails one step, standing in for any error between an effect and its record.</summary>
-    private sealed class FaultyJournal(IJournal inner, int failOnStep = 0, JournalPhase? failAfterClose = null,
-        JournalPhase? failBeforeClose = null) : IJournal
-    {
-        private int _steps;
-        private bool _failedClose;
-        public Task<JournalEntry> OpenAsync(string repository, string kind, IReadOnlyList<JournalStep> planned, CancellationToken ct = default) => Boundary.UnwrapAsync(inner.OpenAsync(repository, kind, planned, ct));
-        public Task<JournalEntry> StepAsync(JournalEntry entry, JournalStep step, CancellationToken ct = default)
-        {
-            _steps++;
-            if (_steps == failOnStep) throw new InvalidOperationException("injected journal failure");
-            return Boundary.UnwrapAsync(inner.StepAsync(entry, step, ct));
-        }
-        public async Task<JournalEntry> CloseAsync(JournalEntry entry, JournalPhase phase, string? stashRef = null, string? pendingStepId = null, string? message = null, CancellationToken ct = default)
-        {
-            if (!_failedClose && entry.Kind == "restack" && phase == failBeforeClose)
-            {
-                _failedClose = true;
-                throw new InvalidOperationException("injected close write failure");
-            }
-            var saved = (await inner.CloseAsync(entry, phase, stashRef, pendingStepId, message, ct)).OrThrow();
-            if (entry.Kind == "restack" && phase == failAfterClose) throw new InvalidOperationException("injected close acknowledgement loss");
-            return saved;
-        }
-        public Task<JournalEntry> SetStashAsync(JournalEntry entry, string? stashRef, CancellationToken ct = default) => Boundary.UnwrapAsync(inner.SetStashAsync(entry, stashRef, ct));
-        public Task<JournalEntry?> ActiveAsync(string repository, CancellationToken ct = default) => Boundary.UnwrapAsync(inner.ActiveAsync(repository, ct));
-        public Task<JournalEntry?> UndoableAsync(string repository, CancellationToken ct = default) => Boundary.UnwrapAsync(inner.UndoableAsync(repository, ct));
-        public Task<JournalEntry?> ByIdAsync(string repository, string id, CancellationToken ct = default) => Boundary.UnwrapAsync(inner.ByIdAsync(repository, id, ct));
-        public IReadOnlyList<JournalEntry> Recent(string repository, int count = 20) => (inner.Recent(repository, count)).OrThrow();
-
-        Task<Result<JournalEntry>> IJournal.OpenAsync(string repository, string kind, IReadOnlyList<JournalStep> planned, CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(repository, kind, planned, ct), ProblemCodes.StoreWrite);
-
-        Task<Result<JournalEntry>> IJournal.StepAsync(JournalEntry entry, JournalStep step, CancellationToken ct) => Boundary.CaptureAsync(() => StepAsync(entry, step, ct), ProblemCodes.StoreWrite);
-
-        Task<Result<JournalEntry>> IJournal.CloseAsync(JournalEntry entry, JournalPhase phase, string? stashRef, string? pendingStepId, string? message, CancellationToken ct) => Boundary.CaptureAsync(() => CloseAsync(entry, phase, stashRef, pendingStepId, message, ct), ProblemCodes.StoreWrite);
-
-        Task<Result<JournalEntry>> IJournal.SetStashAsync(JournalEntry entry, string? stashRef, CancellationToken ct) => Boundary.CaptureAsync(() => SetStashAsync(entry, stashRef, ct), ProblemCodes.StoreWrite);
-
-        Task<Result<JournalEntry?>> IJournal.ActiveAsync(string repository, CancellationToken ct) => Boundary.CaptureAsync(() => ActiveAsync(repository, ct), ProblemCodes.StoreWrite);
-
-        Task<Result<JournalEntry?>> IJournal.UndoableAsync(string repository, CancellationToken ct) => Boundary.CaptureAsync(() => UndoableAsync(repository, ct), ProblemCodes.StoreWrite);
-
-        Task<Result<JournalEntry?>> IJournal.ByIdAsync(string repository, string id, CancellationToken ct) => Boundary.CaptureAsync(() => ByIdAsync(repository, id, ct), ProblemCodes.StoreWrite);
-
-        Result<IReadOnlyList<JournalEntry>> IJournal.Recent(string repository, int count) => Boundary.Capture(() => Recent(repository, count), ProblemCodes.StoreWrite);
-    }
-
-    private sealed class InterceptedRunner(IProcessRunner inner, Action<ProcessRequest, CancellationToken> intercept,
-        Action<ProcessRequest, Result<ProcessResult>>? after = null) : IProcessRunner
-    {
-        public async Task<Result<ProcessResult>> RunAsync(ProcessRequest request, CancellationToken ct = default)
-        {
-            intercept(request, ct);
-            var result = await inner.RunAsync(request, ct);
-            after?.Invoke(request, result);
-            return result;
-        }
-    }
 
     /// <summary>main ← A ← B where main and A both touch conflict.txt, so A conflicts on the replay.</summary>
     private static async Task<StackDefinition> Conflicting(GitFixture f)
     {
         await f.Init();
-        await f.Git("checkout", "-b", "A"); await f.Write("conflict.txt", "A\n"); await f.Commit("A");
-        await f.Git("checkout", "-b", "B"); await f.Write("B.txt", "B\n"); await f.Commit("B");
-        await f.Git("checkout", "main"); await f.Write("conflict.txt", "main\n"); await f.Commit("main moved");
+        await f.Git("checkout", "-b", "A");
+        await f.Write("conflict.txt", "A\n");
+        await f.Commit("A");
+        await f.Git("checkout", "-b", "B");
+        await f.Write("B.txt", "B\n");
+        await f.Commit("B");
+        await f.Git("checkout", "main");
+        await f.Write("conflict.txt", "main\n");
+        await f.Commit("main moved");
         return new("t", "T", "refs/heads/main", ["refs/heads/A", "refs/heads/B"]);
     }
 
@@ -84,7 +32,8 @@ public sealed class RecoveryTests
         var stack = await Conflicting(f);
         var writer = f.Writer();
         var root = await f.ResolvedRoot();
-        var oldA = await f.Git("rev-parse", "A"); var oldB = await f.Git("rev-parse", "B");
+        var oldA = await f.Git("rev-parse", "A");
+        var oldB = await f.Git("rev-parse", "B");
         var outcome = await writer.RestackAsync(await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), stack));
         Assert.True(outcome.Conflicted, outcome.Message);
         Assert.True((await writer.ContinueAsync(root, "true")).Conflicted);
@@ -112,8 +61,11 @@ public sealed class RecoveryTests
     [Fact]
     public async Task A_stash_never_hides_undo()
     {
-        await using var f = new GitFixture(); await f.Linear();
-        await f.Git("checkout", "main"); await f.Write("main2.txt", "moved\n"); await f.Commit("base moved");
+        await using var f = new GitFixture();
+        await f.Linear();
+        await f.Git("checkout", "main");
+        await f.Write("main2.txt", "moved\n");
+        await f.Commit("base moved");
         var writer = f.Writer();
         var root = await f.ResolvedRoot();
         var oldA = await f.Git("rev-parse", "A");
@@ -122,7 +74,9 @@ public sealed class RecoveryTests
         var stash = await writer.StashAsync(root, "Stacker: before the next restack");
         Assert.NotNull(stash);
         var entry = await writer.LastJournalAsync(root);
-        Assert.NotNull(entry); Assert.True(entry!.CanUndo); Assert.Equal(stash, entry.StashRef);
+        Assert.NotNull(entry);
+        Assert.True(entry!.CanUndo);
+        Assert.Equal(stash, entry.StashRef);
         var undone = await writer.UndoLastAsync(root);
         Assert.True(undone.RolledBack, undone.Message);
         Assert.Equal(oldA, await f.Git("rev-parse", "A"));
@@ -134,15 +88,20 @@ public sealed class RecoveryTests
     [Fact]
     public async Task A_failure_mid_cascade_restores_every_branch()
     {
-        await using var f = new GitFixture(); await f.Linear();
+        await using var f = new GitFixture();
+        await f.Linear();
         var journal = f.CreateJournal();
         var writer = new LocalGitClient(f.Runner, new GitExecutable(), f.Reader, new FaultyJournal(journal, failOnStep: 2), new SystemClock());
-        await f.Git("checkout", "main"); await f.Write("main2.txt", "moved\n"); await f.Commit("base moved");
+        await f.Git("checkout", "main");
+        await f.Write("main2.txt", "moved\n");
+        await f.Commit("base moved");
         var before = new Dictionary<string, string>();
-        foreach (var branch in new[] { "A", "B", "C" }) before[branch] = await f.Git("rev-parse", branch);
+        foreach (var branch in new[] { "A", "B", "C" })
+            before[branch] = await f.Git("rev-parse", branch);
         var outcome = await writer.RestackAsync(await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack));
         Assert.True(outcome.RolledBack, outcome.Message);
-        foreach (var branch in new[] { "A", "B", "C" }) Assert.Equal(before[branch], await f.Git("rev-parse", branch));
+        foreach (var branch in new[] { "A", "B", "C" })
+            Assert.Equal(before[branch], await f.Git("rev-parse", branch));
         Assert.Equal("main", await f.Git("branch", "--show-current"));
         Assert.Empty((await f.Git("status", "--porcelain")).Trim());
         var root = await f.ResolvedRoot();
@@ -154,7 +113,8 @@ public sealed class RecoveryTests
     [Fact]
     public async Task A_running_entry_from_a_crash_is_recoverable()
     {
-        await using var f = new GitFixture(); await f.Linear();
+        await using var f = new GitFixture();
+        await f.Linear();
         var journal = f.CreateJournal();
         var writer = new LocalGitClient(f.Runner, new GitExecutable(), f.Reader, journal, new SystemClock());
         var root = await f.ResolvedRoot();
@@ -163,13 +123,18 @@ public sealed class RecoveryTests
         var entry = (await journal.OpenAsync(root, "restack",
             [new JournalStep("original", "original", "main", "main", null, StepState.Planned),
              new JournalStep("layer:0", "rebase", "refs/heads/A", oldA, null, StepState.Planned)])).OrThrow();
-        (await journal.StepAsync(entry, entry.Steps[1] with { State = StepState.Started })).OrThrow();
-        await f.Git("checkout", "A"); await f.Git("commit", "--amend", "-m", "A rewritten");
+        (await journal.StepAsync(entry, entry.Steps[1] with
+        {
+            State = StepState.Started
+        })).OrThrow();
+        await f.Git("checkout", "A");
+        await f.Git("commit", "--amend", "-m", "A rewritten");
         var moved = await f.Git("rev-parse", "A");
         (await journal.StepAsync(entry, entry.Steps[1].Finished(oldA, moved, StepState.Done))).OrThrow();
         Assert.NotEqual(oldA, moved);
         var active = await writer.ActiveJournalAsync(root);
-        Assert.NotNull(active); Assert.True(active!.NeedsAttention);
+        Assert.NotNull(active);
+        Assert.True(active!.NeedsAttention);
         var aborted = await writer.AbortAsync(root);
         Assert.True(aborted.RolledBack, aborted.Message);
         Assert.Equal(oldA, await f.Git("rev-parse", "A"));
@@ -189,25 +154,30 @@ public sealed class RecoveryTests
         if (!resume)
         {
             await f.Linear();
-            await f.Git("checkout", "main"); await f.Write("main2.txt", "moved\n"); await f.Commit("base moved");
+            await f.Git("checkout", "main");
+            await f.Write("main2.txt", "moved\n");
+            await f.Commit("base moved");
         }
         var originalTips = await Task.WhenAll(stack.Branches.Select(branch => f.Git("rev-parse", branch)));
         var root = await f.ResolvedRoot();
         var journal = f.CreateJournal();
         var bus = new CommandBus(new(journal));
-        var reported = new List<CommandOutcome>(); bus.Reported += reported.Add;
+        var reported = new List<CommandOutcome>();
+        bus.Reported += reported.Add;
         using var cancellation = new CancellationTokenSource();
         var armed = false;
         var runner = new InterceptedRunner(f.Runner, (request, token) =>
         {
-            if (!armed || immediatelyAfterGit || !request.Arguments.Contains("--is-ancestor")) return;
+            if (!armed || immediatelyAfterGit || !request.Arguments.Contains("--is-ancestor"))
+                return;
             armed = false;
             cancellation.Cancel();
             token.ThrowIfCancellationRequested();
         }, (request, result) =>
         {
             var action = resume ? "--continue" : "--onto";
-            if (!armed || !immediatelyAfterGit || !request.Arguments.Contains(action) || result.Value is not { ExitCode: 0 }) return;
+            if (!armed || !immediatelyAfterGit || !request.Arguments.Contains(action) || result.Value is not { ExitCode: 0 })
+                return;
             armed = false;
             cancellation.Cancel();
         });
@@ -216,7 +186,8 @@ public sealed class RecoveryTests
         if (resume)
         {
             Assert.True((await writer.RestackAsync(plan)).Conflicted);
-            await f.Write("conflict.txt", "resolved\n"); await f.Git("add", "conflict.txt");
+            await f.Write("conflict.txt", "resolved\n");
+            await f.Git("add", "conflict.txt");
         }
 
         armed = true;
@@ -236,25 +207,30 @@ public sealed class RecoveryTests
     [InlineData(true)]
     public async Task Cancelling_continue_without_an_acknowledgement_keeps_the_original_recovery_open(bool loseResponse)
     {
-        await using var f = new GitFixture(); var stack = await Conflicting(f);
+        await using var f = new GitFixture();
+        var stack = await Conflicting(f);
         using var cancellation = new CancellationTokenSource();
-        var root = await f.ResolvedRoot(); var journal = f.CreateJournal();
+        var root = await f.ResolvedRoot();
+        var journal = f.CreateJournal();
         var oldA = await f.Git("rev-parse", "A");
         var runner = new InterceptedRunner(f.Runner, (request, token) =>
         {
-            if (loseResponse || !request.Arguments.Contains("--continue")) return;
+            if (loseResponse || !request.Arguments.Contains("--continue"))
+                return;
             cancellation.Cancel();
             token.ThrowIfCancellationRequested();
         }, (request, result) =>
         {
-            if (!loseResponse || !request.Arguments.Contains("--continue") || result.Value is not { ExitCode: 0 }) return;
+            if (!loseResponse || !request.Arguments.Contains("--continue") || result.Value is not { ExitCode: 0 })
+                return;
             cancellation.Cancel();
             cancellation.Token.ThrowIfCancellationRequested();
         });
         var writer = new LocalGitClient(runner, new(), f.Reader, journal, new SystemClock());
         var conflicted = await writer.RestackAsync(await writer.PlanAsync(await f.Reader.OpenAsync(root), stack));
         Assert.True(conflicted.Conflicted);
-        await f.Write("conflict.txt", "resolved\n"); await f.Git("add", "conflict.txt");
+        await f.Write("conflict.txt", "resolved\n");
+        await f.Git("add", "conflict.txt");
 
         var outcome = await writer.ContinueAsync(root, "true", cancellation.Token);
 
@@ -281,9 +257,13 @@ public sealed class RecoveryTests
     [InlineData(true)]
     public async Task An_applied_restack_survives_failure_after_commit(bool loseCloseResponse)
     {
-        await using var f = new GitFixture(); await f.Linear();
-        await f.Git("checkout", "main"); await f.Write("main2.txt", "moved\n"); await f.Commit("base moved");
-        var root = await f.ResolvedRoot(); var oldA = await f.Git("rev-parse", "A");
+        await using var f = new GitFixture();
+        await f.Linear();
+        await f.Git("checkout", "main");
+        await f.Write("main2.txt", "moved\n");
+        await f.Commit("base moved");
+        var root = await f.ResolvedRoot();
+        var oldA = await f.Git("rev-parse", "A");
         var journal = f.CreateJournal();
         var writer = new LocalGitClient(new InterceptedRunner(f.Runner, (request, _) =>
         {
@@ -294,7 +274,8 @@ public sealed class RecoveryTests
         var outcome = await writer.RestackAsync(await writer.PlanAsync(await f.Reader.OpenAsync(root), f.Stack));
 
         Assert.True(outcome.Applied, outcome.Message);
-        if (!loseCloseResponse) Assert.Contains("could not be pruned", outcome.Message);
+        if (!loseCloseResponse)
+            Assert.Contains("could not be pruned", outcome.Message);
         Assert.NotEqual(oldA, await f.Git("rev-parse", "A"));
         Assert.Equal(JournalPhase.Applied, Assert.Single(journal.Recent(root).OrThrow()).Phase);
     }
@@ -305,16 +286,22 @@ public sealed class RecoveryTests
     [InlineData(3, StepState.Started, false)]
     public async Task A_pending_rebase_can_be_continued_and_undone_with_matching_git_state(int schema, StepState state, bool hasPendingId)
     {
-        await using var f = new GitFixture(); await Conflicting(f);
-        var root = await f.ResolvedRoot(); var oldA = await f.Git("rev-parse", "A");
+        await using var f = new GitFixture();
+        await Conflicting(f);
+        var root = await f.ResolvedRoot();
+        var oldA = await f.Git("rev-parse", "A");
         var store = new JsonStateStore<JournalLog>(new AtomicFile(), f.Root + " journal");
         var now = DateTimeOffset.UtcNow;
         var pending = new JournalEntry(schema, "pending", root, "restack", now, now, hasPendingId ? JournalPhase.NeedsUser : JournalPhase.Running,
             [new("original", "original", "main", "main", null, StepState.Planned),
              new("layer:0", "rebase", "refs/heads/A", oldA, null, state)], null, hasPendingId ? "layer:0" : null, null);
-        (await store.WriteAsync(root, new() { Entries = [pending] })).OrThrow();
+        (await store.WriteAsync(root, new()
+        {
+            Entries = [pending]
+        })).OrThrow();
         Assert.Equal(1, await f.ExitCode("rebase", "main", "A"));
-        await f.Write("conflict.txt", "resolved\n"); await f.Git("add", "conflict.txt");
+        await f.Write("conflict.txt", "resolved\n");
+        await f.Git("add", "conflict.txt");
         var writer = f.Writer();
 
         var resumed = await writer.ContinueAsync(root, "true");
@@ -330,16 +317,23 @@ public sealed class RecoveryTests
     [Fact]
     public async Task Aborting_a_native_operation_leaves_an_unrelated_unfinished_restack_available()
     {
-        await using var f = new GitFixture(); await f.Linear();
-        var root = await f.ResolvedRoot(); var journal = f.CreateJournal();
+        await using var f = new GitFixture();
+        await f.Linear();
+        var root = await f.ResolvedRoot();
+        var journal = f.CreateJournal();
         var step = new JournalStep("layer:0", "rebase", "refs/heads/A", await f.Git("rev-parse", "A"), null, StepState.Planned);
         var entry = (await journal.OpenAsync(root, "restack", [step])).OrThrow();
-        (await journal.StepAsync(entry, step with { State = StepState.Started })).OrThrow();
-        await f.Git("checkout", "A"); await f.Git("commit", "--amend", "-m", "A rewritten");
+        (await journal.StepAsync(entry, step with
+        {
+            State = StepState.Started
+        })).OrThrow();
+        await f.Git("checkout", "A");
+        await f.Git("commit", "--amend", "-m", "A rewritten");
         var rewritten = await f.Git("rev-parse", "A");
         (await journal.StepAsync(entry, step.Finished(step.OldSha, rewritten, StepState.Done))).OrThrow();
         (await journal.CloseAsync(entry, JournalPhase.NeedsUser)).OrThrow();
-        await f.Git("checkout", "main"); await f.Git("merge", "--no-commit", "--no-ff", "A");
+        await f.Git("checkout", "main");
+        await f.Git("merge", "--no-commit", "--no-ff", "A");
         var writer = f.Writer();
 
         var restore = (await ((IGitBranchWriter)writer).RestoreInterruptedRestackAsync(root, entry.Id)).OrThrow();
@@ -361,8 +355,11 @@ public sealed class RecoveryTests
     [InlineData(true)]
     public async Task Undo_recovers_if_the_close_fails_after_refs_are_restored(bool closeWasSaved)
     {
-        await using var f = new GitFixture(); await f.Linear();
-        await f.Git("checkout", "main"); await f.Write("main2.txt", "moved\n"); await f.Commit("base moved");
+        await using var f = new GitFixture();
+        await f.Linear();
+        await f.Git("checkout", "main");
+        await f.Write("main2.txt", "moved\n");
+        await f.Commit("base moved");
         var root = await f.ResolvedRoot();
         var original = await Task.WhenAll(f.Stack.Branches.Select(branch => f.Git("rev-parse", branch)));
         var journal = f.CreateJournal();
@@ -388,17 +385,27 @@ public sealed class RecoveryTests
     [Fact]
     public async Task Undo_refuses_to_restore_any_ref_when_another_rewrite_was_never_recorded()
     {
-        await using var f = new GitFixture(); await f.Linear();
-        var root = await f.ResolvedRoot(); var journal = f.CreateJournal();
+        await using var f = new GitFixture();
+        await f.Linear();
+        var root = await f.ResolvedRoot();
+        var journal = f.CreateJournal();
         var first = new JournalStep("layer:0", "rebase", "refs/heads/A", await f.Git("rev-parse", "A"), null, StepState.Planned);
         var second = new JournalStep("layer:1", "rebase", "refs/heads/B", await f.Git("rev-parse", "B"), null, StepState.Planned);
         var entry = (await journal.OpenAsync(root, "restack", [first, second])).OrThrow();
-        (await journal.StepAsync(entry, first with { State = StepState.Started })).OrThrow();
-        await f.Git("checkout", "A"); await f.Git("commit", "--amend", "-m", "rewritten A");
+        (await journal.StepAsync(entry, first with
+        {
+            State = StepState.Started
+        })).OrThrow();
+        await f.Git("checkout", "A");
+        await f.Git("commit", "--amend", "-m", "rewritten A");
         var rewrittenA = await f.Git("rev-parse", "A");
         (await journal.StepAsync(entry, first.Finished(first.OldSha, rewrittenA, StepState.Done))).OrThrow();
-        (await journal.StepAsync(entry, second with { State = StepState.Started })).OrThrow();
-        await f.Git("checkout", "B"); await f.Git("commit", "--amend", "-m", "rewritten B");
+        (await journal.StepAsync(entry, second with
+        {
+            State = StepState.Started
+        })).OrThrow();
+        await f.Git("checkout", "B");
+        await f.Git("commit", "--amend", "-m", "rewritten B");
         var rewrittenB = await f.Git("rev-parse", "B");
         var writer = f.Writer();
 
@@ -416,15 +423,24 @@ public sealed class RecoveryTests
     [InlineData(true)]
     public async Task Native_rebase_resolution_does_not_advance_an_unrelated_restack(bool skip)
     {
-        await using var f = new GitFixture(); await Conflicting(f);
-        var root = await f.ResolvedRoot(); var journal = f.CreateJournal();
+        await using var f = new GitFixture();
+        await Conflicting(f);
+        var root = await f.ResolvedRoot();
+        var journal = f.CreateJournal();
         var otherStep = new JournalStep("layer:0", "rebase", skip ? "refs/heads/A" : "refs/heads/B",
             await f.Git("rev-parse", skip ? "B" : "A"), null, StepState.Planned);
         var pending = (await journal.OpenAsync(root, "restack", [otherStep])).OrThrow();
-        (await journal.StepAsync(pending, otherStep with { State = StepState.Started })).OrThrow();
+        (await journal.StepAsync(pending, otherStep with
+        {
+            State = StepState.Started
+        })).OrThrow();
         (await journal.CloseAsync(pending, JournalPhase.NeedsUser, pendingStepId: otherStep.Id)).OrThrow();
         Assert.Equal(1, await f.ExitCode("rebase", "main", "A"));
-        if (!skip) { await f.Write("conflict.txt", "resolved\n"); await f.Git("add", "conflict.txt"); }
+        if (!skip)
+        {
+            await f.Write("conflict.txt", "resolved\n");
+            await f.Git("add", "conflict.txt");
+        }
         var writer = f.Writer();
 
         var outcome = skip ? await writer.SkipAsync(root) : await writer.ContinueAsync(root, "true");
@@ -440,16 +456,21 @@ public sealed class RecoveryTests
     [Fact]
     public async Task A_rebase_onto_a_different_commit_does_not_resume_a_saved_restack()
     {
-        await using var f = new GitFixture(); var stack = await Conflicting(f);
-        await f.Git("checkout", "-b", "other"); await f.Write("conflict.txt", "other\n"); await f.Commit("other base");
+        await using var f = new GitFixture();
+        var stack = await Conflicting(f);
+        await f.Git("checkout", "-b", "other");
+        await f.Write("conflict.txt", "other\n");
+        await f.Commit("other base");
         await f.Git("checkout", "main");
-        var root = await f.ResolvedRoot(); var writer = f.Writer();
+        var root = await f.ResolvedRoot();
+        var writer = f.Writer();
         var oldB = await f.Git("rev-parse", "B");
         var conflict = await writer.RestackAsync(await writer.PlanAsync(await f.Reader.OpenAsync(root), stack));
         Assert.True(conflict.Conflicted);
         await f.Git("rebase", "--abort");
         Assert.Equal(1, await f.ExitCode("rebase", "other", "A"));
-        await f.Write("conflict.txt", "resolved\n"); await f.Git("add", "conflict.txt");
+        await f.Write("conflict.txt", "resolved\n");
+        await f.Git("add", "conflict.txt");
 
         var outcome = await writer.ContinueAsync(root, "true");
 

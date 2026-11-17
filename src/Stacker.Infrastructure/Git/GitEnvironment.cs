@@ -25,5 +25,7 @@ internal static class GitEnvironment
     /// reintroduce a redirect through <see cref="ProcessRequest.Environment"/>. Duplicates are dropped, which keeps the list valid
     /// when the same request is hardened twice. The original record is not mutated; a new one is returned.</remarks>
     internal static ProcessRequest ForRepository(ProcessRequest request) => request with
-    { UnsetEnvironment = (request.UnsetEnvironment ?? []).Concat(RepositoryRedirects).Distinct().ToArray() };
+    {
+        UnsetEnvironment = (request.UnsetEnvironment ?? []).Concat(RepositoryRedirects).Distinct().ToArray()
+    };
 }

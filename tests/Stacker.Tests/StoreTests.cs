@@ -5,7 +5,7 @@ using Stacker.Infrastructure;
 using Stacker.Infrastructure.Framework;
 namespace Stacker.Tests;
 
-public sealed class StoreTests
+public sealed partial class StoreTests
 {
     private static string Temp()
     {
@@ -40,7 +40,8 @@ public sealed class StoreTests
         Assert.True(first.IsOk);
         // While the handle is held, a second window is refused rather than interleaving writes.
         var second = await factory.TryAcquireAsync("/repo");
-        Assert.True(second.IsFailed); Assert.Equal(ProblemCodes.StoreBusy, second.Problem!.Code);
+        Assert.True(second.IsFailed);
+        Assert.Equal(ProblemCodes.StoreBusy, second.Problem!.Code);
         await first.Value!.DisposeAsync();
         // The lock file still exists, exactly like after a crash; taking the lock must work anyway.
         Assert.NotEmpty(Directory.GetFiles(directory, "*.lock"));
@@ -75,8 +76,6 @@ public sealed class StoreTests
         Assert.Equal("local:x", (await store.ReadAsync<ImportedState>("workspace", "not-the-same-key"))?.ActiveGroup ?? "local:x");
     }
 
-    private sealed class ImportedState { public string? ActiveGroup { get; set; } }
-
     // Scenario: A damaged document is quarantined, defaults are used, and the original is kept.
     [Fact]
     public async Task A_damaged_document_is_quarantined_and_defaults_are_used()
@@ -86,7 +85,8 @@ public sealed class StoreTests
         Assert.True((await store.WriteAsync("/repo", new JournalLog { Entries = [] })).IsOk);
         File.WriteAllText(store.PathFor("/repo"), "{ this is not json");
         var read = store.Read("/repo");
-        Assert.True(read.IsFailed); Assert.Null(read.Value);
+        Assert.True(read.IsFailed);
+        Assert.Null(read.Value);
         Assert.Equal(ProblemCodes.StoreCorrupt, read.Problem!.Code);
         var kept = Directory.GetFiles(directory, "*.bad");
         Assert.Single(kept);
@@ -103,12 +103,17 @@ public sealed class StoreTests
         var opened = await journal.OpenAsync("/repo", "restack", [JournalStep.Planned("s1", "move", "refs/heads/A")]);
         Assert.Equal(JournalPhase.Running, opened.Phase);
         Assert.True((await journal.ActiveAsync("/repo"))!.NeedsAttention);
-        await journal.StepAsync(opened, opened.Steps[0] with { State = StepState.Started });
+        await journal.StepAsync(opened, opened.Steps[0] with
+        {
+            State = StepState.Started
+        });
         var stepped = await journal.StepAsync(opened, opened.Steps[0].Finished(new string('a', 40), new string('b', 40), StepState.Done));
         Assert.Equal(StepState.Done, stepped.Steps[0].State);
         await journal.CloseAsync(stepped, JournalPhase.Applied, message: "1 layer restacked");
         var undoable = await journal.UndoableAsync("/repo");
-        Assert.NotNull(undoable); Assert.Single(undoable!.Moved); Assert.Equal("1 layer restacked", undoable.Message);
+        Assert.NotNull(undoable);
+        Assert.Single(undoable!.Moved);
+        Assert.Equal("1 layer restacked", undoable.Message);
         Assert.Null(await journal.ActiveAsync("/repo"));
         // A stash recorded on the entry survives a restart and is offered for restore.
         var withStash = await journal.CloseAsync(undoable, JournalPhase.Applied, stashRef: new string('c', 40));
@@ -120,7 +125,8 @@ public sealed class StoreTests
     [Fact]
     public async Task The_stack_file_saves_without_touching_the_repository()
     {
-        await using var f = new GitFixture(); await f.Init();
+        await using var f = new GitFixture();
+        await f.Init();
         var store = new YamlStackStore(new AtomicFile(), new FileLockFactory(Temp()));
         var saved = await store.SaveAsync(f.Root, [f.Stack], null);
         var status = await f.Git("status", "--porcelain");
@@ -142,11 +148,13 @@ public sealed class StoreTests
         var store = new JsonSettingsStore(directory);
         await File.WriteAllTextAsync(Path.Combine(directory, "settings.json"), "{ broken");
         var recovered = await store.LoadAsync();
-        Assert.Equal("Dark", recovered.Theme); Assert.NotNull(store.LastProblem);
+        Assert.Equal("Dark", recovered.Theme);
+        Assert.NotNull(store.LastProblem);
         Assert.Single(Directory.GetFiles(directory, "*.bad"));
         await store.SaveAsync(new AppSettings { Theme = "Neon", WindowWidth = 1500 });
         var loaded = await store.LoadAsync();
-        Assert.Equal("Dark", loaded.Theme); Assert.Equal(1500, loaded.WindowWidth);
+        Assert.Equal("Dark", loaded.Theme);
+        Assert.Equal(1500, loaded.WindowWidth);
         Assert.Equal(AppSettings.CurrentSchema, loaded.SchemaVersion);
     }
 }

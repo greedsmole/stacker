@@ -16,13 +16,21 @@ internal static class DialogLayout
         if (description.Length > 0)
             heading.Children.Add(new TextBlock { Text = description, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
         var body = new StackPanel { Spacing = 12 };
-        foreach (var field in fields) body.Children.Add(field);
+        foreach (var field in fields)
+            body.Children.Add(field);
         var scroll = new ScrollViewer { Content = body, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
         var footer = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
-        foreach (var action in actions) { action.Margin = new Thickness(8, 4, 0, 0); footer.Children.Add(action); }
+        foreach (var action in actions)
+        {
+            action.Margin = new Thickness(8, 4, 0, 0);
+            footer.Children.Add(action);
+        }
         var grid = new Grid { Margin = new Thickness(24), RowDefinitions = new RowDefinitions("Auto,*,Auto"), RowSpacing = 16 };
-        Grid.SetRow(scroll, 1); Grid.SetRow(footer, 2);
-        grid.Children.Add(heading); grid.Children.Add(scroll); grid.Children.Add(footer);
+        Grid.SetRow(scroll, 1);
+        Grid.SetRow(footer, 2);
+        grid.Children.Add(heading);
+        grid.Children.Add(scroll);
+        grid.Children.Add(footer);
         return grid;
     }
 }

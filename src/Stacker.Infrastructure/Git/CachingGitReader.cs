@@ -1,6 +1,6 @@
-using Stacker.Core.Framework;
 // Purpose: Keeps recently parsed patches so a repeated search or a revisited file does not re-run git diff.
 using Stacker.Core;
+using Stacker.Core.Framework;
 namespace Stacker.Infrastructure;
 
 /// <summary>A bounded, byte-limited cache in front of the reader; every other call is passed straight through.</summary>
@@ -107,9 +107,13 @@ public sealed class CachingGitReader(IGitRepositoryReader inner, int capacity = 
         using var localLease = repositoryGit?.TryAcquireRead(root);
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         var privateRoot = state is not null && new[] { "objects", "history-objects" }.Any(folder => Path.GetFullPath(root).StartsWith(Path.GetFullPath(Path.Combine(state.Root, folder)) + Path.DirectorySeparatorChar, comparison));
-        if (objects is null || !privateRoot) return await read(ct);
-        var lease = await objects.AcquireAsync(root, false, ct); if (lease.IsFailed) return Result<T>.Fail(lease.Problem!);
-        using (lease.Value!) return await read(ct);
+        if (objects is null || !privateRoot)
+            return await read(ct);
+        var lease = await objects.AcquireAsync(root, false, ct);
+        if (lease.IsFailed)
+            return Result<T>.Fail(lease.Problem!);
+        using (lease.Value!)
+            return await read(ct);
     }
 
     /// <summary>Returns a parsed patch, running git only on a miss.</summary>
@@ -130,7 +134,11 @@ public sealed class CachingGitReader(IGitRepositoryReader inner, int capacity = 
     {
         var key = StableIdentity.For(root, @base, head, file.OldPath, file.NewPath);
         await _gate.WaitAsync(ct);
-        try { if (_cache.TryGetValue(key, out var hit)) return hit; }
+        try
+        {
+            if (_cache.TryGetValue(key, out var hit))
+                return hit;
+        }
         finally { _gate.Release(); }
         var diff = await _queries.RunAsync(key, token => _scheduler.RunAsync(ReadWork.Diff, async readToken =>
         {
@@ -142,14 +150,19 @@ public sealed class CachingGitReader(IGitRepositoryReader inner, int capacity = 
         await _gate.WaitAsync(ct);
         try
         {
-            if (_cache.TryGetValue(key, out var raced)) return raced;
+            if (_cache.TryGetValue(key, out var raced))
+                return raced;
             var size = Size(diff);
-            if (size > maxBytes || capacity <= 0) return diff;
-            _cache[key] = diff; _order.Enqueue(key); _bytes += size;
+            if (size > maxBytes || capacity <= 0)
+                return diff;
+            _cache[key] = diff;
+            _order.Enqueue(key);
+            _bytes += size;
             while (_order.Count > capacity || _bytes > maxBytes)
             {
                 var oldest = _order.Dequeue();
-                if (_cache.Remove(oldest, out var evicted)) _bytes -= Size(evicted);
+                if (_cache.Remove(oldest, out var evicted))
+                    _bytes -= Size(evicted);
             }
             return diff;
         }

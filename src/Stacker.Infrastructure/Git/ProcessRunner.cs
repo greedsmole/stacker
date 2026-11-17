@@ -1,8 +1,8 @@
-using Stacker.Core.Framework;
 // Purpose: Runs external tools without a shell, concurrently drains streams, enforces cancellation/time/output bounds, and records Git diagnostics.
 using System.Diagnostics;
 using System.Text;
 using Stacker.Core;
+using Stacker.Core.Framework;
 
 namespace Stacker.Infrastructure;
 
@@ -28,20 +28,30 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
     /// configured path is wrong.</exception>
     public void Start(ProcessRequest request)
     {
-        if ((commandLog ?? new GitCommandLog()).IsGit(request)) request = GitEnvironment.ForRepository(request);
+        if ((commandLog ?? new GitCommandLog()).IsGit(request))
+            request = GitEnvironment.ForRepository(request);
         var info = new ProcessStartInfo(request.Executable)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = request.WorkingDirectory ?? Environment.CurrentDirectory
         };
-        foreach (var arg in request.Arguments) info.ArgumentList.Add(arg);
+        foreach (var arg in request.Arguments)
+            info.ArgumentList.Add(arg);
         if (request.Environment is not null)
-            foreach (var (key, value) in request.Environment) info.Environment[key] = value;
-        if (request.UnsetEnvironment is not null) foreach (var key in request.UnsetEnvironment) info.Environment.Remove(key);
-        try { using var process = Process.Start(info); }
+            foreach (var (key, value) in request.Environment)
+                info.Environment[key] = value;
+        if (request.UnsetEnvironment is not null)
+            foreach (var key in request.UnsetEnvironment)
+                info.Environment.Remove(key);
+        try
+        {
+            using var process = Process.Start(info);
+        }
         catch (System.ComponentModel.Win32Exception ex)
-        { throw new StackerException($"Cannot start {request.Executable}. Set the full path in Settings if it is not on PATH. {ex.Message}"); }
+        {
+            throw new StackerException($"Cannot start {request.Executable}. Set the full path in Settings if it is not on PATH. {ex.Message}");
+        }
     }
 
     /// <summary>Executes without a shell, logs Git-only diagnostics, and returns structured process output.</summary>
@@ -58,7 +68,8 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
     /// <exception cref="StackerException">The program could not be started, or the run passed its timeout.</exception>
     public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
     {
-        if ((commandLog ?? new GitCommandLog()).IsGit(request)) request = GitEnvironment.ForRepository(request);
+        if ((commandLog ?? new GitCommandLog()).IsGit(request))
+            request = GitEnvironment.ForRepository(request);
         var started = DateTimeOffset.UtcNow;
         var watch = Stopwatch.StartNew();
         var logId = commandLog?.Begin(request, started);
@@ -114,23 +125,33 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
             StandardInputEncoding = new UTF8Encoding(false),
             WorkingDirectory = request.WorkingDirectory ?? Environment.CurrentDirectory
         };
-        foreach (var arg in request.Arguments) info.ArgumentList.Add(arg);
+        foreach (var arg in request.Arguments)
+            info.ArgumentList.Add(arg);
         if (request.Environment is not null)
-            foreach (var (key, value) in request.Environment) info.Environment[key] = value;
+            foreach (var (key, value) in request.Environment)
+                info.Environment[key] = value;
         if (request.UnsetEnvironment is not null)
-            foreach (var key in request.UnsetEnvironment) info.Environment.Remove(key);
+            foreach (var key in request.UnsetEnvironment)
+                info.Environment.Remove(key);
         using var process = new Process { StartInfo = info };
-        try { process.Start(); }
+        try
+        {
+            process.Start();
+        }
         catch (System.ComponentModel.Win32Exception ex)
         {
             throw new StackerException(Problem.Of(ProblemCodes.GitFailed, $"Cannot start {request.Executable}. Check its installation and path. {ex.Message}")
-                with { Certainty = EffectCertainty.NotStarted });
+                with
+            {
+                Certainty = EffectCertainty.NotStarted
+            });
         }
         async Task WriteInputAsync()
         {
             try
             {
-                if (request.StandardInput is not null) await process.StandardInput.WriteAsync(request.StandardInput.AsMemory(), linked.Token);
+                if (request.StandardInput is not null)
+                    await process.StandardInput.WriteAsync(request.StandardInput.AsMemory(), linked.Token);
                 process.StandardInput.Close();
             }
             catch { await linked.CancelAsync(); throw; }
@@ -145,7 +166,8 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
                 int count;
                 while ((count = await stream.ReadAsync(buffer, linked.Token)) != 0)
                 {
-                    if (Interlocked.Add(ref total, count) > request.MaxOutputBytes) throw new OutputLimitException();
+                    if (Interlocked.Add(ref total, count) > request.MaxOutputBytes)
+                        throw new OutputLimitException();
                     output.Write(buffer, 0, count);
                 }
                 return Encoding.UTF8.GetString(output.GetBuffer(), 0, (int)output.Length);
@@ -163,18 +185,30 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
         }
         catch
         {
-            try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+            }
             catch (InvalidOperationException) { /* The process exited between HasExited and Kill. */ }
             await linked.CancelAsync();
             using var reap = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            try { await process.WaitForExitAsync(reap.Token); }
+            try
+            {
+                await process.WaitForExitAsync(reap.Token);
+            }
             catch (OperationCanceledException) { /* An unreapable child must not hang the timeout path. */ }
             catch (InvalidOperationException) { }
-            try { await Task.WhenAll(stdout, stderr, stdin).WaitAsync(reap.Token); } catch { /* Drain only within the cleanup budget. */ }
+            try
+            {
+                await Task.WhenAll(stdout, stderr, stdin).WaitAsync(reap.Token);
+            }
+            catch { /* Drain only within the cleanup budget. */ }
             if (stdout.Exception?.GetBaseException() is OutputLimitException || stderr.Exception?.GetBaseException() is OutputLimitException)
                 throw new OutputLimitException();
             ct.ThrowIfCancellationRequested();
-            if (timeout.IsCancellationRequested) throw new StackerException("Operation timed out. Retry or select a smaller comparison.");
+            if (timeout.IsCancellationRequested)
+                throw new StackerException("Operation timed out. Retry or select a smaller comparison.");
             throw;
         }
     }
@@ -192,48 +226,4 @@ public sealed class ProcessRunner(GitCommandLog? commandLog = null) : IProcessRu
     /// can show it without handling an exception. Once the child has started, this boundary has no further knowledge
     /// of it: no exit code, no duration and no output are reported.</remarks>
     Result<Unit> IProcessLauncher.Start(ProcessRequest request) => Boundary.Capture(() => Start(request), ProblemCodes.GitFailed);
-}
-
-/// <summary>Resolves the Git program once, from the user's setting or the usual installation locations.</summary>
-/// <remarks>Resolution is lazy and cached because every Git command needs the path, and walking PATH for each one
-/// would add a directory scan per invocation. A configured override always wins, so a user pointing at a specific
-/// build is obeyed; otherwise PATH is searched first and the platform's common install directories second, so a Git
-/// that exists outside the application's inherited PATH is still found. When nothing exists the bare program name is
-/// returned instead of a fabricated path, which keeps the failure at start time with the message that names the tool
-/// and points at Settings.</remarks>
-public sealed class GitExecutable : IGitToolSettings
-{
-    /// <summary>The executable path taken from settings, or <see langword="null"/> when the user configured none.</summary>
-    /// <remarks>Kept beside the memoized path because the setting can be cleared: assigning through
-    /// <see cref="Override"/> clears the memoized value, so the next <see cref="Resolve"/> looks again instead of
-    /// returning a path that no longer matches the setting.</remarks>
-    private string? _override;
-    /// <summary>The value produced by the last resolution, or <see langword="null"/> when nothing has been resolved
-    /// yet.</summary>
-    /// <remarks>The whole result is memoized, including a bare fallback name, so a Git installed after start-up is not
-    /// noticed until the setting is reassigned or the application restarts.</remarks>
-    private string? _resolved;
-    /// <inheritdoc/>
-    /// <remarks>The setter clears the memoized path so an edited setting takes effect on the next command without a
-    /// restart. A blank value behaves as no override, which leaves exactly one decision between the setting and the
-    /// lookup.</remarks>
-    public string? Override { get => _override; set { _override = value; _resolved = null; } }
-    /// <inheritdoc/>
-    /// <remarks>Candidates are tried in a fixed order: the override, the memoized value, every PATH entry (each
-    /// trimmed of quotes some installers leave in PATH), then the platform defaults, so a GUI application that
-    /// inherited a minimal PATH still finds a normal installation. The first candidate that exists becomes the
-    /// memoized value; when none exists the bare program name is memoized too, and the failure surfaces when the
-    /// process is started rather than here.</remarks>
-    public string Resolve()
-    {
-        if (!string.IsNullOrWhiteSpace(_override)) return _override;
-        if (_resolved is not null) return _resolved;
-        var name = OperatingSystem.IsWindows() ? "git.exe" : "git";
-        var paths = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
-            .Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => Path.Combine(p.Trim('"'), name));
-        var defaults = OperatingSystem.IsWindows()
-            ? new[] { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "cmd", "git.exe"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Git", "cmd", "git.exe") }
-            : new[] { "/opt/homebrew/bin/git", "/usr/local/bin/git", "/usr/bin/git" };
-        return _resolved = paths.Concat(defaults).FirstOrDefault(File.Exists) ?? name;
-    }
 }

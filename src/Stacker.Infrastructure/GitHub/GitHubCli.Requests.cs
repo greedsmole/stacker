@@ -36,9 +36,11 @@ public sealed partial class GitHubCli
             exitCode = response.ExitCode;
             var parsed = TryParse(response.StdOut);
             // gh auth status can report an invalid account in JSON even when the process exits successfully.
-            if (exitCode != 0 && (args[0] != "auth" || parsed is null)) throw RequestFailure(response, parsed, body);
+            if (exitCode != 0 && (args[0] != "auth" || parsed is null))
+                throw RequestFailure(response, parsed, body);
             var json = parsed ?? throw new StackerException("gh returned invalid JSON. Check the GitHub host and CLI version.");
-            if (!string.IsNullOrWhiteSpace(response.StdErr)) detail = SafeDetail(response.StdErr.Trim(), body);
+            if (!string.IsNullOrWhiteSpace(response.StdErr))
+                detail = SafeDetail(response.StdErr.Trim(), body);
             return read is null ? json : read(json);
         }
         catch (OperationCanceledException) { detail = "Cancelled."; throw; }
@@ -56,26 +58,33 @@ public sealed partial class GitHubCli
         var match = Regex.Match(response.StdErr, @"\bHTTP\s+(?<status>[1-5]\d{2})\b", RegexOptions.IgnoreCase);
         int? status = match.Success ? int.Parse(match.Groups["status"].Value, System.Globalization.CultureInfo.InvariantCulture) : null;
         if (status is null && json is { ValueKind: JsonValueKind.Object } root && root.TryGetProperty("status", out var value) &&
-            int.TryParse(value.ToString(), out var number) && number is >= 100 and <= 599) status = number;
+            int.TryParse(value.ToString(), out var number) && number is >= 100 and <= 599)
+            status = number;
 
         var details = json is { } payload ? DescribeErrors(payload) : "";
-        if (details.Length == 0) details = response.StdErr.Trim();
+        if (details.Length == 0)
+            details = response.StdErr.Trim();
         var label = status is int http ? $"GitHub HTTP {http}." : $"GitHub request failed (gh exit {response.ExitCode}).";
         var problem = Problem.Of(status == 401 ? ProblemCodes.GitHubAuth : ProblemCodes.GitHubRequest, SafeDetail(label + " " + details, body).Trim())
-            with { Certainty = status is 400 or 401 or 403 or 404 or 405 or 409 or 410 or 415 or 422 or 429
-                ? EffectCertainty.Rejected : EffectCertainty.Unknown };
+            with
+        {
+            Certainty = status is 400 or 401 or 403 or 404 or 405 or 409 or 410 or 415 or 422 or 429
+                ? EffectCertainty.Rejected : EffectCertainty.Unknown
+        };
         return status == 401 ? new GitHubAuthenticationException(problem) : new StackerException(problem);
     }
 
     private static string DescribeErrors(JsonElement json)
     {
-        if (json.ValueKind != JsonValueKind.Object) return "";
+        if (json.ValueKind != JsonValueKind.Object)
+            return "";
         var messages = new List<string> { Str(json, "message") };
         if (json.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Array)
         {
             foreach (var error in errors.EnumerateArray().Take(8))
             {
-                if (error.ValueKind == JsonValueKind.String) messages.Add(error.GetString()!);
+                if (error.ValueKind == JsonValueKind.String)
+                    messages.Add(error.GetString()!);
                 else if (error.ValueKind == JsonValueKind.Object)
                 {
                     var fields = string.Join(" · ", new[] { Str(error, "resource"), Str(error, "field"), Str(error, "code") }
@@ -112,17 +121,25 @@ public sealed partial class GitHubCli
             {
                 if (property.Name is "body" or "title" && property.Value.ValueKind == JsonValueKind.String)
                     yield return property.Value.GetString()!;
-                else foreach (var text in RequestTexts(property.Value)) yield return text;
+                else
+                    foreach (var text in RequestTexts(property.Value))
+                        yield return text;
             }
         else if (input.ValueKind == JsonValueKind.Array)
             foreach (var item in input.EnumerateArray())
-                foreach (var text in RequestTexts(item)) yield return text;
+                foreach (var text in RequestTexts(item))
+                    yield return text;
     }
 
     private static JsonElement? TryParse(string text)
     {
-        if (string.IsNullOrWhiteSpace(text)) return null;
-        try { using var json = JsonDocument.Parse(text); return json.RootElement.Clone(); }
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        try
+        {
+            using var json = JsonDocument.Parse(text);
+            return json.RootElement.Clone();
+        }
         catch (JsonException) { return null; }
     }
 }

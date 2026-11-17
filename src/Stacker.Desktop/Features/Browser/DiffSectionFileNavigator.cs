@@ -16,7 +16,8 @@ public partial class DiffSectionView
         set
         {
             FilesToggle.IsVisible = value;
-            if (!value && FilePane.IsVisible) ToggleFilesClick(null, new RoutedEventArgs());
+            if (!value && FilePane.IsVisible)
+                ToggleFilesClick(null, new RoutedEventArgs());
         }
     }
     private void ToggleFilesClick(object? sender, RoutedEventArgs e)
@@ -38,9 +39,12 @@ public partial class DiffSectionView
     }
     private void ToggleFileFoldersClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () =>
     {
-        if (sender is not ToggleButton toggle || DataContext is not DiffSectionViewModel section) return;
+        if (sender is not ToggleButton toggle || DataContext is not DiffSectionViewModel section)
+            return;
         var enabled = toggle.IsChecked == true;
-        if (TopLevel.GetTopLevel(this)?.DataContext is MainViewModel main) await main.SetGroupFilesByFolderAsync(enabled);
-        else section.GroupFilesByFolder = enabled;
+        if (TopLevel.GetTopLevel(this)?.DataContext is MainViewModel main)
+            await main.SetGroupFilesByFolderAsync(enabled);
+        else
+            section.GroupFilesByFolder = enabled;
     }, message => AsyncHandler.Report(this, message));
 }

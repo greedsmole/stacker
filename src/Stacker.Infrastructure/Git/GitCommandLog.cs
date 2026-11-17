@@ -22,7 +22,10 @@ public sealed class GitCommandLog : IGitDiagnosticLog
     /// <remarks>Set from settings when they change. A command whose executable matches this full path is logged even when the program is not
     /// named <c>git</c>, which is what keeps a renamed or symlinked binary visible in diagnostics; the comparison is case-insensitive because
     /// Windows and default macOS file systems are. Null falls back to recognizing the conventional names only.</remarks>
-    public string? GitExecutablePath { get; set; }
+    public string? GitExecutablePath
+    {
+        get; set;
+    }
     /// <summary>Expands a path for comparison, falling back to the input when Git's path is not a valid file-system path.</summary>
     /// <param name="path">Configured or requested executable path.</param>
     /// <returns>The absolute path, or the original text when expansion throws.</returns>
@@ -30,16 +33,28 @@ public sealed class GitCommandLog : IGitDiagnosticLog
     /// from the logging path before the child is even started.</remarks>
     private static string SafeFullPath(string path)
     {
-        try { return Path.GetFullPath(path); } catch (Exception) { return path; }
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch (Exception) { return path; }
     }
     /// <inheritdoc/>
     /// <remarks>The copy is taken under the lock, so a later append or update cannot change the returned list.</remarks>
     public IReadOnlyList<GitCommandEntry> Snapshot()
-    { lock (_sync) return _entries.ToArray(); }
+    {
+        lock (_sync)
+            return _entries.ToArray();
+    }
     /// <inheritdoc/>
     /// <remarks>The list is cleared under the lock, then the null notification is raised outside it so a subscriber that snapshots the log sees
     /// the cleared state rather than blocking the clearing thread.</remarks>
-    public void Clear() { lock (_sync) _entries.Clear(); Changed?.Invoke(null); }
+    public void Clear()
+    {
+        lock (_sync)
+            _entries.Clear();
+        Changed?.Invoke(null);
+    }
     /// <summary>Decides whether a request is a Git invocation worth logging.</summary>
     /// <param name="request">The request about to be run.</param>
     /// <returns>True for the configured Git binary or for a program named <c>git</c>/<c>git.exe</c>.</returns>
@@ -62,7 +77,8 @@ public sealed class GitCommandLog : IGitDiagnosticLog
     /// and carries the new running entry.</remarks>
     internal Guid? Begin(ProcessRequest request, DateTimeOffset started)
     {
-        if (!IsGit(request)) return null;
+        if (!IsGit(request))
+            return null;
         return Begin("git", request.Arguments, request.WorkingDirectory ?? "", started);
     }
 
@@ -72,8 +88,15 @@ public sealed class GitCommandLog : IGitDiagnosticLog
     {
         var command = tool + " " + string.Join(' ', arguments.Select(Quote));
         var entry = new GitCommandEntry(Guid.NewGuid(), started, workingDirectory, Redact(command), TimeSpan.Zero, null, "", true)
-        { IsGitHub = tool == "gh" };
-        lock (_sync) { _entries.Add(entry); if (_entries.Count > 500) _entries.RemoveAt(0); }
+        {
+            IsGitHub = tool == "gh"
+        };
+        lock (_sync)
+        {
+            _entries.Add(entry);
+            if (_entries.Count > 500)
+                _entries.RemoveAt(0);
+        }
         Changed?.Invoke(entry);
         return entry.Id;
     }
@@ -88,13 +111,15 @@ public sealed class GitCommandLog : IGitDiagnosticLog
     /// finished entry and is raised outside the lock.</remarks>
     internal void Finish(Guid? id, TimeSpan elapsed, int? exitCode, string detail, bool failed = false)
     {
-        if (id is null) return;
+        if (id is null)
+            return;
         var safe = Redact(detail);
         GitCommandEntry entry;
         lock (_sync)
         {
             var index = _entries.FindIndex(item => item.Id == id);
-            if (index < 0) return;
+            if (index < 0)
+                return;
             entry = _entries[index] with
             {
                 Duration = elapsed,

@@ -21,7 +21,10 @@ public sealed record DiffView(IReadOnlyList<DiffLine> Rows, string EmptyReason)
                 $"Lines {hunk.OldStart}–{hunk.OldStart + Math.Max(0, hunk.OldCount - 1)} → {hunk.NewStart}–{hunk.NewStart + Math.Max(0, hunk.NewCount - 1)}  {hunk.Context}"));
             foreach (var line in hunk.Lines)
                 if (line.Kind != DiffLineKind.Notice || line.Text.StartsWith("\\ No newline", StringComparison.Ordinal))
-                    rows.Add(line.Kind == DiffLineKind.Notice ? line with { Text = "No newline at end of file" } : line);
+                    rows.Add(line.Kind == DiffLineKind.Notice ? line with
+                    {
+                        Text = "No newline at end of file"
+                    } : line);
         }
         var file = diff.File;
         var reason = file.IsBinary ? "Binary file — text preview unavailable."

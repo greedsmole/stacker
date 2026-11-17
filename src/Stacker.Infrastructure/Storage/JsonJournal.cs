@@ -3,15 +3,6 @@ using Stacker.Core;
 using Stacker.Core.Framework;
 namespace Stacker.Infrastructure.Framework;
 
-/// <summary>Journal entries for every repository, bounded and ordered by time.</summary>
-public sealed class JournalLog
-{
-    public List<JournalEntry> Entries { get; set; } = [];
-    public List<JournalStash> Stashes { get; set; } = [];
-}
-
-public sealed record JournalStash(string Sha, string EntryId);
-
 public sealed class JsonJournal(IStateStore<JournalLog> store, IClock clock) : IJournal
 {
     private const int Retained = 40;
@@ -26,7 +17,9 @@ public sealed class JsonJournal(IStateStore<JournalLog> store, IClock clock) : I
                 throw Invalid("A new journal entry requires unique planned steps.");
             var entry = new JournalEntry(JournalEntry.CurrentSchema, OperationCorrelation.Current ?? Guid.NewGuid().ToString("N"), repository, kind,
                 clock.Now, clock.Now, JournalPhase.Running, planned, null, null, null)
-            { RestackPlan = planned.FirstOrDefault(step => step.RestackPlan is not null)?.RestackPlan };
+            {
+                RestackPlan = planned.FirstOrDefault(step => step.RestackPlan is not null)?.RestackPlan
+            };
             await MutateAsync(repository, log =>
             {
                 if (kind == "restack" && log.Entries.Any(existing => existing.Kind == "restack" && existing.NeedsAttention))
@@ -34,7 +27,8 @@ public sealed class JsonJournal(IStateStore<JournalLog> store, IClock clock) : I
                 log.Entries.Add(entry);
                 foreach (var old in log.Entries.Where(existing => !existing.NeedsAttention && existing.StashRef is null
                     && !log.Stashes.Any(stash => stash.EntryId == existing.Id))
-                    .Take(Math.Max(0, log.Entries.Count - Retained)).ToArray()) log.Entries.Remove(old);
+                    .Take(Math.Max(0, log.Entries.Count - Retained)).ToArray())
+                    log.Entries.Remove(old);
             }, ct);
             return entry;
         }
@@ -52,7 +46,8 @@ public sealed class JsonJournal(IStateStore<JournalLog> store, IClock clock) : I
                 ?? throw Invalid($"The journal has no step '{step.Id}'.");
             if (!JournalTransitions.CanRecordStep(current, previous, step))
                 throw Invalid($"Cannot record journal step '{step.Id}' as {step.State} from {previous.State} in {current.Phase}.");
-            if (previous == step) return current;
+            if (previous == step)
+                return current;
             var updated = current with
             {
                 UpdatedAt = clock.Now,
@@ -75,10 +70,23 @@ public sealed class JsonJournal(IStateStore<JournalLog> store, IClock clock) : I
             if (!JournalTransitions.CanClose(current, phase))
                 throw Invalid($"Cannot close journal entry '{entry.Id}' as {phase} from {current.Phase}.");
             var updated = current.Phase == phase && !current.NeedsAttention
-                ? current with { StashRef = stashRef ?? current.StashRef }
-                : current with { Phase = phase, StashRef = stashRef ?? current.StashRef, PendingStepId = pendingStepId, Message = message };
-            if (updated == current) return current;
-            updated = updated with { UpdatedAt = clock.Now };
+                ? current with
+                {
+                    StashRef = stashRef ?? current.StashRef
+                }
+                : current with
+                {
+                    Phase = phase,
+                    StashRef = stashRef ?? current.StashRef,
+                    PendingStepId = pendingStepId,
+                    Message = message
+                };
+            if (updated == current)
+                return current;
+            updated = updated with
+            {
+                UpdatedAt = clock.Now
+            };
             Replace(log, updated);
             (await store.WriteAsync(entry.Repository, log, ct)).OrThrow();
             return updated;
@@ -92,14 +100,23 @@ public sealed class JsonJournal(IStateStore<JournalLog> store, IClock clock) : I
         try
         {
             var log = Load(entry.Repository);
-            var updated = Find(log, entry) with { StashRef = stashRef, UpdatedAt = clock.Now };
+            var updated = Find(log, entry) with
+            {
+                StashRef = stashRef,
+                UpdatedAt = clock.Now
+            };
             if (stashRef is null && entry.StashRef is { } cleared)
             {
                 log.Stashes.RemoveAll(stash => stash.Sha == cleared);
                 for (var i = 0; i < log.Entries.Count; i++)
-                    if (log.Entries[i].StashRef == cleared) log.Entries[i] = log.Entries[i] with { StashRef = null };
+                    if (log.Entries[i].StashRef == cleared)
+                        log.Entries[i] = log.Entries[i] with
+                        {
+                            StashRef = null
+                        };
             }
-            else Replace(log, updated);
+            else
+                Replace(log, updated);
             (await store.WriteAsync(entry.Repository, log, ct)).OrThrow();
             return updated;
         }
@@ -112,10 +129,14 @@ public sealed class JsonJournal(IStateStore<JournalLog> store, IClock clock) : I
         var log = Load(repository);
         var active = log.Entries.LastOrDefault(entry => entry.NeedsAttention && entry.Kind == "restack")
             ?? log.Entries.LastOrDefault(entry => entry.NeedsAttention && entry.Kind != "stash");
-        if (active is not null) return Task.FromResult<JournalEntry?>(active);
+        if (active is not null)
+            return Task.FromResult<JournalEntry?>(active);
         var stash = log.Stashes.LastOrDefault();
         var owner = stash is null ? null : log.Entries.FirstOrDefault(e => e.Id == stash.EntryId);
-        return Task.FromResult(owner is null ? null : owner with { StashRef = stash!.Sha });
+        return Task.FromResult(owner is null ? null : owner with
+        {
+            StashRef = stash!.Sha
+        });
     }
 
     /// <summary>Only an entry that actually moved something can be undone.</summary>
@@ -155,7 +176,8 @@ public sealed class JsonJournal(IStateStore<JournalLog> store, IClock clock) : I
             throw new Stacker.Core.StackerException(Problem.Of(ProblemCodes.StateInvalid,
                 "The operation journal has an unsupported or invalid structure. Preserve it and inspect recovery before making changes."));
         foreach (var entry in log.Entries.Where(e => e.StashRef is not null))
-            if (!log.Stashes.Any(stash => stash.Sha == entry.StashRef)) log.Stashes.Add(new(entry.StashRef!, entry.Id));
+            if (!log.Stashes.Any(stash => stash.Sha == entry.StashRef))
+                log.Stashes.Add(new(entry.StashRef!, entry.Id));
         return log;
     }
 
@@ -168,8 +190,12 @@ public sealed class JsonJournal(IStateStore<JournalLog> store, IClock clock) : I
     private static void Replace(JournalLog log, JournalEntry entry)
     {
         var index = log.Entries.FindIndex(existing => existing.Id == entry.Id);
-        if (index >= 0) log.Entries[index] = entry; else log.Entries.Add(entry);
-        if (entry.StashRef is { } sha && !log.Stashes.Any(stash => stash.Sha == sha)) log.Stashes.Add(new(sha, entry.Id));
+        if (index >= 0)
+            log.Entries[index] = entry;
+        else
+            log.Entries.Add(entry);
+        if (entry.StashRef is { } sha && !log.Stashes.Any(stash => stash.Sha == sha))
+            log.Stashes.Add(new(sha, entry.Id));
     }
 
     private async Task MutateAsync(string repository, Action<JournalLog> mutate, CancellationToken ct)

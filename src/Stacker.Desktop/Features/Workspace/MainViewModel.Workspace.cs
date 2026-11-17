@@ -1,9 +1,9 @@
-using Stacker.Core.Framework;
 // Purpose: Repository and stack workspace lifecycle: opening, refreshing, saving definitions, and preserving each stack’s view.
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Stacker.Core;
+using Stacker.Core.Framework;
 namespace Stacker.Desktop.ViewModels;
 
 public sealed partial class MainViewModel
@@ -24,14 +24,25 @@ public sealed partial class MainViewModel
     /// <summary>Refreshes remote metadata in the background while retaining the currently displayed snapshot.</summary>
     public Task PollAsync(CancellationToken ct = default) => _workspaceController.PollAsync(ct);
     [RelayCommand] public Task RefreshAllAsync() => _workspaceController.RefreshAllAsync();
-    [RelayCommand] public async Task UpdateChangesAsync() { var reopen = ActiveHistory is not null; await _workspaceController.UpdateChangesAsync(); if (reopen) await ShowHistoryAsync(); }
+    [RelayCommand]
+    public async Task UpdateChangesAsync()
+    {
+        var reopen = ActiveHistory is not null;
+        await _workspaceController.UpdateChangesAsync();
+        if (reopen)
+            await ShowHistoryAsync();
+    }
     // A separate state key per repository and stack prevents one stack's file/filter/scroll choices leaking into another.
     internal void CaptureWorkspace() => _workspaceController.CaptureWorkspace();
     /// <summary>Persists the active selection and per-stack view state in the application data directory.</summary>
     public Task SaveWorkspaceAsync() => _workspaceController.SaveWorkspaceAsync();
     public void RestoreSections() => _workspaceController.RestoreSections();
     /// <summary>Opens a stack's aggregate comparison, the top-level action for reviewing the whole change.</summary>
-    public async Task SelectOverviewAsync(StackGroupViewModel group) { await _workspaceController.SelectOverviewAsync(group); await SynchronizeHistoryAsync(); }
+    public async Task SelectOverviewAsync(StackGroupViewModel group)
+    {
+        await _workspaceController.SelectOverviewAsync(group);
+        await SynchronizeHistoryAsync();
+    }
     public Task<ReviewViewModel?> EnsureReviewAsync(DiffSectionViewModel section, CancellationToken ct = default) => _workspaceController.EnsureReviewAsync(section, ct);
     public Task ShowReviewAsync(DiffSectionViewModel? section = null, int tab = 3) => _workspaceController.ShowReviewAsync(section, tab);
     partial void OnActiveReviewChanged(ReviewViewModel? value) => OnPropertyChanged(nameof(ReviewLabel));

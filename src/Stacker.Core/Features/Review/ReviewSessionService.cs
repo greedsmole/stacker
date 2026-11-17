@@ -2,45 +2,6 @@ using System.Text.Json;
 using Stacker.Core.Framework;
 namespace Stacker.Core;
 
-/// <summary>Lifecycle of one publication, from the persisted payload to the final recorded outcome.</summary>
-/// <remarks>
-/// The numeric value is part of the stored format: the draft store treats <c>Prepared</c>, <c>Sending</c> and
-/// <c>Uncertain</c> as unfinished, keeps <c>Confirmed</c> sticky, and closes the matching remote journal entry from the
-/// terminal value. Reordering or renumbering these members would change the meaning of existing evidence, including
-/// operations that were interrupted before an upgrade.
-/// </remarks>
-public enum PublicationPhase
-{
-    /// <summary>Payload and operation are persisted but nothing was dispatched; a restart safely rejects it and allows a retry.</summary>
-    Prepared,
-    /// <summary>The command reached the bus and the process is waiting for GitHub; an exception or restart from this phase is uncertain, not failed.</summary>
-    Sending,
-    /// <summary>GitHub accepted the mutation. Terminal, and never downgraded by a later save.</summary>
-    Confirmed,
-    /// <summary>The outcome is unknown because the response was lost or the app stopped mid-send; sending stays blocked and nothing is retried automatically.</summary>
-    Uncertain,
-    /// <summary>The mutation certainly did not happen, or the user resolved uncertainty after checking GitHub. Terminal, and the unsent text stays available.</summary>
-    Rejected
-}
-/// <summary>One publication attempt, recorded before the send and kept as evidence after it finishes.</summary>
-/// <remarks>
-/// The same <see cref="Id"/> is carried by the draft payload, the foreground command, the durable journal entry and the
-/// remote evidence row, which is what lets the app decide whether an interrupted send reached GitHub. Only one unfinished
-/// operation is allowed per draft, and <see cref="Payload"/> is immutable once written: saving a changed payload under the
-/// same id is refused by the store instead of silently re-describing what was sent.
-/// </remarks>
-/// <param name="Id">Operation id, a compact GUID marker also appended to the published body as evidence.</param>
-/// <param name="Kind">Publication kind: <c>comment</c>, <c>file</c>, <c>inline</c>, <c>reply</c>, <c>review</c> or <c>resolve</c>.</param>
-/// <param name="ContextIdentity">GitHub context identity at preparation time, so another account or repository cannot adopt the operation.</param>
-/// <param name="PullRequest">Pull request number the mutation targets.</param>
-/// <param name="BaseSha">Base commit of the pull request version the send was prepared against.</param>
-/// <param name="HeadSha">Head commit of the pull request version the send was prepared against.</param>
-/// <param name="Payload">Immutable JSON snapshot of the pending text, target file, destination and review decision.</param>
-/// <param name="Phase">Phase at the time of the record; only the terminal phases are kept in the draft's history.</param>
-/// <param name="CreatedAt">UTC preparation time, used to order the evidence of several attempts.</param>
-public sealed record PublicationOperation(string Id, string Kind, string ContextIdentity, long PullRequest,
-    string BaseSha, string HeadSha, string Payload, PublicationPhase Phase, DateTimeOffset CreatedAt);
-
 /// <summary>Durable review rules independent of a view, selection or Avalonia dispatcher.</summary>
 /// <remarks>
 /// This service owns two things the views must not do themselves: it decides whether a draft may be sent against the live
@@ -78,7 +39,8 @@ public sealed class ReviewSessionService(IApplicationState store, IGitHubReader 
             return legacy;
         }
         var result = await drafts.ReadDraftAsync(key, ct);
-        if (result.IsFailed) return Result<ReviewDraft?>.Fail(result.Problem!);
+        if (result.IsFailed)
+            return Result<ReviewDraft?>.Fail(result.Problem!);
         _revision = result.Value?.Revision ?? 0;
         NormalizeInterrupted(result.Value?.Draft);
         return Result<ReviewDraft?>.Ok(result.Value?.Draft);
@@ -94,8 +56,10 @@ public sealed class ReviewSessionService(IApplicationState store, IGitHubReader 
     /// <param name="draft">Stored draft to repair in place, or null when nothing was stored.</param>
     private static void NormalizeInterrupted(ReviewDraft? draft)
     {
-        if (draft?.Operation?.Phase == PublicationPhase.Sending) Transition(draft, PublicationPhase.Uncertain);
-        else if (draft?.Operation?.Phase == PublicationPhase.Prepared) Reject(draft);
+        if (draft?.Operation?.Phase == PublicationPhase.Sending)
+            Transition(draft, PublicationPhase.Uncertain);
+        else if (draft?.Operation?.Phase == PublicationPhase.Prepared)
+            Reject(draft);
     }
     /// <summary>Persists the draft and advances the revision used by the next save.</summary>
     /// <remarks>
@@ -110,10 +74,13 @@ public sealed class ReviewSessionService(IApplicationState store, IGitHubReader 
     /// <returns><see cref="Unit"/> when stored; otherwise the store's problem.</returns>
     public async Task<Result<Unit>> SaveAsync(string key, ReviewDraft draft, CancellationToken ct = default)
     {
-        if (store is not IReviewDraftRepository drafts) return await store.WriteAsync("drafts", key, draft, ct);
+        if (store is not IReviewDraftRepository drafts)
+            return await store.WriteAsync("drafts", key, draft, ct);
         var result = await drafts.SaveDraftAsync(key, draft, _revision, ct);
-        if (result.IsFailed) return Result<Unit>.Fail(result.Problem!);
-        _revision = result.Value; return Result.Ok;
+        if (result.IsFailed)
+            return Result<Unit>.Fail(result.Problem!);
+        _revision = result.Value;
+        return Result.Ok;
     }
     /// <summary>Refuses to publish unless the account, the pull request version and every anchor still match the server.</summary>
     /// <remarks>
@@ -188,21 +155,31 @@ public sealed class ReviewSessionService(IApplicationState store, IGitHubReader 
     /// <exception cref="StackerException">The move is not one the phase machine allows.</exception>
     public static void Transition(ReviewDraft draft, PublicationPhase phase)
     {
-        if (draft.Operation is not { } operation) return; // Legacy uncertain drafts retain their original marker protocol.
-        if (!CanTransition(operation.Phase, phase)) throw new StackerException("Invalid publication transition.");
-        draft.Operation = operation with { Phase = phase };
+        if (draft.Operation is not { } operation)
+            return; // Legacy uncertain drafts retain their original marker protocol.
+        if (!CanTransition(operation.Phase, phase))
+            throw new StackerException("Invalid publication transition.");
+        draft.Operation = operation with
+        {
+            Phase = phase
+        };
         if (phase is PublicationPhase.Confirmed or PublicationPhase.Rejected)
-        { draft.PublicationHistory.Add(draft.Operation); draft.Operation = null; }
+        {
+            draft.PublicationHistory.Add(draft.Operation);
+            draft.Operation = null;
+        }
     }
 
     /// <summary>Uses a matching, durable command result to settle an interrupted publication on load.</summary>
     public static void ReconcileExecution(ReviewDraft draft, JournalEntry execution)
     {
         if (draft.Operation is not { Phase: PublicationPhase.Sending or PublicationPhase.Uncertain } operation ||
-            execution.Id != operation.Id || execution.Repository != "github:" + operation.ContextIdentity) return;
+            execution.Id != operation.Id || execution.Repository != "github:" + operation.ContextIdentity)
+            return;
         if (!HasAcknowledgedExecution(execution))
         {
-            if (execution.Phase == JournalPhase.Dismissed) Reject(draft);
+            if (execution.Phase == JournalPhase.Dismissed)
+                Reject(draft);
             return;
         }
         PendingKind? kind = PendingOperation.TryParse(draft.PendingOperation, out var pending) &&
@@ -221,17 +198,21 @@ public sealed class ReviewSessionService(IApplicationState store, IGitHubReader 
         switch (kind)
         {
             case PendingKind.Review when draft.PendingReviewComments is { } comments:
-                if (draft.Summary == draft.PendingSummary) draft.Summary = "";
+                if (draft.Summary == draft.PendingSummary)
+                    draft.Summary = "";
                 draft.Comments.RemoveAll(comments.Contains);
                 break;
             case PendingKind.FileComment when draft.PendingFilePath is { } path && draft.PendingBody is { } body:
-                if (draft.FileComposers.GetValueOrDefault(path) == body) draft.FileComposers[path] = "";
+                if (draft.FileComposers.GetValueOrDefault(path) == body)
+                    draft.FileComposers[path] = "";
                 break;
             case PendingKind.Comment or PendingKind.Inline or PendingKind.Reply
                 when draft.PendingComposerKey is { } key && draft.PendingBody is { } sent:
-                if (draft.ContextComposers.GetValueOrDefault(key, key == "pr" ? draft.Composer : "") != sent) break;
+                if (draft.ContextComposers.GetValueOrDefault(key, key == "pr" ? draft.Composer : "") != sent)
+                    break;
                 draft.ContextComposers[key] = "";
-                if (key == "pr") draft.Composer = "";
+                if (key == "pr")
+                    draft.Composer = "";
                 break;
         }
         ClearPending(draft);

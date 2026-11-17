@@ -27,13 +27,15 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
     {
         var current = await CurrentBranchRefAsync(root, ct);
         var detached = moves.Any(step => step.Target == current);
-        if (detached) await Run(root, ["checkout", "--detach", "HEAD"], ct);
+        if (detached)
+            await Run(root, ["checkout", "--detach", "HEAD"], ct);
         var input = "start\n" + string.Concat(moves.Select(step => $"update {step.Target} {step.OldSha} {step.NewSha}\n")) + "prepare\ncommit\n";
         var result = (await runner.RunAsync(new(executable.Resolve(), ["update-ref", "--stdin"], root,
             WriteTimeout, StandardInput: input, Environment: WriteEnvironment), ct)).OrThrow();
         if (result.ExitCode != 0)
         {
-            if (detached) await SwitchToAsync(root, current, ct, required: true);
+            if (detached)
+                await SwitchToAsync(root, current, ct, required: true);
             throw new StackerException("The ref transaction was refused; no branches were changed. " + result.StdErr.Trim());
         }
         await SwitchToAsync(root, originalBranch.Length > 0 ? originalBranch : current, ct, required: true);
@@ -49,8 +51,10 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
             return $"{WorkingOperations.Noun(state.Operation)} started after the preview was built. Finish or abort it first.";
         foreach (var step in plan.Steps.Where(step => step.NeedsRebase && !step.Blocked))
         {
-            if (await ShaAsync(root, step.Branch, ct) != step.BranchTip) return $"{step.BranchName} moved after the preview was built. Refresh and restack again.";
-            if (await ShaAsync(root, step.ParentRef, ct) != step.OldParentTip) return $"{step.ParentName} moved after the preview was built. Refresh and restack again.";
+            if (await ShaAsync(root, step.Branch, ct) != step.BranchTip)
+                return $"{step.BranchName} moved after the preview was built. Refresh and restack again.";
+            if (await ShaAsync(root, step.ParentRef, ct) != step.OldParentTip)
+                return $"{step.ParentName} moved after the preview was built. Refresh and restack again.";
         }
         return null;
     }
@@ -99,7 +103,8 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
     public async Task<string?> GitPathAsync(string root, string name, CancellationToken ct)
     {
         var path = (await Run(root, ["rev-parse", "--git-path", name], ct, allowFailure: true)).StdOut.Trim();
-        if (path.Length == 0) return null;
+        if (path.Length == 0)
+            return null;
         return Path.IsPathRooted(path) ? path : Path.Combine(root, path);
     }
 
@@ -109,7 +114,8 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
         foreach (var name in new[] { "rebase-merge", "rebase-apply" })
         {
             var directory = await GitPathAsync(root, name, ct);
-            if (directory is null || !Directory.Exists(directory)) continue;
+            if (directory is null || !Directory.Exists(directory))
+                continue;
             var headName = Path.Combine(directory, "head-name");
             var originalHead = Path.Combine(directory, "orig-head");
             var onto = Path.Combine(directory, "onto");
@@ -130,8 +136,12 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
         {
             var line = raw.TrimEnd('\r');
             if (line.StartsWith("worktree ", StringComparison.Ordinal))
-            { isCurrent = string.Equals(Path.GetFullPath(line[9..]), Path.GetFullPath(root), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal); continue; }
-            if (!isCurrent && line.StartsWith("branch ", StringComparison.Ordinal)) branches.Add(line[7..].Trim());
+            {
+                isCurrent = string.Equals(Path.GetFullPath(line[9..]), Path.GetFullPath(root), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+                continue;
+            }
+            if (!isCurrent && line.StartsWith("branch ", StringComparison.Ordinal))
+                branches.Add(line[7..].Trim());
         }
         return branches;
     }
@@ -160,9 +170,11 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
 
     public async Task SwitchToAsync(string root, string branch, CancellationToken ct, bool required)
     {
-        if (branch.Length == 0) return;
+        if (branch.Length == 0)
+            return;
         var name = StackRefs.Short(branch);
-        if (string.Equals(await CurrentBranchRefAsync(root, ct), "refs/heads/" + name, StringComparison.Ordinal)) return;
+        if (string.Equals(await CurrentBranchRefAsync(root, ct), "refs/heads/" + name, StringComparison.Ordinal))
+            return;
         var result = await Run(root, ["checkout", name], ct, allowFailure: true);
         if (result.ExitCode != 0 && required)
             throw new StackerException($"The branches are in place, but returning to {name} failed: {result.StdErr.Trim()}");
@@ -173,7 +185,8 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
     public string[] RebaseArgs(RestackPlan plan, RestackStep step)
     {
         var args = new List<string> { "rebase", "--onto", step.ParentRef, step.ReplayBase ?? step.OldParentTip!, step.BranchName };
-        if (plan.PreserveMerges) args.Add("--rebase-merges");
+        if (plan.PreserveMerges)
+            args.Add("--rebase-merges");
         args.AddRange(["--no-autostash", "--no-autosquash", "--empty=drop"]);
         return [.. args];
     }
@@ -195,7 +208,8 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
         var result = (await runner.RunAsync(new(executable.Resolve(),
             ["-c", "core.hooksPath=" + Framework.Neutral.HooksPath, "-c", "commit.gpgSign=false", "-c", "rebase.updateRefs=false", .. args],
             root, timeout ?? WriteTimeout, MaxOutputBytes: 4 * 1024 * 1024, Environment: environment), ct)).OrThrow();
-        if (!allowFailure && result.ExitCode != 0) throw new StackerException($"Git exited with code {result.ExitCode}: {result.StdErr.Trim()}");
+        if (!allowFailure && result.ExitCode != 0)
+            throw new StackerException($"Git exited with code {result.ExitCode}: {result.StdErr.Trim()}");
         return result;
     }
 

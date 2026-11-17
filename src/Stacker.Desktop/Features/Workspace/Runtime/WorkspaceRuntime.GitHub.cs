@@ -1,6 +1,6 @@
+using System.Collections.ObjectModel;
 using Stacker.Core;
 using Stacker.Core.Framework;
-using System.Collections.ObjectModel;
 namespace Stacker.Desktop.ViewModels;
 
 internal sealed partial class WorkspaceRuntime
@@ -11,7 +11,13 @@ internal sealed partial class WorkspaceRuntime
     internal IApplicationState _applicationStore = default!;
     internal IDemoRepository? _demo = default!;
     internal IGhToolSettings? _ghExecutable = default!;
-    internal GraphSnapshot? _historyRemoteGraph { get => Session.Displayed.Graph; set => Session.SetRemote(Session.Displayed.Remote, value); }
-    internal GitHubSnapshot? _remoteSnapshot { get => Session.Displayed.Remote; set => Session.SetRemote(value, _historyRemoteGraph); }
+    internal GraphSnapshot? _historyRemoteGraph
+    {
+        get => Session.Displayed.Graph; set => Session.SetRemote(Session.Displayed.Remote, value);
+    }
+    internal GitHubSnapshot? _remoteSnapshot
+    {
+        get => Session.Displayed.Remote; set => Session.SetRemote(value, _historyRemoteGraph);
+    }
     internal CancellationTokenSource? _githubLoad = default!;
 }

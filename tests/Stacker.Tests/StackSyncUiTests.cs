@@ -1,44 +1,35 @@
-using Stacker.Core.Framework;
 // Purpose: Headless scenarios for the sync window, the restack flow, and publishing a stack's pull requests.
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Stacker.Core;
+using Stacker.Core.Framework;
 using Stacker.Desktop;
 using Stacker.Desktop.ViewModels;
 using Stacker.Infrastructure;
 namespace Stacker.Tests;
 
 [Collection(HeadlessApp.CollectionName)]
-public sealed class StackSyncUiTests
+public sealed partial class StackSyncUiTests
 {
     private static MainViewModel CreateVm(GitFixture f, IGitHubReader? github = null, IGitHubPullRequestWriter? pullRequests = null, IEditorLauncher? editor = null) => new(
         f.Reader, new YamlStackStore(), new JsonSettingsStore(f.Root + " settings"), new GitExecutable(),
         new StackService(f.Reader), new DiffService(f.Reader), github: github, pullRequestWriter: pullRequests,
         branchWriter: f.Writer(), editorLauncher: editor);
 
-    /// <summary>An editor that records what it was asked to open, and that git can actually run for a commit message.</summary>
-    private sealed class FakeEditor : IEditorLauncher
-    {
-        private readonly string _command;
-        public FakeEditor(string command) => _command = command;
-        public List<IReadOnlyList<string>> Opened { get; } = [];
-        public Task<string?> ResolveAsync(string root, string? overrideCommand, CancellationToken ct = default) => Task.FromResult<string?>(_command);
-        public Task<string?> OpenAsync(string root, IReadOnlyList<string> paths, string? overrideCommand, CancellationToken ct = default)
-        { Opened.Add(paths); return Task.FromResult<string?>(_command); }
-
-        Task<Result<string?>> IEditorLauncher.ResolveAsync(string root, string? overrideCommand, CancellationToken ct) => Boundary.CaptureAsync(() => ResolveAsync(root, overrideCommand, ct), ProblemCodes.GitFailed);
-
-        Task<Result<string?>> IEditorLauncher.OpenAsync(string root, IReadOnlyList<string> paths, string? overrideCommand, CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(root, paths, overrideCommand, ct), ProblemCodes.GitFailed);
-    }
-
     /// <summary>Leaves main moved under a layer that conflicts, with the stack definition committed.</summary>
     private static async Task Conflicting(GitFixture f)
     {
         await f.Init();
-        await f.Git("checkout", "-b", "A"); await f.Write("conflict.txt", "A\n"); await f.Commit("A");
-        await f.Git("checkout", "-b", "B"); await f.Write("B.txt", "B\n"); await f.Commit("B");
-        await f.Git("checkout", "main"); await f.Write("conflict.txt", "main\n"); await f.Commit("main moved");
+        await f.Git("checkout", "-b", "A");
+        await f.Write("conflict.txt", "A\n");
+        await f.Commit("A");
+        await f.Git("checkout", "-b", "B");
+        await f.Write("B.txt", "B\n");
+        await f.Commit("B");
+        await f.Git("checkout", "main");
+        await f.Write("conflict.txt", "main\n");
+        await f.Commit("main moved");
         await new YamlStackStore().SaveAsync(f.Root, [new("t", "T", "refs/heads/main", ["refs/heads/A", "refs/heads/B"])], null);
         await f.Commit("stack definition");
     }
@@ -51,25 +42,30 @@ public sealed class StackSyncUiTests
     {
         await f.Linear();
         await f.Git("checkout", "main");
-        if (moveBase) await MoveBase(f);
+        if (moveBase)
+            await MoveBase(f);
         await new YamlStackStore().SaveAsync(f.Root, [f.Stack], null);
         await f.Commit("stack definition");
     }
 
     private static async Task MoveBase(GitFixture f)
     {
-        await f.Git("checkout", "main"); await f.Write("main2.txt", "moved\n"); await f.Commit("base moved");
+        await f.Git("checkout", "main");
+        await f.Write("main2.txt", "moved\n");
+        await f.Commit("base moved");
     }
 
     // Scenario: The preview lists every layer, its planned rewrite, and enables only the local action.
     [AvaloniaFact]
     public async Task Preview_lists_every_layer_and_waits_for_an_explicit_restack()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: true);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: true);
         using var vm = CreateVm(f);
         await vm.OpenRepositoryAsync(f.Root);
         var plan = await vm.BuildRestackPlanAsync();
-        Assert.NotNull(plan); Assert.True(plan!.CanExecute, string.Join("; ", plan.Blockers));
+        Assert.NotNull(plan);
+        Assert.True(plan!.CanExecute, string.Join("; ", plan.Blockers));
         Assert.True(vm.CanRestackActiveStack);
         var window = new SyncPreviewWindow(plan, Actions(vm), false);
         window.Show();
@@ -91,12 +87,14 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task Preview_refuses_to_run_a_blocked_plan()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: true);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: true);
         using var vm = CreateVm(f);
         await vm.OpenRepositoryAsync(f.Root);
         await f.Write("base.txt", "edited\n");
         var plan = await vm.BuildRestackPlanAsync();
-        Assert.NotNull(plan); Assert.False(plan!.CanExecute);
+        Assert.NotNull(plan);
+        Assert.False(plan!.CanExecute);
         var window = new SyncPreviewWindow(plan, Actions(vm), false);
         window.Show();
         try
@@ -111,17 +109,20 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task View_model_restacks_reloads_and_undoes()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: false);
         using var vm = CreateVm(f);
         await vm.OpenRepositoryAsync(f.Root);
         var before = vm.Layers.Select(layer => layer.Snapshot.HeadSha).ToArray();
         Assert.False(vm.HasError, vm.Error);
         Assert.Equal(3, before.Length);
-        await MoveBase(f); await vm.RefreshAsync();
+        await MoveBase(f);
+        await vm.RefreshAsync();
         var plan = await vm.BuildRestackPlanAsync();
         Assert.NotNull(plan);
         var outcome = await vm.RestackAsync(plan);
-        Assert.NotNull(outcome); Assert.True(outcome!.Applied, outcome.Message);
+        Assert.NotNull(outcome);
+        Assert.True(outcome!.Applied, outcome.Message);
         Assert.False(vm.HasError, vm.Error);
         Assert.Equal(3, vm.Layers.Count);
         Assert.NotEqual(before[0], vm.Layers[0].Snapshot.HeadSha);
@@ -136,12 +137,14 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task Publishing_creates_missing_pull_requests_and_retargets_moved_ones()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: false);
         var github = new FakeGitHub([DiscoveryTests.Pr(7, "main", "A"), DiscoveryTests.Pr(8, "main", "B")]);
         using var vm = CreateVm(f, github, github);
         await vm.OpenRepositoryAsync(f.Root);
         var (plan, message) = await vm.CheckPullRequestsAsync("test");
-        Assert.NotNull(plan); Assert.True(plan!.CanPublish, message);
+        Assert.NotNull(plan);
+        Assert.True(plan!.CanPublish, message);
         Assert.Equal(2, plan.PendingCount);
         Assert.Equal(PullRequestAction.Unchanged, plan.Steps[0].Action);
         Assert.False(vm.HasError, vm.Error);
@@ -152,7 +155,9 @@ public sealed class StackSyncUiTests
         Assert.Equal(new[] { "base #8 → A", "create C → B: C" }, github.Calls);
         // The same stack checked twice is idempotent: once the server agrees, nothing is pending.
         var (again, second) = await vm.CheckPullRequestsAsync("test");
-        Assert.NotNull(again); Assert.Equal(0, again!.PendingCount); Assert.False(again.CanPublish);
+        Assert.NotNull(again);
+        Assert.Equal(0, again!.PendingCount);
+        Assert.False(again.CanPublish);
         Assert.Contains("already has an open pull request", second);
     }
 
@@ -161,26 +166,32 @@ public sealed class StackSyncUiTests
     [InlineData(2, "B")]
     public async Task An_unknown_pull_request_write_stops_the_batch_and_requires_a_fresh_plan(int attempt, string layer)
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: false);
         var github = new FakeGitHub([DiscoveryTests.Pr(8, "main", "B")]) { LoseResponseOnWrite = attempt };
         using var vm = CreateVm(f, github, github);
         await vm.OpenRepositoryAsync(f.Root);
         var (plan, _) = await vm.CheckPullRequestsAsync("test");
-        Assert.NotNull(plan); Assert.Equal(3, plan.PendingCount);
+        Assert.NotNull(plan);
+        Assert.Equal(3, plan.PendingCount);
 
         var (ok, message) = await vm.PublishPullRequestsAsync(plan);
 
         Assert.False(ok);
         Assert.Contains($"outcome for layer {layer} is unknown", message);
-        if (attempt == 1) Assert.StartsWith("The publication outcome", message);
-        else Assert.StartsWith("Published #100 A → main.", message);
+        if (attempt == 1)
+            Assert.StartsWith("The publication outcome", message);
+        else
+            Assert.StartsWith("Published #100 A → main.", message);
         Assert.Equal(attempt, github.Calls.Count);
         var (stale, staleMessage) = await vm.PublishPullRequestsAsync(plan);
-        Assert.False(stale); Assert.Contains("changed since the check", staleMessage);
+        Assert.False(stale);
+        Assert.Contains("changed since the check", staleMessage);
         Assert.Equal(attempt, github.Calls.Count);
 
         var (fresh, _) = await vm.CheckPullRequestsAsync("test");
-        Assert.NotNull(fresh); Assert.Equal(3 - attempt, fresh.PendingCount);
+        Assert.NotNull(fresh);
+        Assert.Equal(3 - attempt, fresh.PendingCount);
         github.LoseResponseOnWrite = null;
         Assert.True((await vm.PublishPullRequestsAsync(fresh)).Ok);
         Assert.Equal(3, github.Calls.Count);
@@ -189,13 +200,17 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task Confirmed_pull_request_writes_remain_successful_when_the_refresh_fails()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: false);
         var github = new FakeGitHub([DiscoveryTests.Pr(7, "main", "A"), DiscoveryTests.Pr(8, "main", "B"), DiscoveryTests.Pr(9, "B", "C")])
-        { FailSnapshotAfterWrite = true };
+        {
+            FailSnapshotAfterWrite = true
+        };
         using var vm = CreateVm(f, github, github);
         await vm.OpenRepositoryAsync(f.Root);
         var (plan, _) = await vm.CheckPullRequestsAsync("test");
-        Assert.NotNull(plan); Assert.Equal(1, plan.PendingCount);
+        Assert.NotNull(plan);
+        Assert.Equal(1, plan.PendingCount);
 
         var (ok, message) = await vm.PublishPullRequestsAsync(plan);
 
@@ -210,7 +225,8 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task Adding_a_layer_creates_the_branch_and_appends_it_to_the_stack()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: false);
         using var vm = CreateVm(f);
         await vm.OpenRepositoryAsync(f.Root);
         var (ok, message) = await vm.AddLayerAsync("test", "feature/top", "refs/heads/C");
@@ -229,7 +245,8 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task The_add_layer_window_creates_the_named_branch()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: false);
         using var vm = CreateVm(f);
         await vm.OpenRepositoryAsync(f.Root);
         var window = new AddLayerWindow(Assert.Single(vm.Stacks), vm.AddLayerAsync);
@@ -249,7 +266,8 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task Pressing_check_pull_requests_renders_the_plan_and_waits_for_an_explicit_publish()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: false);
         var github = new FakeGitHub([DiscoveryTests.Pr(8, "main", "B")]);
         using var vm = CreateVm(f, github, github);
         await vm.OpenRepositoryAsync(f.Root);
@@ -276,10 +294,13 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task Preview_replans_after_restack_and_undo_in_the_same_window()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: true);
-        using var vm = CreateVm(f); await vm.OpenRepositoryAsync(f.Root);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: true);
+        using var vm = CreateVm(f);
+        await vm.OpenRepositoryAsync(f.Root);
         var plan = (await vm.BuildRestackPlanAsync())!;
-        var window = new SyncPreviewWindow(plan, vm, false); window.Show();
+        var window = new SyncPreviewWindow(plan, vm, false);
+        window.Show();
         try
         {
             var restack = window.FindControl<Button>("RestackButton")!;
@@ -298,32 +319,44 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task Publication_refuses_a_plan_owned_by_another_context()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
-        var github = new FakeGitHub([]); using var vm = CreateVm(f, github, github);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: false);
+        var github = new FakeGitHub([]);
+        using var vm = CreateVm(f, github, github);
         await vm.OpenRepositoryAsync(f.Root);
-        var (plan, _) = await vm.CheckPullRequestsAsync("test"); Assert.NotNull(plan);
-        var (ok, message) = await vm.PublishPullRequestsAsync(plan! with { ContextIdentity = "another identity" });
-        Assert.False(ok); Assert.Contains("identity changed", message); Assert.Empty(github.Calls);
+        var (plan, _) = await vm.CheckPullRequestsAsync("test");
+        Assert.NotNull(plan);
+        var (ok, message) = await vm.PublishPullRequestsAsync(plan! with
+        {
+            ContextIdentity = "another identity"
+        });
+        Assert.False(ok);
+        Assert.Contains("identity changed", message);
+        Assert.Empty(github.Calls);
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        while (!condition()) await Task.Delay(10, timeout.Token);
+        while (!condition())
+            await Task.Delay(10, timeout.Token);
     }
 
     // Scenario: The main-window banner tracks a conflicted restack and clears once it is aborted.
     [AvaloniaFact]
     public async Task The_banner_tracks_a_conflicted_restack_and_clears_after_abort()
     {
-        await using var f = new GitFixture(); await Conflicting(f);
+        await using var f = new GitFixture();
+        await Conflicting(f);
         using var vm = CreateVm(f, editor: new FakeEditor("true"));
         await vm.OpenRepositoryAsync(f.Root);
         Assert.False(vm.HasOperation);
         var plan = await vm.BuildRestackPlanAsync();
-        Assert.NotNull(plan); Assert.True(plan!.CanExecute, string.Join("; ", plan.Blockers));
+        Assert.NotNull(plan);
+        Assert.True(plan!.CanExecute, string.Join("; ", plan.Blockers));
         var outcome = await vm.RestackAsync(plan);
-        Assert.NotNull(outcome); Assert.True(outcome!.Conflicted, outcome.Message);
+        Assert.NotNull(outcome);
+        Assert.True(outcome!.Conflicted, outcome.Message);
         Assert.True(vm.HasOperation);
         Assert.Contains("rebase", vm.OperationSummary, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("conflicted file", vm.OperationSummary);
@@ -338,7 +371,8 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task The_conflict_panel_resolves_and_continues_from_the_window()
     {
-        await using var f = new GitFixture(); await Conflicting(f);
+        await using var f = new GitFixture();
+        await Conflicting(f);
         // Git supplies its shell's no-op command on both platforms.
         var editor = new FakeEditor("true");
         using var vm = CreateVm(f, editor: editor);
@@ -346,7 +380,8 @@ public sealed class StackSyncUiTests
         var plan = await vm.BuildRestackPlanAsync();
         Assert.NotNull(plan);
         var outcome = await vm.RestackAsync(plan!);
-        Assert.NotNull(outcome); Assert.True(outcome!.Conflicted, outcome.Message);
+        Assert.NotNull(outcome);
+        Assert.True(outcome!.Conflicted, outcome.Message);
         var window = new SyncPreviewWindow(plan!, vm, false);
         window.Show();
         try
@@ -374,13 +409,15 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task Stashing_from_the_view_model_unblocks_a_dirty_tree()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: true);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: true);
         using var vm = CreateVm(f);
         await vm.OpenRepositoryAsync(f.Root);
         await f.Write("base.txt", "edited\n");
         await vm.RefreshWorkingTreeAsync();
         var plan = await vm.BuildRestackPlanAsync();
-        Assert.NotNull(plan); Assert.False(plan!.CanExecute);
+        Assert.NotNull(plan);
+        Assert.False(plan!.CanExecute);
         Assert.Contains(plan.Blockers, blocker => blocker.Contains("uncommitted"));
         var (ok, message) = await vm.StashAndRestackAsync(plan);
         Assert.True(ok, message);
@@ -395,7 +432,8 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task The_commit_window_commits_the_working_tree()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: false);
         using var vm = CreateVm(f);
         await vm.OpenRepositoryAsync(f.Root);
         await f.Write("new.txt", "x\n");
@@ -417,16 +455,19 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task Publishing_refuses_when_a_pull_request_appeared_after_the_check()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: false);
         var github = new FakeGitHub([DiscoveryTests.Pr(7, "main", "A"), DiscoveryTests.Pr(8, "main", "B")]);
         using var vm = CreateVm(f, github, github);
         await vm.OpenRepositoryAsync(f.Root);
         var (plan, _) = await vm.CheckPullRequestsAsync("test");
-        Assert.NotNull(plan); Assert.True(plan!.CanPublish);
+        Assert.NotNull(plan);
+        Assert.True(plan!.CanPublish);
         // Someone opens the pull request for layer C while the preview is open.
         github.AddPullRequest(DiscoveryTests.Pr(9, "B", "C"));
         var (ok, message) = await vm.PublishPullRequestsAsync(plan);
-        Assert.False(ok); Assert.Contains("changed since the check", message);
+        Assert.False(ok);
+        Assert.Contains("changed since the check", message);
         Assert.Empty(github.Calls);
     }
 
@@ -434,74 +475,12 @@ public sealed class StackSyncUiTests
     [AvaloniaFact]
     public async Task Checking_without_github_explains_itself()
     {
-        await using var f = new GitFixture(); await Prepared(f, moveBase: false);
+        await using var f = new GitFixture();
+        await Prepared(f, moveBase: false);
         using var vm = CreateVm(f);
         await vm.OpenRepositoryAsync(f.Root);
         var (plan, message) = await vm.CheckPullRequestsAsync("test");
-        Assert.Null(plan); Assert.Contains("Connect GitHub", message);
-    }
-
-    /// <summary>In-memory server double: writes are reflected in later reads, so the flow can be checked end to end.</summary>
-    private sealed class FakeGitHub : IGitHubReader, IGitHubPullRequestWriter
-    {
-        private readonly List<PullRequest> _pullRequests;
-        public FakeGitHub(IReadOnlyList<PullRequest> pullRequests) => _pullRequests = [.. pullRequests];
-        public GitHubRepositoryContext Context { get; } = new("github.com", 1, "team", "repo", "https://github.com/team/repo.git", "alice", "main");
-        public List<string> Calls { get; } = [];
-        public int? LoseResponseOnWrite { get; set; }
-        public bool FailSnapshotAfterWrite { get; init; }
-        /// <summary>Stands in for someone else opening a pull request while the preview is open.</summary>
-        public void AddPullRequest(PullRequest pullRequest) => _pullRequests.Add(pullRequest);
-        public Task<GitHubRepositoryContext> ConnectAsync(string root, string? repositoryOverride, CancellationToken ct = default) => Task.FromResult(Context);
-        public Task<GitHubSnapshot> SnapshotAsync(GitHubRepositoryContext context, CancellationToken ct = default)
-        {
-            if (FailSnapshotAfterWrite && Calls.Count > 0) throw new StackerException("injected refresh failure");
-            return Task.FromResult(new GitHubSnapshot(context, _pullRequests.ToArray(), DateTimeOffset.UtcNow));
-        }
-        public Task VerifyAccessAsync(GitHubRepositoryContext context, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<PullRequest> CreatePullRequestAsync(GitHubRepositoryContext context, string headBranch, string baseBranch, string title, string body, bool draft, CancellationToken ct = default)
-        {
-            Calls.Add($"create {headBranch} → {baseBranch}: {title}");
-            var number = 100 + _pullRequests.Count(pr => pr.Number >= 100);
-            var created = new PullRequest(number, title, context.RepositoryId, baseBranch, new('a', 40), context.RepositoryId, headBranch, new('b', 40), draft, $"https://example.invalid/pr/{number}");
-            _pullRequests.Add(created);
-            return AcknowledgeAsync(created);
-        }
-        public Task<PullRequest> UpdatePullRequestBaseAsync(GitHubRepositoryContext context, long number, string baseBranch, CancellationToken ct = default)
-        {
-            Calls.Add($"base #{number} → {baseBranch}");
-            var index = _pullRequests.FindIndex(pr => pr.Number == number);
-            var updated = _pullRequests[index] with { BaseRef = baseBranch };
-            _pullRequests[index] = updated;
-            return AcknowledgeAsync(updated);
-        }
-        private Task<PullRequest> AcknowledgeAsync(PullRequest pr) => Calls.Count == LoseResponseOnWrite
-            ? throw new StackerException(Problem.Of(ProblemCodes.GitHubRequest, "injected response loss"))
-            : Task.FromResult(pr);
-        public Task<PullRequest> PullRequestAsync(GitHubRepositoryContext context, long number, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<ReviewDiscussion> DiscussionAsync(GitHubRepositoryContext context, PullRequest pr, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task ValidateAnchorsAsync(GitHubRepositoryContext context, PullRequest pr, IReadOnlyList<ReviewAnchor> anchors, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<string>> ChangedFilePathsAsync(GitHubRepositoryContext context, PullRequest pr, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task ValidateFileAsync(GitHubRepositoryContext context, PullRequest pr, string path, CancellationToken ct = default) => throw new NotSupportedException();
-
-        Task<Result<GitHubRepositoryContext>> IGitHubReader.ConnectAsync(string root, string? repositoryOverride, CancellationToken ct) => Boundary.CaptureAsync(() => ConnectAsync(root, repositoryOverride, ct), ProblemCodes.GitHubRequest);
-
-        Task<Result<GitHubSnapshot>> IGitHubReader.SnapshotAsync(GitHubRepositoryContext context, CancellationToken ct) => Boundary.CaptureAsync(() => SnapshotAsync(context, ct), ProblemCodes.GitHubRequest);
-
-        Task<Result<PullRequest>> IGitHubReader.PullRequestAsync(GitHubRepositoryContext context, long number, CancellationToken ct) => Boundary.CaptureAsync(() => PullRequestAsync(context, number, ct), ProblemCodes.GitHubRequest);
-
-        Task<Result<ReviewDiscussion>> IGitHubReader.DiscussionAsync(GitHubRepositoryContext context, PullRequest pr, CancellationToken ct) => Boundary.CaptureAsync(() => DiscussionAsync(context, pr, ct), ProblemCodes.GitHubRequest);
-
-        Task<Result<Unit>> IGitHubReader.ValidateAnchorsAsync(GitHubRepositoryContext context, PullRequest pr, IReadOnlyList<ReviewAnchor> anchors, CancellationToken ct) => Boundary.CaptureAsync(() => ValidateAnchorsAsync(context, pr, anchors, ct), ProblemCodes.GitHubRequest);
-
-        Task<Result<IReadOnlyList<string>>> IGitHubReader.ChangedFilePathsAsync(GitHubRepositoryContext context, PullRequest pr, CancellationToken ct) => Boundary.CaptureAsync(() => ChangedFilePathsAsync(context, pr, ct), ProblemCodes.GitHubRequest);
-
-        Task<Result<Unit>> IGitHubReader.ValidateFileAsync(GitHubRepositoryContext context, PullRequest pr, string path, CancellationToken ct) => Boundary.CaptureAsync(() => ValidateFileAsync(context, pr, path, ct), ProblemCodes.GitHubRequest);
-
-        Task<Result<Unit>> IGitHubReader.VerifyAccessAsync(GitHubRepositoryContext context, CancellationToken ct) => Boundary.CaptureAsync(() => VerifyAccessAsync(context, ct), ProblemCodes.GitHubRequest);
-
-        Task<Result<PullRequest>> IGitHubPullRequestWriter.CreatePullRequestAsync(GitHubRepositoryContext context, string headBranch, string baseBranch, string title, string body, bool draft, CancellationToken ct) => Boundary.CaptureAsync(() => CreatePullRequestAsync(context, headBranch, baseBranch, title, body, draft, ct), ProblemCodes.GitHubRequest);
-
-        Task<Result<PullRequest>> IGitHubPullRequestWriter.UpdatePullRequestBaseAsync(GitHubRepositoryContext context, long number, string baseBranch, CancellationToken ct) => Boundary.CaptureAsync(() => UpdatePullRequestBaseAsync(context, number, baseBranch, ct), ProblemCodes.GitHubRequest);
+        Assert.Null(plan);
+        Assert.Contains("Connect GitHub", message);
     }
 }

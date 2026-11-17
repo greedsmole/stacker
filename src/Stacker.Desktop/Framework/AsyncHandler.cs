@@ -9,7 +9,10 @@ internal static class AsyncHandler
     /// <param name="action">Operation raised by an event handler.</param><param name="report">UI error reporter.</param>
     public static async void Run(Func<Task> action, Action<string> report)
     {
-        try { await action(); }
+        try
+        {
+            await action();
+        }
         catch (OperationCanceledException) { report("The action was cancelled."); }
         catch (Exception ex) { report(ex.Message); }
     }
@@ -20,11 +23,19 @@ internal static class AsyncHandler
     {
         switch (control.DataContext)
         {
-            case MainViewModel shell: shell.Error = message; return;
-            case ReviewViewModel review: review.Message = message; return;
-            case DiffSectionViewModel diff: diff.Message = message; return;
+            case MainViewModel shell:
+                shell.Error = message;
+                return;
+            case ReviewViewModel review:
+                review.Message = message;
+                return;
+            case DiffSectionViewModel diff:
+                diff.Message = message;
+                return;
         }
-        if (TopLevel.GetTopLevel(control)?.DataContext is MainViewModel owner) owner.Error = message;
-        else Console.Error.WriteLine(message);
+        if (TopLevel.GetTopLevel(control)?.DataContext is MainViewModel owner)
+            owner.Error = message;
+        else
+            Console.Error.WriteLine(message);
     }
 }

@@ -43,17 +43,25 @@ public sealed partial class DiffSectionViewModel
         var next = 0;
         foreach (var gap in context.Gaps)
         {
-            while (next < gap.BeforeRow) yield return _patchRows[next++];
-            yield return new(new(DiffLineKind.Notice, null, null, "")) { ContextGap = gap, AllowComment = false };
+            while (next < gap.BeforeRow)
+                yield return _patchRows[next++];
+            yield return new(new(DiffLineKind.Notice, null, null, ""))
+            {
+                ContextGap = gap,
+                AllowComment = false
+            };
         }
-        while (next < _patchRows.Length) yield return _patchRows[next++];
+        while (next < _patchRows.Length)
+            yield return _patchRows[next++];
     }
 
     internal RenderedDiffLine? ExpandContext(RenderedDiffLine row, bool fromEnd)
     {
-        if (_context is not { } context || _contextExpansion is not null || row.ContextGap is not { } gap) return null;
+        if (_context is not { } context || _contextExpansion is not null || row.ContextGap is not { } gap)
+            return null;
         var index = Lines.IndexOf(row);
-        if (index < 0) return null;
+        if (index < 0)
+            return null;
         var count = gap.RevealCount;
         var remaining = gap.Count - count;
         if (Lines.Count + count - (remaining == 0 ? 1 : 0) > DiffView.DisplayLineLimit)
@@ -69,15 +77,25 @@ public sealed partial class DiffSectionViewModel
             rows[i] = CreateContextLine(context, gap, offset + i);
         ApplyContextAppearance(rows);
 
-        if (remaining == 0) Lines.RemoveAt(index);
+        if (remaining == 0)
+            Lines.RemoveAt(index);
         else if (fromEnd)
         {
-            row.ContextGap = gap with { Count = remaining };
+            row.ContextGap = gap with
+            {
+                Count = remaining
+            };
             index++;
         }
         else
-            row.ContextGap = gap with { OldStart = gap.OldStart + count, NewStart = gap.NewStart + count, Count = remaining };
-        foreach (var revealed in rows) Lines.Insert(index++, revealed);
+            row.ContextGap = gap with
+            {
+                OldStart = gap.OldStart + count,
+                NewStart = gap.NewStart + count,
+                Count = remaining
+            };
+        foreach (var revealed in rows)
+            Lines.Insert(index++, revealed);
         SetHiddenContextLines(_hiddenContextLines - count);
         ClearContextMessage();
         ApplyThreads();
@@ -86,7 +104,8 @@ public sealed partial class DiffSectionViewModel
 
     internal async Task<bool> ExpandAllContextAsync()
     {
-        if (_context is not { } context || !HasCollapsedContext || _contextExpansion is not null) return false;
+        if (_context is not { } context || !HasCollapsedContext || _contextExpansion is not null)
+            return false;
         var total = _patchRows.Length + context.HiddenLineCount;
         if (total > DiffView.DisplayLineLimit)
         {
@@ -105,19 +124,22 @@ public sealed partial class DiffSectionViewModel
                 foreach (var row in snapshot)
                 {
                     expansion.Token.ThrowIfCancellationRequested();
-                    if (row.ContextGap is not { } gap) rows.Add(row);
+                    if (row.ContextGap is not { } gap)
+                        rows.Add(row);
                     else
                     {
                         for (var i = 0; i < gap.Count; i++)
                         {
-                            if (i % 1024 == 0) expansion.Token.ThrowIfCancellationRequested();
+                            if (i % 1024 == 0)
+                                expansion.Token.ThrowIfCancellationRequested();
                             rows.Add(CreateContextLine(context, gap, i));
                         }
                     }
                 }
                 return rows;
             }, expansion.Token);
-            if (expansion.IsCancellationRequested || !ReferenceEquals(_context, context)) return false;
+            if (expansion.IsCancellationRequested || !ReferenceEquals(_context, context))
+                return false;
             ApplyContextAppearance(expanded);
             Lines.ReplaceAll(expanded);
             SetHiddenContextLines(0);
@@ -131,7 +153,8 @@ public sealed partial class DiffSectionViewModel
 
     internal void CollapseContext()
     {
-        if (_context is not { } context || !HasExpandedContext) return;
+        if (_context is not { } context || !HasExpandedContext)
+            return;
         _contextExpansion?.Cancel();
         Lines.ReplaceAll(FoldedRows(context));
         SetHiddenContextLines(context.HiddenLineCount);
@@ -151,7 +174,8 @@ public sealed partial class DiffSectionViewModel
         var wrapping = WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap;
         foreach (var row in rows)
         {
-            if (!row.IsExpandedContext) continue;
+            if (!row.IsExpandedContext)
+                continue;
             row.TextWrapping = wrapping;
             if (row.NewLineNumber is int number && _contextTokens?.TryGetValue(number, out var spans) == true)
                 row.Tokens = spans;
@@ -167,6 +191,7 @@ public sealed partial class DiffSectionViewModel
 
     private void ClearContextMessage()
     {
-        if (Message is FullContextTooLarge or ContextAtLimit) Message = "";
+        if (Message is FullContextTooLarge or ContextAtLimit)
+            Message = "";
     }
 }

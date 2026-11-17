@@ -13,7 +13,8 @@ public sealed partial class HistoryPanel : UserControl
 
     private void OpenFileFolders(object? sender, EventArgs e)
     {
-        if (DataContext is not HistoryWorkspaceViewModel history || sender is not Flyout { Content: Grid content }) return;
+        if (DataContext is not HistoryWorkspaceViewModel history || sender is not Flyout { Content: Grid content })
+            return;
         var picker = content.Children.OfType<TreeView>().Single();
         var tree = history.HasDocumentFiles
             ? FileFolderTree.Create(history.DocumentFiles, item => item.File,
@@ -27,19 +28,23 @@ public sealed partial class HistoryPanel : UserControl
 
     private void FolderFileTapped(object? sender, TappedEventArgs e)
     {
-        if (e.Source is not Visual source) return;
+        if (e.Source is not Visual source)
+            return;
         var row = source as TreeViewItem ?? source.FindAncestorOfType<TreeViewItem>();
-        if (row?.DataContext is FileTreeNode node && OpenFolderFile(node)) e.Handled = true;
+        if (row?.DataContext is FileTreeNode node && OpenFolderFile(node))
+            e.Handled = true;
     }
 
     private void FolderFileKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && sender is TreeView { SelectedItem: FileTreeNode node } && OpenFolderFile(node)) e.Handled = true;
+        if (e.Key == Key.Enter && sender is TreeView { SelectedItem: FileTreeNode node } && OpenFolderFile(node))
+            e.Handled = true;
     }
 
     private bool OpenFolderFile(FileTreeNode node)
     {
-        if (DataContext is not HistoryWorkspaceViewModel { IsBusy: false } history) return false;
+        if (DataContext is not HistoryWorkspaceViewModel { IsBusy: false } history)
+            return false;
         switch (node.Item)
         {
             case HistoryDocumentFile document when history.DocumentFiles.Contains(document):

@@ -25,17 +25,23 @@ public static class GraphDiscovery
         var nodes = graph.Nodes.Where(n => n.PullRequest is { } number && active.ContainsKey(number)).ToDictionary(n => n.Id);
         var edges = graph.Edges.Where(e => nodes.ContainsKey(e.Parent) && nodes.ContainsKey(e.Child)).ToArray();
         var parents = edges.GroupBy(e => e.Child).Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.Single().Parent);
-        var nonLeaves = parents.Values.ToHashSet(); var paths = new List<IReadOnlyList<PullRequest>>();
+        var nonLeaves = parents.Values.ToHashSet();
+        var paths = new List<IReadOnlyList<PullRequest>>();
         foreach (var leaf in nodes.Keys.Where(n => !nonLeaves.Contains(n)))
         {
-            var seen = new HashSet<string>(); var path = new List<PullRequest>(); var current = leaf;
+            var seen = new HashSet<string>();
+            var path = new List<PullRequest>();
+            var current = leaf;
             while (seen.Add(current))
             {
                 path.Add(active[nodes[current].PullRequest!.Value]);
-                if (!parents.TryGetValue(current, out var parent)) break;
+                if (!parents.TryGetValue(current, out var parent))
+                    break;
                 current = parent;
             }
-            path.Reverse(); if (path.Count > 1) paths.Add(path);
+            path.Reverse();
+            if (path.Count > 1)
+                paths.Add(path);
         }
         var occurrences = paths.SelectMany(p => p).GroupBy(p => p.Number).ToDictionary(g => g.Key, g => g.Count());
         var stacks = paths.Select(p => new DiscoveredStack("github-" + p[^1].Number, p[^1].Title, p, p.Any(pr => occurrences[pr.Number] > 1))).ToArray();

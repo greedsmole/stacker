@@ -13,7 +13,8 @@ public static class StartupGuard
         for (var i = 0; ; i++)
         {
             var status = probe();
-            if (status == 0 || i == attempts - 1) return status;
+            if (status == 0 || i == attempts - 1)
+                return status;
             wait();
         }
     }
@@ -26,7 +27,8 @@ public static class StartupGuard
             if (display is not null)
             {
                 var status = WaitForDisplay(display, 31, wait ?? (() => Thread.Sleep(1000)));
-                if (status != 0) throw new InvalidOperationException($"macOS display link is unavailable (CoreVideo {status}). Wake/connect a display and start Stacker again. No workspace was opened.");
+                if (status != 0)
+                    throw new InvalidOperationException($"macOS display link is unavailable (CoreVideo {status}). Wake/connect a display and start Stacker again. No workspace was opened.");
             }
             start();
             return 0;
@@ -45,18 +47,22 @@ public static class StartupGuard
         Console.Error.WriteLine(text);
         try
         {
-            var folder = Path.Combine(dataRoot, "diagnostics"); Directory.CreateDirectory(folder);
+            var folder = Path.Combine(dataRoot, "diagnostics");
+            Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "last-crash.log"), text);
         }
         catch (Exception logError) when (logError is IOException or UnauthorizedAccessException)
-        { Console.Error.WriteLine("Cannot save crash report: " + logError.Message); }
+        {
+            Console.Error.WriteLine("Cannot save crash report: " + logError.Message);
+        }
     }
     [SupportedOSPlatform("macos")]
     /// <summary>Returns CoreVideo's active-display probe status on macOS.</summary>
     public static int ProbeMacDisplay()
     {
         var result = CVDisplayLinkCreateWithActiveCGDisplays(out var link);
-        if (link != IntPtr.Zero) CVDisplayLinkRelease(link);
+        if (link != IntPtr.Zero)
+            CVDisplayLinkRelease(link);
         return result;
     }
     [DllImport("/System/Library/Frameworks/CoreVideo.framework/CoreVideo")]

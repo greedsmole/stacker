@@ -19,14 +19,16 @@ public sealed class RecoveryUiTests
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        while (!condition()) await Task.Delay(10, timeout.Token);
+        while (!condition())
+            await Task.Delay(10, timeout.Token);
     }
 
     // Scenario: A window must close even when nothing can be saved on the way out.
     [AvaloniaFact]
     public async Task A_window_closes_even_when_nothing_can_be_saved()
     {
-        await using var f = new GitFixture(); await f.Linear();
+        await using var f = new GitFixture();
+        await f.Linear();
         // A root that cannot be created on any platform: a directory below a file.
         var blocker = Path.Combine(Path.GetTempPath(), "stacker-blocker-" + Guid.NewGuid().ToString("N")[..8]);
         await File.WriteAllTextAsync(blocker, "not a directory");
@@ -43,7 +45,8 @@ public sealed class RecoveryUiTests
     [AvaloniaFact]
     public async Task An_interrupted_run_is_offered_and_can_be_restored()
     {
-        await using var f = new GitFixture(); await f.Linear();
+        await using var f = new GitFixture();
+        await f.Linear();
         var journal = f.CreateJournal();
         using var vm = CreateVm(f);
         await vm.OpenRepositoryAsync(f.Root);
@@ -52,8 +55,12 @@ public sealed class RecoveryUiTests
         var oldA = await f.Git("rev-parse", "A");
         // What a killed process leaves behind: the entry open, one branch already moved, nothing closed.
         var entry = (await journal.OpenAsync(root, "restack", [new JournalStep("layer:0", "rebase", "refs/heads/A", oldA, null, StepState.Planned)])).OrThrow();
-        (await journal.StepAsync(entry, entry.Steps[0] with { State = StepState.Started })).OrThrow();
-        await f.Git("checkout", "A"); await f.Git("commit", "--amend", "-m", "A rewritten");
+        (await journal.StepAsync(entry, entry.Steps[0] with
+        {
+            State = StepState.Started
+        })).OrThrow();
+        await f.Git("checkout", "A");
+        await f.Git("commit", "--amend", "-m", "A rewritten");
         (await journal.StepAsync(entry, entry.Steps[0].Finished(oldA, await f.Git("rev-parse", "A"), StepState.Done))).OrThrow();
         await vm.RefreshWorkingTreeAsync();
         Assert.True(vm.HasRecovery, vm.RecoverySummary);
@@ -69,13 +76,17 @@ public sealed class RecoveryUiTests
     [AvaloniaFact]
     public async Task Dismissing_an_interrupted_run_keeps_the_branches()
     {
-        await using var f = new GitFixture(); await f.Linear();
+        await using var f = new GitFixture();
+        await f.Linear();
         var journal = f.CreateJournal();
         using var vm = CreateVm(f);
         await vm.OpenRepositoryAsync(f.Root);
         var root = await f.ResolvedRoot();
         var entry = (await journal.OpenAsync(root, "restack", [new JournalStep("layer:0", "rebase", "refs/heads/A", await f.Git("rev-parse", "A"), null, StepState.Planned)])).OrThrow();
-        (await journal.StepAsync(entry, entry.Steps[0] with { State = StepState.Started })).OrThrow();
+        (await journal.StepAsync(entry, entry.Steps[0] with
+        {
+            State = StepState.Started
+        })).OrThrow();
         (await journal.StepAsync(entry, entry.Steps[0].Finished(await f.Git("rev-parse", "A"), await f.Git("rev-parse", "A"), StepState.Failed))).OrThrow();
         await vm.RefreshWorkingTreeAsync();
         Assert.True(vm.HasRecovery);
@@ -89,7 +100,8 @@ public sealed class RecoveryUiTests
     [AvaloniaFact]
     public async Task Disposing_the_view_model_twice_is_harmless()
     {
-        await using var f = new GitFixture(); await f.Linear();
+        await using var f = new GitFixture();
+        await f.Linear();
         var vm = CreateVm(f);
         await vm.OpenRepositoryAsync(f.Root);
         vm.Dispose();

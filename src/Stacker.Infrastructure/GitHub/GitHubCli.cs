@@ -1,8 +1,8 @@
-using Stacker.Core.Framework;
 // Purpose: GitHub Enterprise/GitHub adapter implemented through gh; resolves origin identity, reads PR data, validates anchors, and publishes explicit reviews.
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Stacker.Core;
+using Stacker.Core.Framework;
 
 namespace Stacker.Infrastructure;
 
@@ -15,12 +15,19 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
     {
         string host, path;
         if (Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "ssh")
-        { if (uri.Query.Length > 0 || uri.Fragment.Length > 0) throw new StackerException("Origin must be a repository URL without query or fragment."); host = uri.Host; path = uri.AbsolutePath.Trim('/'); }
+        {
+            if (uri.Query.Length > 0 || uri.Fragment.Length > 0)
+                throw new StackerException("Origin must be a repository URL without query or fragment.");
+            host = uri.Host;
+            path = uri.AbsolutePath.Trim('/');
+        }
         else
         {
             var match = Regex.Match(origin, @"^(?:[^@/:]+@)?(?<host>[^/:]+):(?<path>[^\s]+)$");
-            if (!match.Success) throw new StackerException("Origin is not a GitHub HTTPS/SSH URL. Set host/owner/repo in GitHub settings.");
-            host = match.Groups["host"].Value; path = match.Groups["path"].Value;
+            if (!match.Success)
+                throw new StackerException("Origin is not a GitHub HTTPS/SSH URL. Set host/owner/repo in GitHub settings.");
+            host = match.Groups["host"].Value;
+            path = match.Groups["path"].Value;
         }
         return ParseRepository($"{host}/{path}");
     }
@@ -31,7 +38,8 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
         if (parts.Length != 3 || !Regex.IsMatch(parts[0], @"\A[a-zA-Z0-9][a-zA-Z0-9.-]*\z") || parts.Skip(1).Any(p => !Regex.IsMatch(p, @"\A[a-zA-Z0-9_.-]+\z")))
             throw new StackerException("Use host/owner/repo, for example github.com/team/project.");
         var name = parts[2].EndsWith(".git", StringComparison.Ordinal) ? parts[2][..^4] : parts[2];
-        if (name.Length == 0) throw new StackerException("Repository name is empty.");
+        if (name.Length == 0)
+            throw new StackerException("Repository name is empty.");
         return (parts[0].ToLowerInvariant(), parts[1], name);
     }
     /// <summary>Returns only the active, valid account for this host, while explaining environment-token precedence.</summary>
@@ -48,7 +56,8 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
             {
                 if (Bool(entry, "active") && Str(entry, "state") != "success" && Str(entry, "tokenSource") is "GH_TOKEN" or "GITHUB_TOKEN" or "GH_ENTERPRISE_TOKEN" or "GITHUB_ENTERPRISE_TOKEN")
                     throw new GitHubAuthenticationException($"{host}: {Str(entry, "tokenSource")} is invalid and overrides saved gh accounts. Enable Settings → Use saved gh credentials, then Refresh; or fix the environment token and restart Stacker.");
-                if (Bool(entry, "active") && Str(entry, "state") == "success" && !string.IsNullOrEmpty(Str(entry, "login"))) return entry;
+                if (Bool(entry, "active") && Str(entry, "state") == "success" && !string.IsNullOrEmpty(Str(entry, "login")))
+                    return entry;
             }
         throw new GitHubAuthenticationException($"Not authenticated for {host}. Run: gh auth login --hostname {host}, then retry.");
     }
@@ -56,11 +65,13 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
     public async Task<GitHubRepositoryContext> ConnectAsync(string root, string? repositoryOverride, CancellationToken ct = default)
     {
         (string Host, string Owner, string Name) parsed;
-        if (!string.IsNullOrWhiteSpace(repositoryOverride)) parsed = ParseRepository(repositoryOverride);
+        if (!string.IsNullOrWhiteSpace(repositoryOverride))
+            parsed = ParseRepository(repositoryOverride);
         else
         {
             var remote = (await runner.RunAsync(new(git.Resolve(), ["remote", "get-url", "origin"], root), ct)).OrThrow();
-            if (remote.ExitCode != 0) throw new StackerException("No origin remote. Local stacks remain available.");
+            if (remote.ExitCode != 0)
+                throw new StackerException("No origin remote. Local stacks remain available.");
             parsed = ParseOrigin(remote.StdOut.Trim());
         }
         var user = await ActiveUser(parsed.Host, ct);
@@ -71,9 +82,11 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
     public async Task VerifyAccessAsync(GitHubRepositoryContext context, CancellationToken ct = default)
     {
         var user = await ActiveUser(context.Host, ct);
-        if (!string.Equals(user, context.User, StringComparison.OrdinalIgnoreCase)) throw new StackerException("The active GitHub account changed. Refresh before publishing.");
+        if (!string.Equals(user, context.User, StringComparison.OrdinalIgnoreCase))
+            throw new StackerException("The active GitHub account changed. Refresh before publishing.");
         var repository = await Api(context.Host, Repo(context), ct);
-        if (repository.GetProperty("id").GetInt64() != context.RepositoryId) throw new StackerException("Repository identity changed. Reconnect before publishing.");
+        if (repository.GetProperty("id").GetInt64() != context.RepositoryId)
+            throw new StackerException("Repository identity changed. Reconnect before publishing.");
     }
     /// <summary>Reads all open PR pages, retaining draft entries because drafts may still form a stack.</summary>
     public async Task<GitHubSnapshot> SnapshotAsync(GitHubRepositoryContext context, CancellationToken ct = default)
@@ -85,13 +98,18 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
     public async Task<PullRequest> PullRequestAsync(GitHubRepositoryContext context, long number, CancellationToken ct = default)
     {
         var value = await Api(context.Host, $"{Repo(context)}/pulls/{number}", ct);
-        if (Str(value, "state") != "open") throw new StackerException($"PR #{number} is no longer open. Refresh.");
+        if (Str(value, "state") != "open")
+            throw new StackerException($"PR #{number} is no longer open. Refresh.");
         return ParsePr(value);
     }
     private static PullRequest ParsePr(JsonElement p)
     {
-        var b = p.GetProperty("base"); var h = p.GetProperty("head");
-        return new(p.GetProperty("number").GetInt64(), Str(p, "title"), RepoId(b), Str(b, "ref"), Str(b, "sha"), RepoId(h), Str(h, "ref"), Str(h, "sha"), Bool(p, "draft"), Str(p, "html_url")) { State = Bool(p, "merged") ? "Merged" : Str(p, "state") == "closed" ? "Closed" : "Open" };
+        var b = p.GetProperty("base");
+        var h = p.GetProperty("head");
+        return new(p.GetProperty("number").GetInt64(), Str(p, "title"), RepoId(b), Str(b, "ref"), Str(b, "sha"), RepoId(h), Str(h, "ref"), Str(h, "sha"), Bool(p, "draft"), Str(p, "html_url"))
+        {
+            State = Bool(p, "merged") ? "Merged" : Str(p, "state") == "closed" ? "Closed" : "Open"
+        };
     }
     private static long RepoId(JsonElement p) => p.TryGetProperty("repo", out var repo) && repo.ValueKind == JsonValueKind.Object ? repo.GetProperty("id").GetInt64() : -1;
     /// <summary>Loads conversation comments, review decisions, and code threads as separate UI concepts.</summary>
@@ -101,24 +119,38 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
             .Select(c => new DiscussionComment(c.GetProperty("id").ToString(), Str(c.GetProperty("user"), "login"), Str(c, "body"), Str(c, "html_url"), Date(c, "created_at"))).ToArray();
         var reviews = Pages(await Api(context.Host, $"{Repo(context)}/pulls/{pr.Number}/reviews?per_page=100", ct, paginate: true))
             .Select(c => new ReviewSummary(c.GetProperty("id").ToString(), Str(c.GetProperty("user"), "login"), Str(c, "body"), Str(c, "state"), Date(c, "submitted_at"))).ToArray();
-        var threads = new List<ReviewThread>(); string? cursor = null;
+        var threads = new List<ReviewThread>();
+        string? cursor = null;
         const string fields = "id isResolved isOutdated viewerCanResolve viewerCanUnresolve subjectType path line startLine diffSide startDiffSide comments(first:100){nodes{id databaseId body url createdAt author{login} commit{oid}} pageInfo{hasNextPage endCursor}}";
         do
         {
             var data = await Graph(context.Host, "query($owner:String!,$name:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$cursor){nodes{" + fields + "} pageInfo{hasNextPage endCursor}}}}}",
-                new { owner = context.Owner, name = context.Name, number = pr.Number, cursor }, ct);
+                new
+                {
+                    owner = context.Owner,
+                    name = context.Name,
+                    number = pr.Number,
+                    cursor
+                }, ct);
             var connection = data.GetProperty("repository").GetProperty("pullRequest").GetProperty("reviewThreads");
             foreach (var thread in connection.GetProperty("nodes").EnumerateArray())
             {
-                var allComments = new List<JsonElement>(); var connectionComments = thread.GetProperty("comments");
+                var allComments = new List<JsonElement>();
+                var connectionComments = thread.GetProperty("comments");
                 allComments.AddRange(connectionComments.GetProperty("nodes").EnumerateArray().Select(n => n.Clone()));
                 while (Bool(connectionComments.GetProperty("pageInfo"), "hasNextPage"))
                 {
                     var more = await Graph(context.Host, "query($id:ID!,$cursor:String){node(id:$id){... on PullRequestReviewThread{comments(first:100,after:$cursor){nodes{id databaseId body url createdAt author{login} commit{oid}} pageInfo{hasNextPage endCursor}}}}}",
-                        new { id = Str(thread, "id"), cursor = Str(connectionComments.GetProperty("pageInfo"), "endCursor") }, ct);
-                    connectionComments = more.GetProperty("node").GetProperty("comments"); allComments.AddRange(connectionComments.GetProperty("nodes").EnumerateArray().Select(n => n.Clone()));
+                        new
+                        {
+                            id = Str(thread, "id"),
+                            cursor = Str(connectionComments.GetProperty("pageInfo"), "endCursor")
+                        }, ct);
+                    connectionComments = more.GetProperty("node").GetProperty("comments");
+                    allComments.AddRange(connectionComments.GetProperty("nodes").EnumerateArray().Select(n => n.Clone()));
                 }
-                var line = Int(thread, "line"); var first = allComments.FirstOrDefault();
+                var line = Int(thread, "line");
+                var first = allComments.FirstOrDefault();
                 var isFile = Str(thread, "subjectType") == "FILE";
                 var anchor = isFile || line is null ? null : new ReviewAnchor(pr.Number,
                     first.ValueKind == JsonValueKind.Object && first.TryGetProperty("commit", out var commit) && commit.ValueKind == JsonValueKind.Object ? Str(commit, "oid") : pr.HeadSha,
@@ -126,7 +158,8 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
                 threads.Add(new(Str(thread, "id"), Bool(thread, "isResolved"), Bool(thread, "isOutdated"), Bool(thread, "isResolved") ? Bool(thread, "viewerCanUnresolve") : Bool(thread, "viewerCanResolve"), anchor,
                     allComments.Select(c => new DiscussionComment(c.GetProperty("databaseId").ToString(), c.GetProperty("author").ValueKind == JsonValueKind.Object ? Str(c.GetProperty("author"), "login") : "deleted", Str(c, "body"), Str(c, "url"), Date(c, "createdAt"))).ToArray(), Str(thread, "path"), isFile));
             }
-            var page = connection.GetProperty("pageInfo"); cursor = Bool(page, "hasNextPage") ? Str(page, "endCursor") : null;
+            var page = connection.GetProperty("pageInfo");
+            cursor = Bool(page, "hasNextPage") ? Str(page, "endCursor") : null;
         } while (cursor is not null);
         return new(comments, reviews, threads);
     }
@@ -146,7 +179,8 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
     /// <remarks>This prevents a local or stale comparison from attaching a comment to the wrong server-side line.</remarks>
     public async Task ValidateAnchorsAsync(GitHubRepositoryContext context, PullRequest pr, IReadOnlyList<ReviewAnchor> anchors, CancellationToken ct = default)
     {
-        if (anchors.Count == 0) return;
+        if (anchors.Count == 0)
+            return;
         var files = Pages(await Api(context.Host, $"{Repo(context)}/pulls/{pr.Number}/files?per_page=100", ct, paginate: true))
             .ToLookup(file => Str(file, "filename"), StringComparer.Ordinal);
         var linesByFile = new Dictionary<string, (HashSet<int> Left, HashSet<int> Right)>(StringComparer.Ordinal);
@@ -167,8 +201,10 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
                 lines = ([], []);
                 foreach (var line in parsed.Lines)
                 {
-                    if (line.Kind == DiffLineKind.Removed && line.OldLineNumber is int oldNumber) lines.Left.Add(oldNumber);
-                    if (line.Kind is DiffLineKind.Added or DiffLineKind.Context && line.NewLineNumber is int newNumber) lines.Right.Add(newNumber);
+                    if (line.Kind == DiffLineKind.Removed && line.OldLineNumber is int oldNumber)
+                        lines.Left.Add(oldNumber);
+                    if (line.Kind is DiffLineKind.Added or DiffLineKind.Context && line.NewLineNumber is int newNumber)
+                        lines.Right.Add(newNumber);
                 }
                 linesByFile.Add(anchor.Path, lines);
             }
@@ -180,11 +216,18 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
     }
 
     private static StackerException AnchorProblem(string message) =>
-        new(Problem.Of(ProblemCodes.GitHubRequest, message) with { Certainty = EffectCertainty.NotStarted });
+        new(Problem.Of(ProblemCodes.GitHubRequest, message) with
+        {
+            Certainty = EffectCertainty.NotStarted
+        });
 
     // GraphQL is used for review threads because REST does not expose resolution and outdated state consistently.
     private Task<JsonElement> Graph(string host, string query, object variables, CancellationToken ct) =>
-        Api(host, "graphql", ct, new { query, variables }, read: json =>
+        Api(host, "graphql", ct, new
+        {
+            query,
+            variables
+        }, read: json =>
         {
             if (json.ValueKind == JsonValueKind.Object && json.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Array && errors.GetArrayLength() > 0)
                 throw new StackerException(SafeDetail("GitHub GraphQL request failed. " + DescribeErrors(json), null));
@@ -192,64 +235,6 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
                 throw new StackerException("GitHub returned no GraphQL data.");
             return data;
         });
-    /// <summary>Posts one ordinary PR conversation comment, not a review decision or code-thread comment.</summary>
-    public async Task CommentAsync(GitHubRepositoryContext context, long number, string body, CancellationToken ct = default) =>
-        _ = await Api(context.Host, $"{Repo(context)}/issues/{number}/comments", ct, new { body });
-    /// <summary>Posts a file-level review comment without fabricating a line number.</summary>
-    public async Task FileCommentAsync(GitHubRepositoryContext context, PullRequest pr, string path, string body, CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(body)) throw new StackerException("Choose a file and enter a comment.");
-        _ = await Api(context.Host, $"{Repo(context)}/pulls/{pr.Number}/comments", ct,
-            new { body, commit_id = pr.HeadSha, path, subject_type = "file" });
-    }
-    /// <summary>Posts an inline comment using the current PR's line/side coordinates.</summary>
-    public async Task InlineCommentAsync(GitHubRepositoryContext context, DraftComment comment, CancellationToken ct = default)
-    {
-        var body = AnchorBody(comment); body["commit_id"] = comment.Anchor.HeadSha;
-        _ = await Api(context.Host, $"{Repo(context)}/pulls/{comment.Anchor.PullRequest}/comments", ct, body);
-    }
-    /// <summary>Replies to an existing review thread after validating the server comment ID.</summary>
-    public async Task ReplyAsync(GitHubRepositoryContext context, long number, string commentId, string body, CancellationToken ct = default)
-    {
-        if (!long.TryParse(commentId, out var id) || id <= 0) throw new StackerException("Invalid comment ID.");
-        _ = await Api(context.Host, $"{Repo(context)}/pulls/{number}/comments/{id}/replies", ct, new { body });
-    }
-    /// <summary>Changes thread resolution through GitHub's review-thread mutation.</summary>
-    public async Task ResolveAsync(GitHubRepositoryContext context, string threadId, bool resolved, CancellationToken ct = default) =>
-        _ = await Graph(context.Host, "mutation($id:ID!){" + (resolved ? "resolveReviewThread" : "unresolveReviewThread") + "(input:{threadId:$id}){thread{id isResolved}}}", new { id = threadId }, ct);
-    /// <summary>Submits a grouped review and its line comments only when explicitly requested by the user.</summary>
-    public async Task SubmitReviewAsync(GitHubRepositoryContext context, ReviewDraft draft, CancellationToken ct = default)
-    {
-        if (draft.Decision is not ("COMMENT" or "APPROVE" or "REQUEST_CHANGES")) throw new StackerException("Invalid review decision.");
-        _ = await Api(context.Host, $"{Repo(context)}/pulls/{draft.PullRequest}/reviews", ct,
-            new { commit_id = draft.HeadSha, body = draft.Summary, @event = draft.Decision, comments = draft.Comments.Select(AnchorBody).ToArray() });
-    }
-    /// <summary>Creates a pull request whose base is the layer's parent branch.</summary>
-    public async Task<PullRequest> CreatePullRequestAsync(GitHubRepositoryContext context, string headBranch, string baseBranch,
-        string title, string body, bool draft, CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(headBranch) || string.IsNullOrWhiteSpace(baseBranch))
-            throw new StackerException("A pull request needs both a head and a base branch.");
-        var value = await Api(context.Host, Repo(context) + "/pulls", ct,
-            new { title, head = headBranch, @base = baseBranch, body, draft }, method: "POST");
-        return ParsePr(value);
-    }
-    /// <summary>Retargets one existing pull request after its layer's parent changed.</summary>
-    public async Task<PullRequest> UpdatePullRequestBaseAsync(GitHubRepositoryContext context, long number, string baseBranch, CancellationToken ct = default)
-    {
-        if (number <= 0 || string.IsNullOrWhiteSpace(baseBranch)) throw new StackerException("A pull request needs a valid number and a base branch.");
-        var value = await Api(context.Host, $"{Repo(context)}/pulls/{number}", ct, new { @base = baseBranch }, method: "PATCH");
-        return ParsePr(value);
-    }
-    // GitHub's current review-comment contract uses line/side and optional start_line/start_side, never legacy position.
-    private static Dictionary<string, object> AnchorBody(DraftComment comment)
-    {
-        var a = comment.Anchor;
-        if (a.Line <= 0 || a.Side is not ("LEFT" or "RIGHT") || a.StartLine is <= 0 || a.StartLine > a.Line) throw new StackerException("Invalid review line range.");
-        var body = new Dictionary<string, object> { ["body"] = comment.Body, ["path"] = a.Path, ["line"] = a.Line, ["side"] = a.Side };
-        if (a.StartLine is not null && a.StartLine != a.Line) { body["start_line"] = a.StartLine; body["start_side"] = a.StartSide ?? a.Side; }
-        return body;
-    }
     private static string Repo(GitHubRepositoryContext c) => $"repos/{c.Owner}/{c.Name}";
     private static IEnumerable<JsonElement> Pages(JsonElement json) => json.EnumerateArray().SelectMany(p => p.ValueKind == JsonValueKind.Array ? p.EnumerateArray().ToArray() : [p]);
     private static string Str(JsonElement e, string name) => e.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString()! : "";
@@ -289,8 +274,4 @@ public sealed partial class GitHubCli(IProcessRunner runner, GitExecutable git, 
     Task<Result<PullRequest>> IGitHubPullRequestWriter.CreatePullRequestAsync(GitHubRepositoryContext context, string headBranch, string baseBranch, string title, string body, bool draft, CancellationToken ct) => Boundary.CaptureAsync(() => CreatePullRequestAsync(context, headBranch, baseBranch, title, body, draft, ct), ProblemCodes.GitHubRequest);
 
     Task<Result<PullRequest>> IGitHubPullRequestWriter.UpdatePullRequestBaseAsync(GitHubRepositoryContext context, long number, string baseBranch, CancellationToken ct) => Boundary.CaptureAsync(() => UpdatePullRequestBaseAsync(context, number, baseBranch, ct), ProblemCodes.GitHubRequest);
-}
-internal static class JsonHelpers
-{
-    internal static bool TryGetInt32Safe(this JsonElement value, out int result) { result = 0; return value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out result); }
 }

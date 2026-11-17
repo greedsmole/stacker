@@ -12,23 +12,31 @@ public sealed class RestackTests
     /// <summary>Advances main past the layers so every layer needs a rebase.</summary>
     private static async Task MoveBase(GitFixture f)
     {
-        await f.Git("checkout", "main"); await f.Write("main2.txt", "moved\n"); await f.Commit("base moved");
+        await f.Git("checkout", "main");
+        await f.Write("main2.txt", "moved\n");
+        await f.Commit("base moved");
     }
 
     // Scenario: A moved base rewrites every layer, keeps each layer's own change, and returns the user to their branch.
     [Fact]
     public async Task Restack_rebases_every_layer_and_keeps_its_content()
     {
-        await using var f = new GitFixture(); await f.Linear();
+        await using var f = new GitFixture();
+        await f.Linear();
         var before = new Dictionary<string, string>();
-        foreach (var branch in new[] { "A", "B", "C" }) before[branch] = await f.Git("rev-parse", branch);
+        foreach (var branch in new[] { "A", "B", "C" })
+            before[branch] = await f.Git("rev-parse", branch);
         await MoveBase(f);
         var writer = Writer(f);
         var plan = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack);
         Assert.True(plan.CanExecute, string.Join("; ", plan.Blockers));
-        Assert.Equal(3, plan.RebaseCount); Assert.Equal("main", plan.OriginalBranch); Assert.True(plan.HasOrigin == false);
+        Assert.Equal(3, plan.RebaseCount);
+        Assert.Equal("main", plan.OriginalBranch);
+        Assert.True(plan.HasOrigin == false);
         var outcome = await writer.RestackAsync(plan);
-        Assert.True(outcome.Applied, outcome.Message); Assert.False(outcome.RolledBack); Assert.Equal(3, outcome.Steps.Count);
+        Assert.True(outcome.Applied, outcome.Message);
+        Assert.False(outcome.RolledBack);
+        Assert.Equal(3, outcome.Steps.Count);
         Assert.Equal("main", await f.Git("branch", "--show-current"));
         Assert.Empty((await f.Git("status", "--porcelain")).Trim());
         foreach (var branch in new[] { "A", "B", "C" })
@@ -44,7 +52,9 @@ public sealed class RestackTests
         Assert.Equal(3, backups.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
         Assert.DoesNotContain(repo.Refs, reference => reference.Name.StartsWith("refs/stacker", StringComparison.Ordinal));
         var journal = await writer.LastJournalAsync(await f.ResolvedRoot());
-        Assert.NotNull(journal); Assert.True(journal!.CanUndo); Assert.Equal(JournalPhase.Applied, journal.Phase);
+        Assert.NotNull(journal);
+        Assert.True(journal!.CanUndo);
+        Assert.Equal(JournalPhase.Applied, journal.Phase);
         Assert.Equal(3, journal.Moved.Count);
     }
 
@@ -52,9 +62,11 @@ public sealed class RestackTests
     [Fact]
     public async Task Undo_restores_every_branch_even_the_checked_out_one()
     {
-        await using var f = new GitFixture(); await f.Linear();
+        await using var f = new GitFixture();
+        await f.Linear();
         var before = new Dictionary<string, string>();
-        foreach (var branch in new[] { "A", "B", "C" }) before[branch] = await f.Git("rev-parse", branch);
+        foreach (var branch in new[] { "A", "B", "C" })
+            before[branch] = await f.Git("rev-parse", branch);
         await MoveBase(f);
         var writer = Writer(f);
         Assert.True((await writer.RestackAsync(await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack))).Applied);
@@ -64,8 +76,10 @@ public sealed class RestackTests
         Assert.Contains("uncommitted", (await Assert.ThrowsAsync<StackerException>(() => writer.UndoLastAsync(root))).Message);
         await f.Git("checkout", "--", "B.txt");
         var outcome = await writer.UndoLastAsync(root);
-        Assert.True(outcome.RolledBack); Assert.Equal(3, outcome.Steps.Count);
-        foreach (var branch in new[] { "A", "B", "C" }) Assert.Equal(before[branch], await f.Git("rev-parse", branch));
+        Assert.True(outcome.RolledBack);
+        Assert.Equal(3, outcome.Steps.Count);
+        foreach (var branch in new[] { "A", "B", "C" })
+            Assert.Equal(before[branch], await f.Git("rev-parse", branch));
         Assert.Equal("main", await f.Git("branch", "--show-current"));
         Assert.Empty((await f.Git("status", "--porcelain")).Trim());
         // Undo restores the branches but keeps the backups, so the restack can still be recovered.
@@ -76,7 +90,9 @@ public sealed class RestackTests
     [Fact]
     public async Task Restack_returns_to_a_rewritten_layer_branch()
     {
-        await using var f = new GitFixture(); await f.Linear(); await MoveBase(f);
+        await using var f = new GitFixture();
+        await f.Linear();
+        await MoveBase(f);
         await f.Git("checkout", "C");
         var writer = Writer(f);
         var plan = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack);
@@ -93,11 +109,18 @@ public sealed class RestackTests
     private static async Task<(Dictionary<string, string> Before, StackDefinition Stack)> Conflicting(GitFixture f)
     {
         await f.Init();
-        await f.Git("checkout", "-b", "A"); await f.Write("conflict.txt", "A\n"); await f.Commit("A");
-        await f.Git("checkout", "-b", "B"); await f.Write("B.txt", "B\n"); await f.Commit("B");
-        await f.Git("checkout", "main"); await f.Write("conflict.txt", "main\n"); await f.Commit("main moved");
+        await f.Git("checkout", "-b", "A");
+        await f.Write("conflict.txt", "A\n");
+        await f.Commit("A");
+        await f.Git("checkout", "-b", "B");
+        await f.Write("B.txt", "B\n");
+        await f.Commit("B");
+        await f.Git("checkout", "main");
+        await f.Write("conflict.txt", "main\n");
+        await f.Commit("main moved");
         var before = new Dictionary<string, string>();
-        foreach (var branch in new[] { "main", "A", "B" }) before[branch] = await f.Git("rev-parse", branch);
+        foreach (var branch in new[] { "main", "A", "B" })
+            before[branch] = await f.Git("rev-parse", branch);
         return (before, new("t", "T", "refs/heads/main", ["refs/heads/A", "refs/heads/B"]));
     }
 
@@ -119,12 +142,16 @@ public sealed class RestackTests
         Assert.Equal(before["A"], await f.Git("rev-parse", "A"));
         var state = await writer.StateAsync(root);
         Assert.Equal(WorkingOperation.Rebase, state.Operation);
-        Assert.True(state.CanContinue); Assert.True(state.HasConflicts);
+        Assert.True(state.CanContinue);
+        Assert.True(state.HasConflicts);
         Assert.Contains("conflict.txt", state.ConflictedFiles);
         var journal = await writer.ActiveJournalAsync(root);
-        Assert.NotNull(journal); Assert.True(journal!.NeedsAttention); Assert.Equal(JournalPhase.NeedsUser, journal.Phase);
+        Assert.NotNull(journal);
+        Assert.True(journal!.NeedsAttention);
+        Assert.Equal(JournalPhase.NeedsUser, journal.Phase);
         // The layer the user has to resolve is recorded as pending, so an undo after resolving reverses it too.
-        Assert.NotNull(journal.Pending); Assert.Equal("refs/heads/A", journal.Pending!.Target);
+        Assert.NotNull(journal.Pending);
+        Assert.Equal("refs/heads/A", journal.Pending!.Target);
         // Resolving in the working tree, staging it and continuing finishes the layer.
         await f.Write("conflict.txt", "resolved\n");
         Assert.Contains("conflict.txt", await writer.StageAsync(root, state.ConflictedFiles));
@@ -150,7 +177,8 @@ public sealed class RestackTests
         Assert.True(outcome.Conflicted, outcome.Message);
         var aborted = await writer.AbortAsync(await f.ResolvedRoot());
         Assert.True(aborted.RolledBack, aborted.Message);
-        foreach (var branch in new[] { "main", "A", "B" }) Assert.Equal(before[branch], await f.Git("rev-parse", branch));
+        foreach (var branch in new[] { "main", "A", "B" })
+            Assert.Equal(before[branch], await f.Git("rev-parse", branch));
         Assert.Equal("main", await f.Git("branch", "--show-current"));
         Assert.Empty((await f.Git("status", "--porcelain")).Trim());
         Assert.False(Directory.Exists(Path.Combine(f.Root, ".git", "rebase-merge")));
@@ -178,14 +206,19 @@ public sealed class RestackTests
     [Fact]
     public async Task An_empty_layer_follows_its_parent()
     {
-        await using var f = new GitFixture(); await f.Init();
-        await f.Git("checkout", "-b", "A"); await f.Write("A.txt", "A\n"); await f.Commit("A");
+        await using var f = new GitFixture();
+        await f.Init();
+        await f.Git("checkout", "-b", "A");
+        await f.Write("A.txt", "A\n");
+        await f.Commit("A");
         await f.Git("branch", "empty");
         var stack = new StackDefinition("t", "T", "refs/heads/main", ["refs/heads/A", "refs/heads/empty"]);
         await MoveBase(f);
         var writer = Writer(f);
         var plan = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), stack);
-        Assert.True(plan.Steps[1].NeedsRebase); Assert.Equal(0, plan.Steps[1].CommitCount); Assert.NotNull(plan.Steps[1].Note);
+        Assert.True(plan.Steps[1].NeedsRebase);
+        Assert.Equal(0, plan.Steps[1].CommitCount);
+        Assert.NotNull(plan.Steps[1].Note);
         Assert.True((await writer.RestackAsync(plan)).Applied);
         Assert.Equal(await f.Git("rev-parse", "A"), await f.Git("rev-parse", "empty"));
     }
@@ -214,7 +247,8 @@ public sealed class RestackTests
     [Fact]
     public async Task The_newest_commit_subject_is_available_for_a_pull_request_title()
     {
-        await using var f = new GitFixture(); await f.Linear();
+        await using var f = new GitFixture();
+        await f.Linear();
         var writer = Writer(f);
         Assert.Equal("B", await writer.LastCommitSubjectAsync(f.Root, "refs/heads/B"));
         Assert.Null(await writer.LastCommitSubjectAsync(f.Root, "refs/heads/missing"));
@@ -224,7 +258,9 @@ public sealed class RestackTests
     [Fact]
     public async Task Restack_commands_appear_in_the_git_log()
     {
-        await using var f = new GitFixture(); await f.Linear(); await MoveBase(f);
+        await using var f = new GitFixture();
+        await f.Linear();
+        await MoveBase(f);
         var log = new GitCommandLog();
         var writer = new LocalGitClient(new ProcessRunner(log), new GitExecutable(), f.Reader, f.CreateJournal(), new SystemClock());
         var plan = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack);
@@ -238,7 +274,9 @@ public sealed class RestackTests
     [Fact]
     public async Task Untracked_files_are_allowed_but_tracked_changes_block()
     {
-        await using var f = new GitFixture(); await f.Linear(); await MoveBase(f);
+        await using var f = new GitFixture();
+        await f.Linear();
+        await MoveBase(f);
         var writer = Writer(f);
         await f.Write("scratch.txt", "notes\n");
         var plan = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack);
@@ -247,7 +285,8 @@ public sealed class RestackTests
         // A change to a tracked file is a different matter, and it is what the stash is for.
         await f.Write("base.txt", "edited\n");
         var blocked = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack);
-        Assert.False(blocked.CanExecute); Assert.Contains(blocked.Blockers, blocker => blocker.Contains("uncommitted"));
+        Assert.False(blocked.CanExecute);
+        Assert.Contains(blocked.Blockers, blocker => blocker.Contains("uncommitted"));
         var stash = await writer.StashAsync(f.Root, "Stacker: test");
         Assert.NotNull(stash);
         // Stashing takes the tracked change; the untracked scratch file stays where it is.
@@ -261,18 +300,25 @@ public sealed class RestackTests
     [Fact]
     public async Task Dirty_tree_and_an_unfinished_rebase_refuse_to_plan()
     {
-        await using var f = new GitFixture(); await f.Linear();
+        await using var f = new GitFixture();
+        await f.Linear();
         var writer = Writer(f);
         await f.Write("base.txt", "edited\n");
         var dirty = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack);
-        Assert.False(dirty.CanExecute); Assert.Contains(dirty.Blockers, blocker => blocker.Contains("uncommitted"));
+        Assert.False(dirty.CanExecute);
+        Assert.Contains(dirty.Blockers, blocker => blocker.Contains("uncommitted"));
         Assert.Contains("uncommitted", (await writer.RestackAsync(dirty)).Message);
         await f.Git("checkout", "--", "base.txt");
-        await f.Git("checkout", "A"); await f.Write("conflict.txt", "A\n"); await f.Commit("A");
-        await f.Git("checkout", "main"); await f.Write("conflict.txt", "main\n"); await f.Commit("main");
+        await f.Git("checkout", "A");
+        await f.Write("conflict.txt", "A\n");
+        await f.Commit("A");
+        await f.Git("checkout", "main");
+        await f.Write("conflict.txt", "main\n");
+        await f.Commit("main");
         Assert.NotEqual(0, await f.ExitCode("rebase", "A"));
         var blocked = await writer.PlanAsync(await f.Reader.OpenAsync(f.Root), f.Stack);
-        Assert.False(blocked.CanExecute); Assert.Contains(blocked.Blockers, blocker => blocker.Contains("in progress"));
+        Assert.False(blocked.CanExecute);
+        Assert.Contains(blocked.Blockers, blocker => blocker.Contains("in progress"));
         Assert.Equal(0, await f.ExitCode("rebase", "--abort"));
     }
 }

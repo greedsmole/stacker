@@ -18,7 +18,8 @@ public static class JournalTransitions
     /// <summary>Checks a step update, including reconciliation of an interrupted rebase.</summary>
     public static bool CanRecordStep(JournalEntry entry, JournalStep current, JournalStep next)
     {
-        if (current == next) return true;
+        if (current == next)
+            return true;
         if (!entry.NeedsAttention || current.Id != next.Id || current.Kind != next.Kind || current.Target != next.Target ||
             current.Kind == "original" || (current.OldSha is not null && current.OldSha != next.OldSha) ||
             (current.NewSha is not null && current.NewSha != next.NewSha))

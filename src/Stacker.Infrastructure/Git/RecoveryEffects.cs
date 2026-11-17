@@ -45,8 +45,10 @@ internal sealed class RecoveryEffects(GitRunner git, IJournal journal)
         {
             var entry = entryId is null ? (await journal.ActiveAsync(root, ct)).OrThrow()
                 : (await journal.ByIdAsync(root, entryId, ct)).OrThrow();
-            if (entry is not { Kind: "restack", NeedsAttention: true }) entry = null;
-            if (entryId is not null && entry is null) return git.Refused("The interrupted restack is no longer available. Refresh the recovery list.");
+            if (entry is not { Kind: "restack", NeedsAttention: true })
+                entry = null;
+            if (entryId is not null && entry is null)
+                return git.Refused("The interrupted restack is no longer available. Refresh the recovery list.");
             var operation = await git.OperationAsync(root, ct);
             if (operation != WorkingOperation.None &&
                 (operation != WorkingOperation.Rebase || await FindStoppedRebaseAsync(root, entry, ct) is null))
@@ -59,7 +61,10 @@ internal sealed class RecoveryEffects(GitRunner git, IJournal journal)
             if (entry is null)
                 return git.Refused("There is no interrupted restack to restore. Inspect any uncertain effects before dismissing their record.");
             int restored;
-            try { restored = await RestoreAsync(root, entry, git.OriginalBranch(entry), ct, close: false); }
+            try
+            {
+                restored = await RestoreAsync(root, entry, git.OriginalBranch(entry), ct, close: false);
+            }
             catch (Exception ex)
             {
                 return git.Refused($"Could not complete restack recovery. {ex.Message}", entry);
@@ -73,19 +78,24 @@ internal sealed class RecoveryEffects(GitRunner git, IJournal journal)
     /// <summary>Finds the interrupted layer using Git's worktree markers, even if the pending id was never saved.</summary>
     internal async Task<JournalStep?> FindStoppedRebaseAsync(string root, JournalEntry? entry, CancellationToken ct)
     {
-        if (entry is not { Kind: "restack", NeedsAttention: true }) return null;
+        if (entry is not { Kind: "restack", NeedsAttention: true })
+            return null;
         foreach (var step in entry.Steps)
         {
-            if (step.Kind != "rebase" || step.OldSha is null) continue;
+            if (step.Kind != "rebase" || step.OldSha is null)
+                continue;
             var legacyPending = entry.SchemaVersion == 2 && step.Id == entry.PendingStepId && step.State == StepState.Planned;
-            if (!legacyPending && step.State is not (StepState.Started or StepState.Unknown)) continue;
+            if (!legacyPending && step.State is not (StepState.Started or StepState.Unknown))
+                continue;
             string? onto = null;
             if (entry.RestackPlan is { } plan)
             {
                 var approved = plan.Steps.FirstOrDefault(layer => layer.Branch == step.Target && layer.NeedsRebase && !layer.Blocked);
-                if (approved is null || (onto = ExpectedParent(entry, approved)) is null) continue;
+                if (approved is null || (onto = ExpectedParent(entry, approved)) is null)
+                    continue;
             }
-            if (await git.MatchesRebaseAsync(root, step, onto, ct)) return step;
+            if (await git.MatchesRebaseAsync(root, step, onto, ct))
+                return step;
         }
         return null;
     }
@@ -133,7 +143,8 @@ internal sealed class RecoveryEffects(GitRunner git, IJournal journal)
         foreach (var step in entry.Restorable)
         {
             var sha = await git.ShaAsync(root, step.Target, ct);
-            if (sha == step.OldSha) continue;
+            if (sha == step.OldSha)
+                continue;
             if (sha is null || step.NewSha is null || sha != step.NewSha || elsewhere.Contains(step.Target))
                 throw new StackerException($"Recovery cannot prove ownership of {StackRefs.Short(step.Target)}. Its current commit was preserved; inspect Git before continuing.");
             moves.Add(step);
@@ -201,20 +212,27 @@ internal sealed class RecoveryEffects(GitRunner git, IJournal journal)
         {
             var entry = (await journal.UndoableAsync(root, ct)).OrThrow() ?? throw UndoBlocked("There is no restack to undo in this repository.");
             var state = await git.StatusAsync(root, ct);
-            if (state.HasTrackedChanges) throw UndoBlocked("The working tree has uncommitted changes. Commit or stash them before undoing.");
-            if (state.HasOperation) throw UndoBlocked($"{WorkingOperations.Noun(state.Operation)} is in progress. Finish or abort it before undoing.");
+            if (state.HasTrackedChanges)
+                throw UndoBlocked("The working tree has uncommitted changes. Commit or stash them before undoing.");
+            if (state.HasOperation)
+                throw UndoBlocked($"{WorkingOperations.Noun(state.Operation)} is in progress. Finish or abort it before undoing.");
             var elsewhere = await git.OtherWorktreeBranchesAsync(root, ct);
             var moves = new List<JournalStep>();
             foreach (var step in entry.Restorable)
             {
                 var sha = await git.ShaAsync(root, step.Target, ct);
-                if (sha == step.OldSha) continue;
-                if (elsewhere.Contains(step.Target)) throw UndoBlocked($"{StackRefs.Short(step.Target)} is checked out in another worktree.");
+                if (sha == step.OldSha)
+                    continue;
+                if (elsewhere.Contains(step.Target))
+                    throw UndoBlocked($"{StackRefs.Short(step.Target)} is checked out in another worktree.");
                 if (sha is null || step.NewSha is null || sha != step.NewSha)
                     throw UndoBlocked($"Undo cannot prove ownership of {StackRefs.Short(step.Target)}. Inspect the repository before restoring any branches.");
                 moves.Add(step);
             }
-            try { await git.RestoreRefsAsync(root, moves, git.OriginalBranch(entry), ct); }
+            try
+            {
+                await git.RestoreRefsAsync(root, moves, git.OriginalBranch(entry), ct);
+            }
             catch (Exception ex)
             {
                 return git.Refused($"Could not complete Undo. Check the repository and retry Undo to finish recovery. {ex.Message}", entry);
@@ -226,16 +244,23 @@ internal sealed class RecoveryEffects(GitRunner git, IJournal journal)
     }
 
     private static StackerException UndoBlocked(string message) => new(Problem.Of(ProblemCodes.GitFailed, message)
-        with { Certainty = EffectCertainty.NotStarted });
+        with
+    {
+        Certainty = EffectCertainty.NotStarted
+    });
 
     private async Task<RestackOutcome> CompleteRecoveryAsync(JournalEntry entry, JournalPhase phase, string message)
     {
         using var completion = new CancellationTokenSource(GitRunner.RecoveryTimeout);
-        try { entry = (await journal.CloseAsync(entry, phase, message: message, ct: completion.Token)).OrThrow(); }
+        try
+        {
+            entry = (await journal.CloseAsync(entry, phase, message: message, ct: completion.Token)).OrThrow();
+        }
         catch (Exception ex)
         {
             var stored = (await journal.ByIdAsync(entry.Repository, entry.Id, completion.Token)).OrThrow();
-            if (stored is null) throw;
+            if (stored is null)
+                throw;
             if (stored.Phase != phase)
                 return git.Refused($"{message} Could not finish recording recovery. Retry recovery. {ex.Message}", stored);
             entry = stored;
