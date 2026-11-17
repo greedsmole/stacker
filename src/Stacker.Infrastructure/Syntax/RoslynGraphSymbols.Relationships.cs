@@ -57,6 +57,8 @@ internal sealed partial class RoslynGraphSymbols
             var symbol = model.GetDeclaredSymbol(ancestor, ct);
             if (symbol is IMethodSymbol { AssociatedSymbol: { } propertyOrEvent })
                 return propertyOrEvent;
+            if (symbol is ILocalSymbol)
+                continue;
             if (symbol is not null)
                 return symbol;
         }

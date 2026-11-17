@@ -147,7 +147,7 @@ public sealed partial class ClassDiagramUiTests
             window.Close();
             await vm.FlushReviewsAsync();
             services.Dispose();
-            root.Delete(recursive: true);
+            GitFixture.DeleteDirectory(root.FullName);
         }
     }
 

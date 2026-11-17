@@ -47,7 +47,10 @@ public sealed partial class CSharpGraphTests
             public class Marker { }
             public class Caller
             {
-                public int Result() => Calculator.Sum(1);
+                public int Result() { var result = Calculator.Sum(1); return result; }
+                public static int Initial = Calculator.Sum(1);
+                public int Property { get { var result = Calculator.Sum(1); return result; } }
+                public int Lambda() { System.Func<int> action = () => Calculator.Sum(1); return action(); }
                 public Calculator Make() => new Calculator();
             }
             """);
@@ -106,6 +109,14 @@ public sealed partial class CSharpGraphTests
         var result = Assert.Single(caller.Members, member => member.Member.Signature.Contains("Result", StringComparison.Ordinal));
         Assert.Equal(result.Before!.DeclarationHash, result.After!.DeclarationHash);
         Assert.Equal(CSharpChange.Modified, result.Change);
+        foreach (var name in new[] { "Initial", "Property", "Lambda" })
+        {
+            var member = Assert.Single(caller.Members, member => member.Member.Signature.Contains(name, StringComparison.Ordinal));
+            Assert.Equal(member.Before!.DeclarationHash, member.After!.DeclarationHash);
+            Assert.Equal(CSharpChange.Modified, member.Change);
+            Assert.Contains(middle.Relationships, edge => edge.SourceMember == member.Member.Id
+                && edge.Kind == CSharpRelationshipKind.Calls && edge.TargetType == calculator.Id);
+        }
         var rebound = firstLayer.Relationships.Where(edge => edge.Relationship.SourceMember == result.Member.Id && edge.Relationship.Kind == CSharpRelationshipKind.Calls).ToArray();
         Assert.Contains(rebound, edge => edge.Change == CSharpChange.Added && edge.Relationship.TargetType == calculator.Id);
         Assert.Contains(rebound, edge => edge.Change == CSharpChange.Removed && edge.Relationship.TargetType == calculator.Id);

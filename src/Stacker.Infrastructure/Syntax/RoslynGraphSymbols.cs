@@ -8,7 +8,7 @@ using Stacker.Core;
 
 namespace Stacker.Infrastructure;
 
-internal sealed partial class RoslynGraphSymbols(string root, IReadOnlySet<string> tracked, GraphProject project,
+internal sealed partial class RoslynGraphSymbols(RoslynTrackedPaths paths, GraphProject project,
     ILookup<AssemblyIdentity, GraphProject> assemblies)
 {
     private static readonly SymbolDisplayFormat MemberFormat = new(
@@ -109,9 +109,7 @@ internal sealed partial class RoslynGraphSymbols(string root, IReadOnlySet<strin
     {
         if (!_sourcePaths.TryGetValue(tree, out var path))
         {
-            path = Path.IsPathFullyQualified(tree.FilePath) ? RoslynWorkspace.RelativePath(root, tree.FilePath) : null;
-            if (path is not null && !tracked.Contains(path))
-                path = null;
+            path = paths.Resolve(tree.FilePath);
             _sourcePaths.Add(tree, path);
         }
         return path;

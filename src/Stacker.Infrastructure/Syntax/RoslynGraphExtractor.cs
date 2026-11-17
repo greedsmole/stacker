@@ -15,14 +15,15 @@ internal static class RoslynGraphExtractor
         var diagnostics = new ConcurrentQueue<string>(workspace.Diagnostics.Select(item => item.Message));
         using var subscription = workspace.RegisterWorkspaceFailedHandler(item => diagnostics.Enqueue(item.Diagnostic.Message));
         var solution = workspace.CurrentSolution;
+        var paths = new RoslynTrackedPaths(root, tracked);
         var projects = new List<GraphProject>();
         foreach (var project in solution.Projects.Where(project => project.Language == LanguageNames.CSharp))
         {
             ct.ThrowIfCancellationRequested();
-            var path = project.FilePath is { } file ? RoslynWorkspace.RelativePath(root, file) : project.Name;
-            if (!tracked.Contains(path))
+            var path = project.FilePath is { } file ? paths.Resolve(file) : null;
+            if (path is null)
             {
-                diagnostics.Enqueue($"Project is outside the checked-in analysis scope: {path}.");
+                diagnostics.Enqueue($"Project is outside the checked-in analysis scope: {project.FilePath ?? project.Name}.");
                 continue;
             }
             if (await project.GetCompilationAsync(ct) is not { } compilation)
@@ -39,7 +40,7 @@ internal static class RoslynGraphExtractor
             diagnostics.Enqueue("The entry did not load any checked-in C# projects.");
 
         var assemblies = projects.ToLookup(project => project.Compilation.Assembly.Identity);
-        var tables = projects.Select(project => new RoslynGraphSymbols(root, tracked, project, assemblies)).ToArray();
+        var tables = projects.Select(project => new RoslynGraphSymbols(paths, project, assemblies)).ToArray();
         var types = tables.SelectMany(table => table.ReadTypes(ct))
             .GroupBy(type => type.Id, StringComparer.Ordinal)
             .Select(group => MergeType(group, ct)).ToImmutableArray();
@@ -48,7 +49,7 @@ internal static class RoslynGraphExtractor
         var coverage = projects.Select(project => project.Project.OutputFilePath is { } output
             ? $"{project.Path} · {RoslynWorkspace.RelativePath(root, output)}"
             : project.Path).Distinct().Order(StringComparer.Ordinal).ToImmutableArray();
-        return new(commit, types, relationships, coverage, diagnostics.Distinct().ToImmutableArray());
+        return new(commit, types, relationships, coverage, diagnostics.Concat(paths.Diagnostics).Distinct().ToImmutableArray());
     }
 
     private static CSharpType MergeType(IGrouping<string, CSharpType> group, CancellationToken ct)
