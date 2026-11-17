@@ -42,6 +42,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     [ObservableProperty] internal string _comparisonTitle = "Changes";
     public bool HasError => !string.IsNullOrEmpty(Error);
     public bool HasNoSections => Sections.Count == 0;
+    public bool HasCSharpGraph => CSharpGraph is not null;
+    public bool HasClassDiagram => HasCSharpGraph && !HasNoSections;
     /// <summary>Shows setup guidance only when the comparison is empty and loading has finished.</summary>
     public bool ShowEmptyState => HasNoSections && !IsBusy;
     /// <summary>Explains pending workspace work while no comparison content is available.</summary>
@@ -58,12 +60,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
         IGitBranchWriter? branchWriter = null, IGitHubPullRequestWriter? pullRequestWriter = null, IEditorLauncher? editorLauncher = null,
         CommandBus? commands = null, IHistoryStore? historyStore = null, IHistoryGit? historyObjects = null,
         ChangeGraphService? historyGraph = null, VersionComparisonService? historyComparisons = null, ReviewProgressService? historyProgress = null, IWorkspaceBackupService? backupService = null, IChangeIdentityService? identities = null, IDiagnosticSink? diagnostics = null,
-        ISymbolNavigation? symbolNavigation = null)
+        ISymbolNavigation? symbolNavigation = null, ICSharpGraphReader? csharpGraph = null)
     {
         _backupService = backupService;
         _runtime.Identities = identities;
         _runtime.Diagnostics = diagnostics;
         SymbolNavigation = symbolNavigation;
+        CSharpGraph = csharpGraph;
         _runtime.HistoryStore = historyStore;
         _runtime.HistoryObjects = historyObjects;
         _runtime.HistoryGraph = historyGraph;
@@ -110,6 +113,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
         Sections.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasNoSections));
+            OnPropertyChanged(nameof(HasClassDiagram));
             OnPropertyChanged(nameof(ShowEmptyState));
             OnPropertyChanged(nameof(ShowLoadingState));
             // Search results point at sections; when the sections go, the results must go with them.

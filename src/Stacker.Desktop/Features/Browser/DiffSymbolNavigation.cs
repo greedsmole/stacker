@@ -131,7 +131,7 @@ public partial class DiffSectionView
         return await dialog.ShowDialog<string?>(owner);
     }
 
-    private static async Task ShowSymbolLocationsAsync(Window owner, MainViewModel main, SymbolNavigationRequest request,
+    internal static async Task ShowSymbolLocationsAsync(Window owner, MainViewModel main, SymbolNavigationRequest request,
         SymbolNavigationResult result, CancellationToken ct)
     {
         var definition = request.Kind == SymbolNavigationKind.Definition;
