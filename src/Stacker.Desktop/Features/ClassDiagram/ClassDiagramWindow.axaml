@@ -1,0 +1,88 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Stacker.Desktop.ClassDiagramWindow" Title="C# class diagram"
+        Width="1280" Height="800" MinWidth="940" MinHeight="600" WindowStartupLocation="CenterOwner">
+ <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+  <Border Background="{DynamicResource PanelBrush}" Padding="16,12" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+   <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="10">
+    <TextBlock Text="C# class diagram" FontSize="20" FontWeight="SemiBold"/>
+    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+     <Button x:Name="RefreshButton" Content="Refresh revisions" Click="RefreshClick" Classes="quiet"/>
+     <Button Content="Close" Click="CloseClick" IsCancel="True" Classes="quiet"/>
+    </StackPanel>
+    <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="2*,Auto,2*,Auto" ColumnSpacing="10">
+     <StackPanel Spacing="4">
+      <TextBlock Text="Revision" Classes="muted"/>
+      <ComboBox x:Name="Revisions" HorizontalAlignment="Stretch" SelectionChanged="RangeChanged" AutomationProperties.Name="Revision"/>
+     </StackPanel>
+     <StackPanel Grid.Column="1" Spacing="4">
+      <TextBlock Text="View" Classes="muted"/>
+      <ComboBox x:Name="Modes" MinWidth="148" SelectionChanged="RangeChanged" AutomationProperties.Name="Diagram view"/>
+     </StackPanel>
+     <StackPanel Grid.Column="2" Spacing="4">
+      <TextBlock Text="Analysis scope" Classes="muted"/>
+      <ComboBox x:Name="Scopes" HorizontalAlignment="Stretch" SelectionChanged="ScopeChanged" AutomationProperties.Name="Analysis scope"/>
+     </StackPanel>
+     <StackPanel Grid.Column="3" VerticalAlignment="Bottom" Orientation="Horizontal" Spacing="4">
+      <Button x:Name="LoadButton" Content="Analyze C#" Click="LoadClick" Classes="primary" IsEnabled="False"/>
+      <Button x:Name="CancelButton" Content="Cancel analysis" Click="CancelClick" IsVisible="False" Classes="quiet"/>
+     </StackPanel>
+    </Grid>
+   </Grid>
+  </Border>
+  <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="16,8" ColumnSpacing="10">
+   <SelectableTextBlock x:Name="Range" TextWrapping="Wrap"/>
+   <Button Grid.Column="1" x:Name="CoverageButton" Content="Analysis details" Click="CoverageClick" Classes="quiet" IsEnabled="False"/>
+  </Grid>
+  <ProgressBar Grid.Row="2" x:Name="Progress" Height="2" IsIndeterminate="True" IsVisible="False"/>
+  <Grid Grid.Row="3" ColumnDefinitions="220,*,265" Background="{DynamicResource CanvasBrush}">
+   <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,1,1" Padding="10">
+    <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="6">
+     <TextBlock Text="Types" FontWeight="SemiBold"/>
+     <TextBox Grid.Row="1" x:Name="TypeQuery" Watermark="Filter types…" TextChanged="TypeFilterChanged" AutomationProperties.Name="Filter types by project, namespace or name"/>
+     <CheckBox Grid.Row="2" x:Name="ChangesOnly" Content="Changed types only" IsCheckedChanged="TypeFilterChanged" IsEnabled="False"/>
+     <ListBox Grid.Row="3" x:Name="TypeList" SelectionChanged="TypeSelected" AutomationProperties.Name="C# types"/>
+    </Grid>
+   </Border>
+   <Grid Grid.Column="1" RowDefinitions="Auto,*" Background="{DynamicResource CanvasBrush}">
+    <WrapPanel Margin="8,5" ItemSpacing="4">
+     <ComboBox x:Name="EdgeKinds" SelectionChanged="EdgeFilterChanged" AutomationProperties.Name="Relationship kind"/>
+     <Button Content="−" Click="ZoomOut" Classes="quiet" AutomationProperties.Name="Zoom out"/>
+     <Button x:Name="ZoomReset" Content="100%" Click="ResetZoom" Classes="quiet" AutomationProperties.Name="Reset zoom"/>
+     <Button Content="+" Click="ZoomIn" Classes="quiet" AutomationProperties.Name="Zoom in"/>
+     <Button x:Name="ExpandButton" Content="Expand neighbors" Click="ExpandClick" Classes="quiet" IsEnabled="False"/>
+     <Button x:Name="MoreButton" Content="More changes" Click="MoreClick" Classes="quiet" IsVisible="False"/>
+    </WrapPanel>
+    <Border Grid.Row="1" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1">
+     <ScrollViewer x:Name="Viewport" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                   PointerPressed="PanStarted" PointerMoved="PanMoved" PointerReleased="PanEnded" PointerCaptureLost="PanLost">
+      <LayoutTransformControl x:Name="ZoomLayer" HorizontalAlignment="Left" VerticalAlignment="Top">
+       <Canvas x:Name="GraphCanvas" Background="{DynamicResource CanvasBrush}"/>
+      </LayoutTransformControl>
+     </ScrollViewer>
+    </Border>
+   </Grid>
+   <Border Grid.Column="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1,1,0,1" Padding="10">
+    <Grid RowDefinitions="Auto,*" RowSpacing="6">
+     <TextBlock x:Name="InspectorTitle" Text="Type details" FontWeight="SemiBold" TextWrapping="Wrap"/>
+     <TabControl Grid.Row="1" Padding="0">
+      <TabItem Header="Members">
+       <Grid RowDefinitions="*,Auto" RowSpacing="6">
+        <ListBox x:Name="MemberList" SelectionChanged="DetailSelected" AutomationProperties.Name="Members and declarations"/>
+        <Button Grid.Row="1" x:Name="SourceButton" Content="Open declaration" Click="SourceClick" IsEnabled="False" Classes="quiet"/>
+       </Grid>
+      </TabItem>
+      <TabItem Header="Relationships">
+       <Grid RowDefinitions="*,Auto" RowSpacing="6">
+        <ListBox x:Name="RelationshipList" SelectionChanged="RelationshipSelected" AutomationProperties.Name="Relationships"/>
+        <Button Grid.Row="1" x:Name="NeighborButton" Content="Focus related type" Click="NeighborClick" IsEnabled="False" Classes="quiet"/>
+       </Grid>
+      </TabItem>
+     </TabControl>
+    </Grid>
+   </Border>
+  </Grid>
+  <ScrollViewer Grid.Row="4" MaxHeight="64" Margin="16,8" HorizontalScrollBarVisibility="Disabled">
+   <SelectableTextBlock x:Name="Status" TextWrapping="Wrap" Classes="muted"/>
+  </ScrollViewer>
+ </Grid>
+</Window>

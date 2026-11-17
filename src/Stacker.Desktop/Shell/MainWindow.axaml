@@ -86,7 +86,7 @@
       <TextBlock Grid.Row="1" Text="{Binding ComparisonDetail}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ComparisonDetail}"/>
       <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,4,0,0">
        <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding HasSelectedLayer}"><ToggleButton Content="This layer" IsChecked="{Binding IsSingleLayer, Mode=OneWay}" Click="ThisLayerClick" Classes="quiet"/><ToggleButton Content="Through this layer" IsChecked="{Binding IsThroughLayer, Mode=OneWay}" Click="ThroughLayerClick" Classes="quiet"/></StackPanel>
-       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"><Button Content="History" Click="HistoryClick" Classes="quiet"/><Button Content="Restack…" Click="RestackClick" IsVisible="{Binding CanRestackActiveStack}" Classes="quiet"/><Button Content="Discussion" Click="PrCommentsClick" IsVisible="{Binding HasPrDiscussion}" Classes="quiet"/><Button Content="{Binding ReviewLabel}" Click="ReviewPrClick" IsVisible="{Binding CanReview}" Classes="primary"/></StackPanel>
+       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"><Button x:Name="OpenClassDiagramButton" Content="Class diagram" Click="ClassDiagramClick" IsVisible="{Binding HasClassDiagram}" Classes="quiet"/><Button Content="History" Click="HistoryClick" Classes="quiet"/><Button Content="Restack…" Click="RestackClick" IsVisible="{Binding CanRestackActiveStack}" Classes="quiet"/><Button Content="Discussion" Click="PrCommentsClick" IsVisible="{Binding HasPrDiscussion}" Classes="quiet"/><Button Content="{Binding ReviewLabel}" Click="ReviewPrClick" IsVisible="{Binding CanReview}" Classes="primary"/></StackPanel>
       </Grid>
      </Grid>
     </Border>

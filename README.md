@@ -162,6 +162,12 @@ In a C# diff, right-click a symbol and choose **Go to Definition** or **Find Ref
 
 File patches retain the v0.1 limit of 5 MiB / 50,000 lines. Binary, submodule, rename and mode changes have explicit metadata. Non-UTF-8 path bytes remain outside v0.4 support.
 
+## C# class diagrams
+
+Open **Class diagram** from branch changes or a pull request review. **This layer** shows the semantic delta for one layer, **From stack base** compares the bottom layer's base with the selected revision, and **Snapshot** lets you browse every indexed C# type at that commit. Search by project, namespace, or type name. Select a type to inspect its complete member list and follow inheritance, interface, type dependency, creation, and call relationships. **Open declaration** opens the file at the corresponding Git revision.
+
+Choose a solution or project and select **Analyze C#**. Analysis runs Roslyn and MSBuild with an installed .NET SDK and restores packages in temporary detached checkouts. Use it on code you trust. **Analysis details** identifies the projects loaded at each revision and reports build or restore failures.
+
 ## Storage and tests
 
 `.stackpr.yml` retains the v1 schema: stable IDs, full base ref and ordered branch refs. Saves use atomic replacement, content revision checks and a writer lock. A revision mismatch refuses saving. If an external editor races with replacement, its version is preserved in a unique `.conflict` backup and the error identifies both versions. Formatting/comments are rewritten on save.

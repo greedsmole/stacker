@@ -7,7 +7,7 @@
    </ScrollViewer>
    <Button Grid.Column="1" Content="GitHub log" Command="{Binding $parent[Window].DataContext.ShowGitHubLogCommand}" IsVisible="{Binding HasPublicationProblem}" Classes="quiet" VerticalAlignment="Top"/>
   </Grid>
-  <StackPanel Grid.Row="2" Spacing="6"><Button Content="Retry loading review" Command="{Binding RetryInitializeCommand}" IsVisible="{Binding !IsInitialized}"/>
+  <StackPanel Grid.Row="2" Spacing="6"><Button x:Name="ReviewClassDiagramButton" Content="Class diagram" Click="ClassDiagramClick" Classes="quiet" HorizontalAlignment="Left" IsVisible="{Binding $parent[Window].DataContext.HasCSharpGraph}"/><Button Content="Retry loading review" Command="{Binding RetryInitializeCommand}" IsVisible="{Binding !IsInitialized}"/>
    <Border IsVisible="{Binding HasRecoveredText}" Classes="notice" Padding="10"><StackPanel Spacing="6"><TextBlock Text="Recovered draft: choose its destination before posting" TextWrapping="Wrap"/><SelectableTextBlock Text="{Binding RecoveredText}" TextWrapping="Wrap" MaxHeight="100"/><Button Content="Use in current editor" Command="{Binding RestoreRecoveredTextCommand}"/></StackPanel></Border>
    <Button Content="Recheck draft against current PR" Command="{Binding UseCurrentVersionCommand}" IsVisible="{Binding HasStaleDraft}"/>
    <StackPanel IsVisible="{Binding HasPendingPublication}" IsEnabled="{Binding !IsBusy}" Spacing="6"><Button Content="Check publication status" Command="{Binding ReloadCommand}"/><Button Content="I checked GitHub: allow retry" Command="{Binding UnlockRetryCommand}"/></StackPanel>

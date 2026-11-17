@@ -15,12 +15,12 @@ public sealed class RoslynSymbolNavigation(GitRepositoryReader git) : ISymbolNav
         {
             await git.RequireCleanCheckoutAsync(request.Root, request.Commit, ct);
             var paths = await git.TrackedPathsAsync(request.Root, request.Commit, ct);
-            var solutions = paths.Where(path => HasExtension(path, ".sln") || HasExtension(path, ".slnx"))
+            var solutions = paths.Where(RoslynWorkspace.IsSolution)
                 .Order(StringComparer.Ordinal).ToArray();
             if (solutions.Length > 0)
                 return solutions;
 
-            var projects = paths.Where(path => HasExtension(path, ".csproj"))
+            var projects = paths.Where(RoslynWorkspace.IsProject)
                 .Order(StringComparer.Ordinal).ToArray();
             var directory = Path.GetDirectoryName(request.Path);
             while (!string.IsNullOrEmpty(directory))
@@ -42,24 +42,13 @@ public sealed class RoslynSymbolNavigation(GitRepositoryReader git) : ISymbolNav
     {
         await git.RequireCleanCheckoutAsync(request.Root, request.Commit, ct);
         var tracked = (await git.TrackedPathsAsync(request.Root, request.Commit, ct)).ToHashSet(StringComparer.Ordinal);
-        if (!(HasExtension(project, ".csproj") || HasExtension(project, ".sln") || HasExtension(project, ".slnx")) ||
+        if (!RoslynWorkspace.IsEntry(project) ||
             !HasExtension(request.Path, ".cs") || !tracked.Contains(project) || !tracked.Contains(request.Path))
             throw new StackerException("The selected project and file must belong to the checked-out commit.");
 
         using var workspace = MSBuildWorkspace.Create();
         var root = Path.GetFullPath(request.Root);
-        var entry = Path.GetFullPath(project, root);
-        try
-        {
-            if (HasExtension(entry, ".csproj"))
-                await workspace.OpenProjectAsync(entry, cancellationToken: ct);
-            else
-                await workspace.OpenSolutionAsync(entry, cancellationToken: ct);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            throw new StackerException($"Cannot load {project}. Check the project's .NET SDK and restore its packages. {ex.Message}");
-        }
+        await RoslynWorkspace.OpenAsync(workspace, root, project, ct);
 
         var failure = workspace.Diagnostics.FirstOrDefault(diagnostic => diagnostic.Kind == WorkspaceDiagnosticKind.Failure);
         if (failure is not null)

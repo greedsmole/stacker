@@ -14,6 +14,7 @@
     <SolidColorBrush x:Key="CanvasBrush">#1C1E20</SolidColorBrush>
     <SolidColorBrush x:Key="PanelBrush">#232629</SolidColorBrush>
     <SolidColorBrush x:Key="DividerBrush">#3B424A</SolidColorBrush>
+    <SolidColorBrush x:Key="DiagramEdgeBrush">#8C99A6</SolidColorBrush>
     <SolidColorBrush x:Key="NoticeBrush">#293039</SolidColorBrush>
     <SolidColorBrush x:Key="WarningBrush">#E5B76B</SolidColorBrush>
     <SolidColorBrush x:Key="FileAddedBrush">#8BD7A0</SolidColorBrush>
@@ -34,6 +35,7 @@
     <SolidColorBrush x:Key="CanvasBrush">#FCFCFC</SolidColorBrush>
     <SolidColorBrush x:Key="PanelBrush">#F1F3F5</SolidColorBrush>
     <SolidColorBrush x:Key="DividerBrush">#D4DAE0</SolidColorBrush>
+    <SolidColorBrush x:Key="DiagramEdgeBrush">#697887</SolidColorBrush>
     <SolidColorBrush x:Key="NoticeBrush">#E8EEF5</SolidColorBrush>
     <SolidColorBrush x:Key="WarningBrush">#875816</SolidColorBrush>
     <SolidColorBrush x:Key="FileAddedBrush">#276642</SolidColorBrush>
