@@ -22,7 +22,7 @@ public partial class MainWindow
         Workspace.ColumnDefinitions[1].Width = new(visible ? 1 : 0);
         StacksPane.IsVisible = StacksSplitter.IsVisible = visible;
         StacksToggle.IsChecked = visible;
-        ToolTip.SetTip(StacksToggle, visible ? "Hide stacks" : "Show stacks");
+        ToolTip.SetTip(StacksToggle, visible ? "Hide stacks and pull requests" : "Show stacks and pull requests");
     }
 
     private void RememberStacksWidth()

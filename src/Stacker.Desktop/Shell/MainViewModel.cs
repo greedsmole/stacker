@@ -19,10 +19,30 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     private readonly SearchController _searchController;
     private readonly NavigationController _navigationController;
     private readonly GitLogController _gitLogController;
+    private AppSettings _settings = new();
     public void Notify(string name) => OnPropertyChanged(name);
 
     public IReadOnlyList<int> SelectedPositions => _runtime._selectedPositions;
-    public AppSettings Settings { get; set; } = new();
+    public AppSettings Settings
+    {
+        get => _settings;
+        set
+        {
+            if (SetProperty(ref _settings, value))
+                OnPropertyChanged(nameof(AreFilesVisible));
+        }
+    }
+    public bool AreFilesVisible
+    {
+        get => !Settings.FilesHidden;
+        set
+        {
+            if (value == AreFilesVisible)
+                return;
+            Settings.FilesHidden = !value;
+            OnPropertyChanged();
+        }
+    }
     public IWorkspaceSession Session => _runtime.Session;
     public RepositorySnapshot? Repository => _runtime._repository;
     public ObservableCollection<StackDefinition> Stacks { get; } = [];

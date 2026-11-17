@@ -14,9 +14,13 @@ public sealed partial class DiffSectionViewModel
     private CancellationTokenSource? _contextExpansion;
     private int _hiddenContextLines;
 
-    [ObservableProperty] private bool _contextUnavailable;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowFullFileAction))]
+    private bool _contextUnavailable;
     public bool HasCollapsedContext => _hiddenContextLines > 0;
     public bool HasExpandedContext => _context is { } context && _hiddenContextLines < context.HiddenLineCount;
+    public bool CanCollapsePartialContext => HasCollapsedContext && HasExpandedContext;
+    public bool ShowFullFileAction => HasCollapsedContext || HasExpandedContext || ContextUnavailable;
+    public string FullFileActionLabel => HasExpandedContext && !HasCollapsedContext ? "Collapse unchanged lines" : "Show full file";
 
     private void ResetContext()
     {
@@ -187,6 +191,9 @@ public sealed partial class DiffSectionViewModel
         _hiddenContextLines = count;
         OnPropertyChanged(nameof(HasCollapsedContext));
         OnPropertyChanged(nameof(HasExpandedContext));
+        OnPropertyChanged(nameof(CanCollapsePartialContext));
+        OnPropertyChanged(nameof(ShowFullFileAction));
+        OnPropertyChanged(nameof(FullFileActionLabel));
     }
 
     private void ClearContextMessage()

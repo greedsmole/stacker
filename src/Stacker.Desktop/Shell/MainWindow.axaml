@@ -1,5 +1,6 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.MainWindow" Title="Stacker" Icon="avares://Stacker/Assets/Stacker.png" Width="1400" Height="880" MinWidth="1060" MinHeight="640" Background="{DynamicResource CanvasBrush}">
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" xmlns:converters="using:Avalonia.Data.Converters" x:Class="Stacker.Desktop.MainWindow" Title="Stacker" Icon="avares://Stacker/Assets/Stacker.png" Width="1400" Height="880" MinWidth="1060" MinHeight="640" Background="{DynamicResource CanvasBrush}">
  <Window.Resources>
+  <StreamGeometry x:Key="NavigatorIcon">M 1,2 H 15 V 4 H 1 Z M 1,7 H 15 V 9 H 1 Z M 1,12 H 15 V 14 H 1 Z</StreamGeometry>
   <DataTemplate x:Key="StackGroupTemplate">
    <StackPanel Margin="0,0,0,20">
     <Border Classes.selected="{Binding IsSelected}" CornerRadius="3">
@@ -29,8 +30,25 @@
     <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
      <Image Source="avares://Stacker/Assets/Stacker.png" Width="30" Height="30" VerticalAlignment="Center" RenderOptions.BitmapInterpolationMode="HighQuality"/>
      <TextBlock Text="stacker" FontSize="21" FontWeight="SemiBold" VerticalAlignment="Center"/>
-     <ToggleButton x:Name="StacksToggle" Click="ToggleStacksClick" IsChecked="True" IsVisible="{Binding IsChangesOpen}" Classes="quiet" Padding="5" ToolTip.Tip="Hide stacks" AutomationProperties.Name="Show stacks">
-      <PathIcon Width="15" Height="15" Data="M 1,2 L 15,2 L 15,14 L 1,14 Z M 2,3 L 2,13 L 6,13 L 6,3 Z M 7,3 L 7,13 L 14,13 L 14,3 Z"/>
+     <ToggleButton x:Name="StacksToggle" Click="ToggleStacksClick" IsChecked="True" IsVisible="{Binding IsChangesOpen}"
+                   Classes="quiet" Cursor="Hand" Margin="8,0,0,0" ToolTip.Tip="Hide stacks and pull requests" AutomationProperties.Name="Stacks and pull requests">
+      <StackPanel Orientation="Horizontal" Spacing="6">
+       <PathIcon Width="12" Height="12" VerticalAlignment="Center" Data="{StaticResource NavigatorIcon}"/>
+       <TextBlock Text="Stacks &amp; PRs" VerticalAlignment="Center"/>
+      </StackPanel>
+     </ToggleButton>
+     <ToggleButton x:Name="FilesToggle" IsChecked="{Binding AreFilesVisible, Mode=TwoWay}" IsEnabled="{Binding !HasNoSections}"
+                   Classes="quiet" Cursor="Hand" ToolTip.Tip="Show or hide changed files" AutomationProperties.Name="Changed files">
+      <ToggleButton.IsVisible>
+       <MultiBinding Converter="{x:Static converters:BoolConverters.And}">
+        <Binding Path="IsChangesOpen"/>
+        <Binding Path="!IsHistoryOpen"/>
+       </MultiBinding>
+      </ToggleButton.IsVisible>
+      <StackPanel Orientation="Horizontal" Spacing="6">
+       <PathIcon Width="12" Height="12" VerticalAlignment="Center" Data="{StaticResource NavigatorIcon}"/>
+       <TextBlock Text="Files" VerticalAlignment="Center"/>
+      </StackPanel>
      </ToggleButton>
     </StackPanel>
     <Button x:Name="RepositoryButton" Grid.Column="1" Content="{Binding RepositoryTitle}" Classes="quiet" HorizontalAlignment="Left" MaxWidth="340" ToolTip.Tip="Switch repository"><Button.Flyout><Flyout><StackPanel Spacing="10" Width="320"><TextBlock Text="REPOSITORY" Classes="label"/><ComboBox x:Name="RecentBox" ItemsSource="{Binding RecentRepositories}" PlaceholderText="Recent repositories" HorizontalAlignment="Stretch" SelectionChanged="RecentChanged"/><Button x:Name="OpenFolderButton" Content="Open folder…" Click="OpenFolderClick"/><Button Content="Open demo" Click="OpenDemoClick"/><TextBox Text="{Binding RepositoryPath}" Watermark="Or enter a repository path" KeyDown="PathKeyDown"/></StackPanel></Flyout></Button.Flyout></Button>
@@ -83,7 +101,7 @@
     <StackPanel Grid.Row="3" IsVisible="{Binding ShowLoadingState}" Margin="32" VerticalAlignment="Center" Spacing="8"><TextBlock Text="Loading workspace…" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="Reading repository and comparison details." Classes="muted"/></StackPanel>
     <ScrollViewer Grid.Row="3" IsVisible="{Binding !HasNoSections}" x:Name="SectionScroll" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"><ItemsControl ItemsSource="{Binding Sections}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel>
      <ToggleButton Content="{Binding Title}" IsChecked="{Binding IsExpanded}" IsVisible="{Binding ShowSectionHeader}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Classes="quiet" Margin="12,4"/>
-     <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsContentVisible}"><TextBlock Text="{Binding Warning}" IsVisible="{Binding HasWarning}" Foreground="{DynamicResource WarningBrush}" Margin="16,8" TextWrapping="Wrap"/><local:DiffSectionView Grid.Row="1" Height="{Binding PanelHeight}"/></Grid>
+     <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsContentVisible}"><TextBlock Text="{Binding Warning}" IsVisible="{Binding HasWarning}" Foreground="{DynamicResource WarningBrush}" Margin="16,8" TextWrapping="Wrap"/><local:DiffSectionView Grid.Row="1" Height="{Binding PanelHeight}" ShowFileNavigator="{Binding $parent[Window].DataContext.AreFilesVisible}"/></Grid>
     </StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
    </Grid>
    <Border x:Name="ReviewHost" Grid.Column="3" Width="390" HorizontalAlignment="Right" IsVisible="{Binding IsReviewOpen}" Background="{DynamicResource PanelBrush}" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource DividerBrush}"><Grid RowDefinitions="44,*"><TextBlock Text="Pull request review" Margin="16,0" VerticalAlignment="Center" FontWeight="SemiBold"/><Button Content="Close" Command="{Binding CloseReviewCommand}" HorizontalAlignment="Right" Classes="quiet"/><local:ReviewPanel Grid.Row="1" DataContext="{Binding ActiveReview}"/></Grid></Border>

@@ -12,6 +12,7 @@ namespace Stacker.Desktop;
 
 public partial class DiffSectionView : UserControl
 {
+    private const double MinimumInlineFileHeaderWidth = 560;
     private ScrollViewer? _scroll;
     private bool _restoring;
     private DiffSectionViewModel? _section;
@@ -21,21 +22,16 @@ public partial class DiffSectionView : UserControl
         DiffLines.AddHandler(PointerPressedEvent, AddLinePointerPressed, RoutingStrategies.Tunnel);
         DiffLines.SelectionChanged += (_, _) => UpdateRangeSelection();
         LayoutUpdated += (_, _) => UpdateRangeButton();
-        ContentGrid.ColumnDefinitions[0].MinWidth = 200;
-        ContentGrid.ColumnDefinitions[0].MaxWidth = 600;
-        AttachedToVisualTree += (_, _) =>
-        {
-            if (ShowFileNavigator && TopLevel.GetTopLevel(this) is MainWindow window && window.DataContext is MainViewModel vm)
-                ContentGrid.ColumnDefinitions[0].Width = new(vm.Settings.FilesWidth);
-        };
+        InitializeFileNavigator();
         Loaded += (_, _) => AttachSection(DataContext as DiffSectionViewModel);
         DataContextChanged += (_, _) => { if (IsLoaded) AttachSection(DataContext as DiffSectionViewModel); };
         Unloaded += (_, _) => AttachSection(null);
-        ContentGrid.SizeChanged += (_, _) =>
-        {
-            if (ShowFileNavigator && FilePane.IsVisible && TopLevel.GetTopLevel(this) is MainWindow window && window.DataContext is MainViewModel vm && ContentGrid.ColumnDefinitions[0].ActualWidth >= 150)
-                vm.Settings.FilesWidth = ContentGrid.ColumnDefinitions[0].ActualWidth;
-        };
+    }
+    private void FileHeaderSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        var inline = e.NewSize.Width >= MinimumInlineFileHeaderWidth;
+        Grid.SetRow(FileHeaderActions, inline ? 0 : 1);
+        Grid.SetColumn(FileHeaderActions, inline ? 1 : 0);
     }
     private void AttachSection(DiffSectionViewModel? section)
     {
@@ -202,18 +198,26 @@ public partial class DiffSectionView : UserControl
         if (section.ExpandContext(row, fromEnd) is { } revealed)
             ScrollToContextRow(section, revealed);
     }
-    private void ExpandAllContextClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () =>
+    private void FullFileClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () =>
     {
         if (DataContext is not DiffSectionViewModel section)
             return;
+        if (!section.HasCollapsedContext)
+        {
+            CollapseContext(section);
+            return;
+        }
         var anchor = FirstVisibleCodeLine();
         if (await section.ExpandAllContextAsync())
             ScrollToContextRow(section, anchor ?? section.Lines.FirstOrDefault(row => row.IsCode));
     }, message => AsyncHandler.Report(this, message));
     private void CollapseContextClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not DiffSectionViewModel section)
-            return;
+        if (DataContext is DiffSectionViewModel section)
+            CollapseContext(section);
+    }
+    private void CollapseContext(DiffSectionViewModel section)
+    {
         var anchor = FirstVisibleCodeLine();
         section.CollapseContext();
         if (anchor is { IsExpandedContext: true, NewLineNumber: int number })

@@ -147,16 +147,18 @@ public sealed class UiReviewTests
     {
         await using var fixture = new GitFixture();
         await fixture.Init();
-        const string path = "Numbers.cs";
-        var original = Enumerable.Range(1, 110).Select(number => $"const int value{number} = {number};").ToArray();
+        const string path = "Numbers.razor";
+        var original = Enumerable.Range(1, 110).Select(number => $"    private const int value{number} = {number};").ToArray();
+        original[0] = "@code {";
+        original[^1] = "}";
         original[33] = "";
         await fixture.Write(path, string.Join(newline, original));
         await fixture.Commit("Original file");
         var basis = await fixture.Git("rev-parse", "HEAD");
         var changed = original.ToList();
-        changed[34] = "const int value35 = 350;";
-        changed.Insert(35, "// The next line keeps its original value.");
-        changed[80] = "const int value80 = 800;";
+        changed[34] = "    private const int value35 = 350;";
+        changed.Insert(35, "    // The next line keeps its original value.");
+        changed[80] = "    private const int value80 = 800;";
         await fixture.Write(path, string.Join(newline, changed));
         await fixture.Commit("Two separate edits");
         var head = await fixture.Git("rev-parse", "HEAD");
@@ -174,12 +176,14 @@ public sealed class UiReviewTests
         var gaps = section.Lines.Where(line => line.IsCollapsedContext).ToArray();
         Assert.Equal(new[] { 31, 38, 27 }, gaps.Select(line => line.ContextGap!.Count));
         Assert.Contains(patchRows, line => line.Kind == DiffLineKind.Context && line.NewLineNumber == 34);
+        Assert.NotEmpty(Assert.Single(patchRows, line => line.IsRemoved && line.OldLineNumber == 35).Tokens);
+        Assert.NotEmpty(Assert.Single(patchRows, line => line.IsAdded && line.NewLineNumber == 35).Tokens);
 
         var view = new DiffSectionView { DataContext = section, ShowFileNavigator = false };
         var window = new Window
         {
             Content = view,
-            Width = 788,
+            Width = theme == "Dark" ? 788 : 480,
             Height = 470,
             RequestedThemeVariant = theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark
         };
@@ -187,6 +191,7 @@ public sealed class UiReviewTests
         try
         {
             var list = view.FindControl<ListBox>("DiffLines")!;
+            var fullFile = view.FindControl<Button>("FullFileButton")!;
             Capture(window, theme, "diff-context-collapsed");
             await ClickGap(gaps[0], "Show 20 lines above · 31 hidden");
             Assert.Equal(11, gaps[0].ContextGap!.Count);
@@ -208,9 +213,19 @@ public sealed class UiReviewTests
             await ClickGap(gaps[2], "Show 7 unchanged lines");
             Assert.DoesNotContain(gaps[2], section.Lines);
 
+            var actions = Assert.Single(view.GetVisualDescendants().OfType<Button>(), button => Equals(button.Content, "···"));
+            var flyout = Assert.IsType<MenuFlyout>(actions.Flyout);
+            flyout.ShowAt(actions);
+            var collapsePartial = Assert.Single(flyout.Items.OfType<MenuItem>(), item => Equals(item.Header, "Collapse unchanged lines"));
+            Assert.True(collapsePartial.IsVisible);
+            Assert.DoesNotContain(flyout.Items.OfType<MenuItem>(), item => Equals(item.Header, "Show full file"));
+            flyout.Hide();
+
             section.WrapCode = true;
-            ClickFileAction("Show full file");
-            await Until(() => !section.HasCollapsedContext);
+            Assert.Equal("Show full file", fullFile.Content);
+            Assert.True(fullFile.IsEffectivelyVisible);
+            ClickAt(window, fullFile);
+            await Until(() => Equals(fullFile.Content, "Collapse unchanged lines"));
             Assert.Equal(Enumerable.Range(1, changed.Count), section.Lines.Where(line => line.NewLineNumber.HasValue).Select(line => line.NewLineNumber!.Value));
             Assert.Equal(Enumerable.Range(1, original.Length), section.Lines.Where(line => line.OldLineNumber.HasValue).Select(line => line.OldLineNumber!.Value));
             Assert.Equal(changed, section.Lines.Where(line => line.NewLineNumber.HasValue).Select(line => line.Text.TrimEnd('\r')));
@@ -220,8 +235,11 @@ public sealed class UiReviewTests
                 Assert.Equal(Avalonia.Media.TextWrapping.Wrap, line.TextWrapping);
             });
             Assert.Equal(patch, section.Patch);
+            Capture(window, theme, "diff-full-file");
 
-            ClickFileAction("Collapse unchanged lines");
+            Assert.True(fullFile.Focus());
+            Press(window, Key.Space);
+            Assert.Equal("Show full file", fullFile.Content);
             Assert.False(section.HasExpandedContext);
             Assert.Equal(patchRows, section.Lines.Where(line => !line.IsCollapsedContext));
             Assert.Equal(new[] { 31, 38, 27 }, section.Lines.Where(line => line.IsCollapsedContext).Select(line => line.ContextGap!.Count));
@@ -235,27 +253,172 @@ public sealed class UiReviewTests
                     window.UpdateLayout();
                     var button = view.GetVisualDescendants().OfType<Button>().SingleOrDefault(item =>
                         ReferenceEquals(item.DataContext, gap) && item.IsEffectivelyVisible && Equals(item.Content, label));
-                    position = button?.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window);
-                    return position is { Y: >= 0 } point && point.Y < window.Bounds.Height;
+                    // ScrollIntoView can leave the bottom of the gap under the overlay scrollbar.
+                    position = button?.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 4), window);
+                    return position is Point point && window.InputHitTest(point) is Visual hit &&
+                        (ReferenceEquals(button, hit) || button!.IsVisualAncestorOf(hit));
                 });
                 var pointer = position!.Value;
                 window.MouseMove(pointer);
                 window.MouseDown(pointer, MouseButton.Left);
                 window.MouseUp(pointer, MouseButton.Left);
             }
+        }
+        finally { window.Close(); }
+    }
 
-            void ClickFileAction(string label)
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Full_file_action_explains_display_limits_and_unavailable_source(bool sourceUnavailable)
+    {
+        await using var fixture = new GitFixture();
+        await fixture.Init();
+        const string path = "Large.txt";
+        var tail = "one\ntwo\nthree\nfour\n" + (sourceUnavailable
+            ? new string('x', 2 * 1024 * 1024)
+            : new string('\n', DiffView.DisplayLineLimit));
+        await fixture.Write(path, "before\n" + tail);
+        await fixture.Commit("Add file");
+        var basis = await fixture.Git("rev-parse", "HEAD");
+        await fixture.Write(path, "after\n" + tail);
+        await fixture.Commit("Edit first line");
+        var head = await fixture.Git("rev-parse", "HEAD");
+        var files = await fixture.Reader.FilesAsync(fixture.Root, basis, head);
+        using var section = new DiffSectionViewModel(fixture.Reader, fixture.Root, new("head", "base", basis, head, null, files));
+        await Until(() => !section.IsBusy && section.Lines.Count > 0);
+
+        var view = new DiffSectionView { DataContext = section, ShowFileNavigator = false };
+        var window = new Window { Content = view, Width = 480, Height = 420 };
+        window.Show();
+        try
+        {
+            var fullFile = view.FindControl<Button>("FullFileButton")!;
+            Assert.True(fullFile.IsEffectivelyVisible);
+            Assert.Equal("Show full file", fullFile.Content);
+            if (sourceUnavailable)
             {
-                var actions = Assert.Single(view.GetVisualDescendants().OfType<Button>(), button => Equals(button.Content, "···"));
-                var flyout = Assert.IsType<MenuFlyout>(actions.Flyout);
-                flyout.ShowAt(actions);
-                var item = Assert.Single(flyout.Items.OfType<MenuItem>(), item => Equals(item.Header, label));
-                Assert.True(item.IsVisible);
-                item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-                flyout.Hide();
+                Assert.False(fullFile.IsEnabled);
+                Assert.Equal("Full file source unavailable", ToolTip.GetTip(fullFile));
+            }
+            else
+            {
+                var rows = section.Lines.ToArray();
+                Assert.True(fullFile.IsEnabled);
+                ClickAt(window, fullFile);
+                Assert.Contains("exceeds the display limit", section.Message);
+                Assert.Equal(rows, section.Lines);
             }
         }
         finally { window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public async Task Workspace_toggles_independently_restore_all_file_panes_and_saved_visibility(string theme)
+    {
+        await using var fixture = new GitFixture();
+        await fixture.Linear();
+        var store = new YamlStackStore();
+        await store.SaveAsync(fixture.Root, [fixture.Stack], null);
+        var settings = new JsonSettingsStore(Path.Combine(fixture.Root, "settings"));
+        await settings.SaveAsync(new AppSettings { Theme = theme, LastRepository = fixture.Root, WindowWidth = 1060, WindowHeight = 640 });
+
+        using var vm = CreateViewModel();
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
+        try
+        {
+            await Until(() => vm.Sections.Count == 1 && !vm.IsBusy);
+            vm.SelectLayers([vm.Layers[0], vm.Layers[2]]);
+            await vm.CompareAsync();
+            Assert.Equal(2, vm.Sections.Count);
+            var stacks = window.FindControl<ToggleButton>("StacksToggle")!;
+            var files = window.FindControl<ToggleButton>("FilesToggle")!;
+            var stackPane = window.FindControl<Grid>("StacksPane")!;
+            var source = vm.Sections[0];
+            source.Filter = "A.txt";
+            var selected = source.SelectedFile;
+            Assert.NotNull(selected);
+
+            var views = CheckFilePanes(window, visible: true);
+            Assert.Equal(2, views.Length);
+            var sectionScroll = window.FindControl<ScrollViewer>("SectionScroll")!;
+            var firstGrid = views[0].FindControl<Grid>("ContentGrid")!;
+            firstGrid.ColumnDefinitions[0].Width = new(310);
+            window.FindControl<Grid>("Workspace")!.ColumnDefinitions[0].Width = new(344);
+            sectionScroll.Offset = Vector.Zero;
+            Capture(window, theme, "review-navigators");
+
+            ClickAt(window, files);
+            CheckFilePanes(window, visible: false);
+            Assert.True(stackPane.IsVisible);
+            Assert.True(stacks.IsChecked);
+
+            ClickAt(window, stacks);
+            Assert.False(stackPane.IsVisible);
+            Assert.True(files.IsEffectivelyVisible && stacks.IsEffectivelyVisible);
+            Capture(window, theme, "review-navigators-hidden");
+
+            Assert.True(files.Focus());
+            Press(window, Key.Space);
+            CheckFilePanes(window, visible: true);
+            Assert.False(stackPane.IsVisible);
+            Assert.Equal(310, firstGrid.ColumnDefinitions[0].ActualWidth);
+            Assert.Same(selected, source.SelectedFile);
+            Assert.Equal("A.txt", source.Filter);
+
+            Assert.True(stacks.Focus());
+            Press(window, Key.Space);
+            Assert.True(stackPane.IsVisible);
+            window.Width = 1320;
+            vm.IsReviewOpen = true;
+            Capture(window, theme, "review-navigators-docked");
+            Assert.Equal(3, Grid.GetColumn(window.FindControl<Border>("ReviewHost")!));
+            vm.IsReviewOpen = false;
+
+            ClickAt(window, files);
+            ClickAt(window, stacks);
+            await vm.SelectLayerAsync(vm.Layers[1], toggle: false);
+            Assert.Single(CheckFilePanes(window, visible: false));
+        }
+        finally { window.Close(); await Until(() => !window.IsVisible); }
+
+        using var reopenedVm = CreateViewModel();
+        var reopened = new MainWindow { DataContext = reopenedVm };
+        reopened.Show();
+        try
+        {
+            await Until(() => reopenedVm.Sections.Count == 1 && !reopenedVm.IsBusy);
+            var view = Assert.Single(CheckFilePanes(reopened, visible: false));
+            Assert.False(reopened.FindControl<Grid>("StacksPane")!.IsVisible);
+            var files = reopened.FindControl<ToggleButton>("FilesToggle")!;
+            Assert.False(files.IsChecked);
+            ClickAt(reopened, files);
+            CheckFilePanes(reopened, visible: true);
+            Assert.Equal(310, view.FindControl<Grid>("ContentGrid")!.ColumnDefinitions[0].ActualWidth);
+        }
+        finally { reopened.Close(); await Until(() => !reopened.IsVisible); }
+
+        MainViewModel CreateViewModel() => new(fixture.Reader, store, settings, new GitExecutable(), new(fixture.Reader), new(fixture.Reader));
+
+        static DiffSectionView[] CheckFilePanes(MainWindow window, bool visible)
+        {
+            window.UpdateLayout();
+            var views = window.FindControl<ScrollViewer>("SectionScroll")!.GetVisualDescendants().OfType<DiffSectionView>().ToArray();
+            Assert.NotEmpty(views);
+            foreach (var view in views)
+            {
+                Assert.Equal(visible, view.FindControl<Grid>("FilePane")!.IsVisible);
+                Assert.Equal(visible, view.FindControl<GridSplitter>("FileSplitter")!.IsVisible);
+                var columns = view.FindControl<Grid>("ContentGrid")!.ColumnDefinitions;
+                Assert.Equal(visible ? 1 : 0, columns[1].ActualWidth);
+                if (!visible)
+                    Assert.Equal(0, columns[0].ActualWidth);
+            }
+            return views;
+        }
     }
 
     [AvaloniaTheory]
