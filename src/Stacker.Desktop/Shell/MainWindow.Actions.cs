@@ -74,7 +74,6 @@ public partial class MainWindow
         }
         catch (Exception ex) { Vm.Error = ex.Message; }
     }
-    private void UndoRestackClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await Vm.UndoAsync(); }, message => AsyncHandler.Report(this, message));
     /// <summary>Opens the conflicted files in the editor the user configured.</summary>
     private void ResolveConflictsClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await Vm.OpenConflictsInEditorAsync(); }, message => AsyncHandler.Report(this, message));
     /// <summary>Opens the sync window, whose conflict panel covers Continue, Skip and Abort.</summary>
@@ -113,16 +112,15 @@ public partial class MainWindow
     }
     catch (Exception ex) { Vm.Error = ex.Message; }
 }, message => AsyncHandler.Report(this, message));
-    /// <summary>Creates a new layer branch on top of a local stack and adds it to the definition.</summary>
+    /// <summary>Opens the layer form for the selected local stack.</summary>
     private void AddLayerClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
-    if (sender is not Control { DataContext: StackGroupViewModel group })
+    if (!Vm.IsLocalSelected || Vm.SelectedStack is not { } stack)
         return;
     try
     {
-        await Vm.SelectGroupAsync(group);
-        await new AddLayerWindow(group.Definition, Vm.AddLayerAsync).ShowDialog<bool>(this);
+        await new AddLayerWindow(stack, Vm.AddLayerAsync).ShowDialog<bool>(this);
     }
     catch (Exception ex) { Vm.Error = ex.Message; }
 }, message => AsyncHandler.Report(this, message));
@@ -141,18 +139,23 @@ public partial class MainWindow
         }
         catch (Exception ex) { Vm.Error = ex.Message; }
     }
-    private void PrCommentsClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await Vm.ShowReviewAsync(tab: 0); }, message => AsyncHandler.Report(this, message));
+    private void PrCommentsClick(object? sender, RoutedEventArgs e)
+    {
+        var animate = TakePointerPress(sender);
+        AsyncHandler.Run(() => OpenReviewFromHeaderAsync(() => Vm.ShowReviewAsync(tab: 0), sender as Control, animate),
+            message => AsyncHandler.Report(this, message));
+    }
+
     private void ReviewPrClick(object? sender, RoutedEventArgs e)
-=> AsyncHandler.Run(async () =>
-{
-    if (Vm.Sections.FirstOrDefault() is { IsPrSnapshot: false, HasPr: true } section)
-        await Vm.OpenPrChangesAsync(section);
-    await Vm.ShowReviewAsync();
-}, message => AsyncHandler.Report(this, message));
+    {
+        var animate = TakePointerPress(sender);
+        AsyncHandler.Run(() => OpenReviewFromHeaderAsync(async () =>
+        {
+            if (Vm.Sections.FirstOrDefault() is { IsPrSnapshot: false, HasPr: true } section)
+                await Vm.OpenPrChangesAsync(section);
+            await Vm.ShowReviewAsync();
+        }, sender as Control, animate), message => AsyncHandler.Report(this, message));
+    }
     private void OverviewClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () => { if (sender is Control { DataContext: StackGroupViewModel group }) await Vm.SelectOverviewAsync(group); }, message => AsyncHandler.Report(this, message));
-    private void EditGroupClick(object? sender, RoutedEventArgs e)
-=> AsyncHandler.Run(async () => { if (sender is Control { DataContext: StackGroupViewModel group }) { await Vm.SelectGroupAsync(group); await EditAsync(true); } }, message => AsyncHandler.Report(this, message));
-    private void SaveGroupClick(object? sender, RoutedEventArgs e)
-=> AsyncHandler.Run(async () => { if (sender is Control { DataContext: StackGroupViewModel group }) { await Vm.SelectGroupAsync(group); await Vm.SaveRemoteAsLocalAsync(); } }, message => AsyncHandler.Report(this, message));
 }

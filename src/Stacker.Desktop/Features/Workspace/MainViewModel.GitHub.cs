@@ -19,11 +19,15 @@ public sealed partial class MainViewModel
     /// <summary>Current connection or refresh status.</summary>
     [ObservableProperty] internal string _gitHubStatus = "Not connected";
     /// <summary>True while GitHub data or remote objects are loading.</summary>
-    [ObservableProperty] internal bool _gitHubBusy;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowPrEmpty))]
+    internal bool _gitHubBusy;
     /// <summary>Whether the current workspace is the offline demo and cannot publish.</summary>
     [ObservableProperty] internal bool _isDemo;
     public bool HasRemoteGroups => RemoteGroups.Count > 0;
     public bool HasOtherGroups => OtherGroups.Count > 0;
+    public bool ShowPrEmpty => !HasRemoteGroups && !HasOtherGroups && !GitHubBusy;
+    public string PullRequestsEmptyMessage => CanEdit ? "No pull requests to show for this repository."
+        : "Open a repository to see its pull requests.";
     [RelayCommand] public Task OpenDemoAsync() => _gitHubController.OpenDemoAsync();
     [RelayCommand] public Task RefreshGitHubAsync() => _gitHubController.RefreshGitHubAsync();
     Task ISyncPresentation.RefreshGitHubAfterPublicationAsync() => _gitHubController.RefreshAfterPublicationAsync();

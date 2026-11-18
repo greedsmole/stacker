@@ -71,6 +71,7 @@ internal sealed partial class NavigationController
         owner.Settings.GroupFilesByFolder = enabled;
         foreach (var section in owner.Sections.Concat(runtime._views.Values.SelectMany(views => views)).Distinct())
             section.GroupFilesByFolder = enabled;
+        owner.Notify(nameof(MainViewModel.GroupFilesByFolder));
         await SaveSettingsAsync();
     }
 

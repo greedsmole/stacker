@@ -26,6 +26,7 @@ public partial class StackEditorWindow : Window
     public StackEditorWindow(RepositorySnapshot repository, StackDefinition? stack, Func<StackDefinition, Task<bool>> save) : this()
     {
         _save = save;
+        Title = stack is null ? "New stack" : "Edit stack";
         var refs = repository.Refs.Select(r => r.Name).ToList();
         if (stack is not null)
         {

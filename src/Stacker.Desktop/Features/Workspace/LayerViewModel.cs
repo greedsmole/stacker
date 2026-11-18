@@ -25,6 +25,7 @@ public sealed partial class LayerViewModel : ObservableObject
     public int Number => Snapshot.Position + 1;
     public string Name => Snapshot.Branch.Replace("refs/heads/", "").Replace("refs/remotes/", "");
     public string Title => PullRequest?.Title ?? Name;
+    public string CheckLabel => $"Include layer {Number}: {Title}";
     public string Detail => PullRequest is null ? $"↑{Snapshot.Ahead}  ↓{Snapshot.Behind}" : $"#{PullRequest.Number} · {PullRequest.HeadRef}{(PullRequest.IsDraft ? " · Draft" : "")}";
     public string? Warning => Snapshot.Warning;
     public bool HasWarning => Warning is not null;

@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Media.Transformation;
 using Stacker.Core;
 namespace Stacker.Desktop;
 
@@ -11,6 +12,12 @@ public partial class MainWindow
     {
         if (Application.Current is { } app)
             app.Resources["DiffLineHeight"] = (double)Vm.Settings.DiffLineHeight;
+    }
+
+    private void ApplyMotionSettings()
+    {
+        if (Application.Current is { } app)
+            app.Resources["ButtonPressTransform"] = TransformOperations.Parse(Vm.Settings.ReduceMotion ? "scale(1)" : "scale(0.98)");
     }
 
     private void SettingsClick(object? sender, RoutedEventArgs e)
@@ -28,6 +35,7 @@ public partial class MainWindow
         var savedCredentials = new CheckBox { Content = "Use saved gh credentials for GitHub API", IsChecked = Vm.Settings.UseSavedGhCredentials };
         var background = new CheckBox { Content = "Update GitHub in the background while active", IsChecked = Vm.Settings.BackgroundRefresh };
         var theme = new ToggleSwitch { Content = "Use light appearance", IsChecked = Vm.Settings.Theme == "Light" };
+        var reduceMotion = new CheckBox { Content = "Reduce motion", IsChecked = Vm.Settings.ReduceMotion };
         var lineHeight = new NumericUpDown
         {
             Minimum = AppSettings.MinDiffLineHeight,
@@ -51,11 +59,15 @@ public partial class MainWindow
             MinHeight = 420,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Content = DialogLayout.Create("Settings", "Appearance, tools and background updates.", new Control[] {
-                    theme, new TextBlock { Text = "Diff line height" }, lineHeight,
+                    new TextBlock { Text = "Appearance", Classes = { "pane-title" } }, theme, reduceMotion,
+                    new TextBlock { Text = "Diff line height" }, lineHeight,
+                    new TextBlock { Text = "Git and GitHub", Classes = { "pane-title" }, Margin = new Thickness(0, 8, 0, 0) },
                     new TextBlock { Text = "Git executable", FontWeight = Avalonia.Media.FontWeight.SemiBold }, git, new TextBlock { Text = "GitHub CLI executable" }, gh,
                     new TextBlock { Text = "Editor for conflicts and commit messages" }, editor,
                     new TextBlock { Text = "Add a wait flag (for example \"code --wait\") if your editor returns immediately.", FontSize = 11, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
-                    savedCredentials, background, storage, new TextBlock { Text = "Connection changes are checked automatically.", FontSize = 12 }
+                    savedCredentials, background,
+                    new TextBlock { Text = "Workspace data", Classes = { "pane-title" }, Margin = new Thickness(0, 8, 0, 0) },
+                    storage
                 }, cancel, save)
         };
         cancel.Click += (_, _) => window.Close();
@@ -74,10 +86,12 @@ public partial class MainWindow
             settings.UseSavedGhCredentials = savedCredentials.IsChecked == true;
             settings.BackgroundRefresh = background.IsChecked == true;
             settings.Theme = nextTheme;
+            settings.ReduceMotion = reduceMotion.IsChecked == true;
             settings.DiffLineHeight = Math.Clamp((int)(lineHeight.Value ?? AppSettings.DefaultDiffLineHeight),
                 AppSettings.MinDiffLineHeight, AppSettings.MaxDiffLineHeight);
             await Vm.SaveSettingsAsync();
             ApplyDiffLineHeight();
+            ApplyMotionSettings();
             if (themeChanged)
             {
                 ApplyTheme();

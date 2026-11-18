@@ -1,13 +1,13 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Stacker.Desktop.AddLayerWindow" Title="Add layer" Width="600" Height="420" MinWidth="500" MinHeight="360" WindowStartupLocation="CenterOwner">
   <Grid Margin="24" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" RowSpacing="12">
     <StackPanel Spacing="6">
-      <TextBlock Text="New layer" FontSize="22" FontWeight="SemiBold"/>
+      <TextBlock Text="Add layer" Classes="view-title"/>
       <TextBlock x:Name="StackLabel" Classes="muted" TextWrapping="Wrap"/>
       <TextBlock Text="Create and check out a branch above the selected starting point. Stacker also adds it to your stack definition; commit that file when you are ready." Classes="muted" FontSize="12" TextWrapping="Wrap"/>
     </StackPanel>
     <Grid Grid.Row="1" ColumnDefinitions="110,*"><TextBlock Text="Branch name" VerticalAlignment="Center"/><TextBox Grid.Column="1" x:Name="NameInput" AutomationProperties.Name="Branch name" Watermark="e.g. feature/session-api"/></Grid>
     <Grid Grid.Row="2" ColumnDefinitions="110,*"><TextBlock Text="Start from" VerticalAlignment="Center"/><ComboBox Grid.Column="1" x:Name="StartInput" AutomationProperties.Name="Start from branch" HorizontalAlignment="Stretch"/></Grid>
-    <ScrollViewer Grid.Row="4" MaxHeight="72"><TextBlock x:Name="ErrorLabel" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/></ScrollViewer>
+    <ScrollViewer Grid.Row="4" MaxHeight="72"><SelectableTextBlock x:Name="ErrorLabel" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/></ScrollViewer>
     <Grid Grid.Row="5" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
       <Button Content="Cancel" IsCancel="True" Click="CancelClick" HorizontalAlignment="Left"/>
       <Button Grid.Column="2" x:Name="CreateButton" Content="Create layer" Classes="primary" Click="CreateClick"/>

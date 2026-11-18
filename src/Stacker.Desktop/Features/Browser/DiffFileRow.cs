@@ -12,6 +12,7 @@ public sealed partial class DiffFileRow(FileChange change) : ObservableObject
     public bool IsReviewed => ReviewStatus?.State == FileReviewState.Reviewed;
     public bool HasReviewStatus => ReviewStatus is not null;
     public bool CanChangeReview => HasReviewStatus && !SavingReview;
+    public string ReviewButtonLabel => IsReviewed ? "Mark unreviewed" : "Mark reviewed";
     public string ReviewAction => ReviewStatus?.State switch
     {
         FileReviewState.Reviewed => "Mark unreviewed",
@@ -22,7 +23,7 @@ public sealed partial class DiffFileRow(FileChange change) : ObservableObject
         _ => "Mark reviewed"
     };
 
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsReviewed), nameof(HasReviewStatus), nameof(CanChangeReview), nameof(ReviewAction))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsReviewed), nameof(HasReviewStatus), nameof(CanChangeReview), nameof(ReviewAction), nameof(ReviewButtonLabel))]
     private FileReviewStatus? _reviewStatus;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(CanChangeReview))]
     private bool _savingReview;

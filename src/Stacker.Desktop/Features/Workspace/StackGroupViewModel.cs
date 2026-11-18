@@ -23,7 +23,8 @@ public sealed partial class StackGroupViewModel : ObservableObject
     public bool IsStack => !IsSinglePr;
     public bool ShowLayers => IsStack && IsExpanded;
     public string Name => Definition.Name;
-    public string Summary => IsSinglePr ? $"#{PullRequests[0].Number} · {PullRequests[0].BaseRef} ← {PullRequests[0].HeadRef}"
+    public string ExpandLabel => (IsExpanded ? "Collapse " : "Expand ") + Name;
+    public string Summary => IsSinglePr ? $"#{PullRequests[0].Number} · {PullRequests[0].HeadRef}{(PullRequests[0].IsDraft ? " · Draft" : "")}"
         : $"{Layers.Count} {(IsRemote ? "PRs" : "layers")}{(SharedPrefix ? " · shared foundation" : "")}";
     public string BaseLabel => "Base: " + (IsRemote ? PullRequests[0].BaseRef : Definition.Base.Replace("refs/heads/", "").Replace("refs/remotes/", ""));
     /// <summary>Whether remote pull requests share a common foundation.</summary>
@@ -35,7 +36,11 @@ public sealed partial class StackGroupViewModel : ObservableObject
     [ObservableProperty] private bool _undoAvailable;
     /// <summary>Whether the layer list is expanded.</summary>
     [ObservableProperty] private bool _isExpanded = true;
-    partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(ShowLayers));
+    partial void OnIsExpandedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowLayers));
+        OnPropertyChanged(nameof(ExpandLabel));
+    }
     /// <summary>Whether this group is selected.</summary>
     [ObservableProperty] private bool _isSelected;
     /// <summary>Creates a group and assigns each layer to it.</summary>

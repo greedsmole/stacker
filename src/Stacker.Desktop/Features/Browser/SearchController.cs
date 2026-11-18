@@ -151,8 +151,6 @@ internal sealed class SearchController(ISearchPresentation owner, WorkspaceRunti
         if (!owner.Sections.Contains(hit.Section))
             return;
         hit.Section.IsExpanded = true;
-        if (!hit.Section.Files.Contains(hit.File))
-            hit.Section.Filter = "";
         hit.Section.SelectedFile = hit.File;
         await hit.Section.LoadAsync(hit.File);
     }

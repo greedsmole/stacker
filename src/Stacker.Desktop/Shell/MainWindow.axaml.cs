@@ -1,6 +1,7 @@
 // Purpose: Main-window event bridge: translates user gestures into view-model actions and owns native dialogs/clipboard interaction.
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -23,13 +24,6 @@ public partial class MainWindow : Window
         Activated += (_, _) => { if (_ready && _closePhase == ClosePhase.Open) Vm.SetWindowActive(true); };
         KeyDown += SearchShortcut;
         Deactivated += (_, _) => { if (_ready) Vm.SetWindowActive(false); };
-        SizeChanged += (_, _) =>
-        {
-            var compact = Bounds.Width < 1320;
-            Grid.SetColumn(ReviewHost, compact ? 2 : 3);
-            ReviewHost.Width = compact ? double.NaN : 390;
-            ReviewHost.HorizontalAlignment = compact ? HorizontalAlignment.Stretch : HorizontalAlignment.Right;
-        };
         Opened += (_, _) =>
 AsyncHandler.Run(async () =>
 {
@@ -39,8 +33,10 @@ AsyncHandler.Run(async () =>
     Width = Vm.Settings.WindowWidth;
     Height = Vm.Settings.WindowHeight;
     ApplyTheme();
+    ApplyMotionSettings();
     ApplyDiffLineHeight();
-    ApplyStacksVisibility();
+    InitializeWorkspaceLayout();
+    InitializeFileNavigation();
     Vm.Sections.CollectionChanged += (_, _) => ResizeSections();
     SectionScroll.SizeChanged += (_, _) => ResizeSections();
     _ready = true;
@@ -78,11 +74,40 @@ AsyncHandler.Run(async () =>
         if (Application.Current is { } app)
             app.RequestedThemeVariant = Vm.Settings.Theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark;
     }
-    private void ChangesTabClick(object? sender, RoutedEventArgs e) => Vm.IsGitLogOpen = false;
-    private void GitLogsTabClick(object? sender, RoutedEventArgs e) => Vm.IsGitLogOpen = true;
+    private void ChangesTabClick(object? sender, RoutedEventArgs e)
+        => OpenChanges();
+
+    private void OpenChanges()
+    {
+        Vm.CloseOperationsCommand.Execute(null);
+        Vm.CloseHistoryCommand.Execute(null);
+        Vm.IsGitLogOpen = false;
+        ApplyWorkspaceLayout();
+    }
+
+    private void HistoryTabClick(object? sender, RoutedEventArgs e)
+    {
+        Vm.CloseOperationsCommand.Execute(null);
+        Vm.IsGitLogOpen = false;
+        HistoryTab.SetCurrentValue(ToggleButton.IsCheckedProperty, Vm.IsHistoryOpen);
+        if (!Vm.IsHistoryOpen)
+            HistoryClick(sender, e);
+    }
+
+    private void GitLogsTabClick(object? sender, RoutedEventArgs e)
+    {
+        Vm.CloseOperationsCommand.Execute(null);
+        Vm.IsGitLogOpen = true;
+    }
     private void FindClick(object? sender, RoutedEventArgs e) => OpenFind("Files");
     private void OpenFind(string scope)
     {
+        OpenChanges();
+        if (_reviewCompact)
+        {
+            StopReviewMotion();
+            Vm.CloseReviewCommand.Execute(null);
+        }
         Vm.OpenSearch(scope);
         SearchBox.Focus();
         SearchBox.SelectAll();
@@ -110,9 +135,16 @@ AsyncHandler.Run(async () =>
             _ = Vm.SearchAsync();
         }
         else if (e.Key == Key.Escape)
-            Vm.CloseSearch();
+        {
+            e.Handled = true;
+            CloseSearchClick(sender, e);
+        }
     }
-    private void CloseSearchClick(object? sender, RoutedEventArgs e) => Vm.CloseSearch();
+    private void CloseSearchClick(object? sender, RoutedEventArgs e)
+    {
+        Vm.CloseSearch();
+        FindButton.Focus();
+    }
     private void DismissErrorClick(object? sender, RoutedEventArgs e) => Vm.Error = "";
     private void SearchResultSelected(object? sender, SelectionChangedEventArgs e)
 => AsyncHandler.Run(async () =>
@@ -121,7 +153,9 @@ AsyncHandler.Run(async () =>
         return;
     list.SelectedItem = null;
     await Vm.OpenSearchHitAsync(hit);
-    var view = SectionScroll.GetVisualDescendants().OfType<DiffSectionView>().FirstOrDefault(v => ReferenceEquals(v.DataContext, hit.Section));
+    if (Vm.Sections.Contains(hit.Section))
+        ShowFileSelection(hit.Section);
+    var view = FindDiffSection(hit.Section);
     if (view is not null)
     {
         view.BringIntoView();

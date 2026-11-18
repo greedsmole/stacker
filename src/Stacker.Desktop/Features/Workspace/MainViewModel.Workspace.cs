@@ -12,7 +12,12 @@ public sealed partial class MainViewModel
     [ObservableProperty] internal bool _isReviewOpen;
     [ObservableProperty] internal ReviewViewModel? _activeReview;
     public string ComparisonDetail => Sections.Count == 1 ? Sections[0].Comparison : "Each layer is compared with its own parent";
-    public string ReviewLabel => ActiveReview?.ReviewLabel ?? "Review";
+    public string ReviewLabel => CanPresentActiveReview ? ActiveReview!.ReviewLabel : "Review";
+    internal bool CanPresentActiveReview => ActiveReview is { } review &&
+        SelectedPrForDiscussion?.Number == review.PullRequest.Number &&
+        _runtime._remoteSnapshot?.Context.Identity == review.Context.Identity;
+    internal bool HasReviewablePrDiff => Sections.Count == 1 && Sections[0] is { IsPrSnapshot: true, Review: { } review } &&
+        ReferenceEquals(review, ActiveReview);
     public bool CanReview => HasPrDiscussion;
     public bool IsSingleLayer => Mode == DiffMode.Layer;
     public bool IsThroughLayer => Mode == DiffMode.Cumulative;

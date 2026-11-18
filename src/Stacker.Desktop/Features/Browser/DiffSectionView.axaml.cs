@@ -12,7 +12,7 @@ namespace Stacker.Desktop;
 
 public partial class DiffSectionView : UserControl
 {
-    private const double MinimumInlineFileHeaderWidth = 560;
+    private const double MinimumInlineFileHeaderWidth = 700;
     private ScrollViewer? _scroll;
     private bool _restoring;
     private DiffSectionViewModel? _section;
@@ -32,6 +32,7 @@ public partial class DiffSectionView : UserControl
         var inline = e.NewSize.Width >= MinimumInlineFileHeaderWidth;
         Grid.SetRow(FileHeaderActions, inline ? 0 : 1);
         Grid.SetColumn(FileHeaderActions, inline ? 1 : 0);
+        Grid.SetColumnSpan(FileHeaderActions, inline ? 1 : 2);
     }
     private void AttachSection(DiffSectionViewModel? section)
     {
@@ -56,6 +57,7 @@ public partial class DiffSectionView : UserControl
         {
             _symbolLoad?.Cancel();
             _rangeStart = null;
+            FileThreadsToggle.IsChecked = false;
         }
         if (e.PropertyName == nameof(DiffSectionViewModel.IsBusy) && _section?.IsBusy == false)
             RestoreScroll();

@@ -12,7 +12,7 @@ internal static class DialogLayout
     public static Grid Create(string title, string description, IEnumerable<Control> fields, params Control[] actions)
     {
         var heading = new StackPanel { Spacing = 6 };
-        heading.Children.Add(new TextBlock { Text = title, FontSize = 24, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap });
+        heading.Children.Add(new TextBlock { Text = title, Classes = { "view-title" }, TextWrapping = TextWrapping.Wrap });
         if (description.Length > 0)
             heading.Children.Add(new TextBlock { Text = description, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
         var body = new StackPanel { Spacing = 12 };

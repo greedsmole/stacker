@@ -43,6 +43,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
             OnPropertyChanged();
         }
     }
+    public bool GroupFilesByFolder => Settings.GroupFilesByFolder;
     public IWorkspaceSession Session => _runtime.Session;
     public RepositorySnapshot? Repository => _runtime._repository;
     public ObservableCollection<StackDefinition> Stacks { get; } = [];
@@ -56,7 +57,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     [ObservableProperty] internal string _error = "";
     [ObservableProperty] internal string _emptyMessage = "Open a repository or explore the demo.";
     [ObservableProperty] internal bool _isBusy;
-    [ObservableProperty] internal bool _canEdit;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(WorkspaceEmptyTitle), nameof(IsLocalSelected), nameof(PullRequestsEmptyMessage))]
+    internal bool _canEdit;
     [ObservableProperty] internal StackDefinition? _selectedStack;
     [ObservableProperty] internal DiffMode _mode = DiffMode.FullStack;
     [ObservableProperty] internal string _comparisonTitle = "Changes";
@@ -70,6 +72,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     public bool ShowLoadingState => HasNoSections && IsBusy;
     public bool HasSelectedLayer => _runtime._selectedPositions.Length == 1;
     public bool IsLocalSelected => _runtime._activeGroup is { IsRemote: false } && CanEdit;
+    public bool IsRemoteStackSelected => _runtime._activeGroup is { IsRemote: true, IsStack: true };
+    public bool ShowLayerModes => HasSelectedLayer && _runtime._activeGroup is { IsSinglePr: false };
+    public string WorkspaceEmptyTitle => CanEdit ? "Choose changes to review" : "Open a Git repository";
     /// <summary>Packaged product version, read from the assembly so the status bar cannot drift from the release.</summary>
     public static string ProductVersion => "Stacker " + (typeof(MainViewModel).Assembly
         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "dev");

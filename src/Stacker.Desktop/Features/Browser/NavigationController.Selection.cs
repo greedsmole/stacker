@@ -30,6 +30,8 @@ internal sealed partial class NavigationController
             owner.Layers.Add(layer);
         owner.Notify(nameof(owner.BaseLabel));
         owner.Notify(nameof(owner.IsLocalSelected));
+        owner.Notify(nameof(MainViewModel.IsRemoteStackSelected));
+        owner.Notify(nameof(MainViewModel.ShowLayerModes));
         owner.Notify(nameof(owner.CanRestackActiveStack));
     }
 
@@ -113,6 +115,7 @@ internal sealed partial class NavigationController
         var ticket = runtime.Session.Ticket;
         owner.Notify(nameof(owner.HasPrDiscussion));
         owner.Notify(nameof(owner.CanReview));
+        owner.Notify(nameof(MainViewModel.ReviewLabel));
         owner.IsBusy = true;
         owner.Error = "";
         try
@@ -182,9 +185,10 @@ internal sealed partial class NavigationController
             foreach (var layer in group.Layers)
             {
                 layer.IsChecked = runtime._selectedPositions.Contains(layer.Snapshot.Position);
-                layer.IsSelected = layer.IsChecked;
+                layer.IsSelected = positions.Length == 1 && layer.IsChecked;
             }
-            owner.ComparisonTitle = mode switch
+            owner.ComparisonTitle = sections.FirstOrDefault(s => s.IsPrSnapshot)?.AssociatedPr is { } displayedPr
+                ? displayedPr.Label : mode switch
             {
                 DiffMode.FullStack => $"Entire stack · {group.Name}",
                 DiffMode.Cumulative => $"Through layer {(runtime._selectedPositions.FirstOrDefault() + 1)} · {group.Name}",
@@ -203,6 +207,15 @@ internal sealed partial class NavigationController
             {
                 var review = await owner.EnsureReviewAsync(prSection, compare.Token);
                 compare.Token.ThrowIfCancellationRequested();
+                if (!ReferenceEquals(owner.ActiveReview, review))
+                {
+                    owner.IsReviewOpen = false;
+                    if (review is not null)
+                    {
+                        review.IsPrComposerOpen = false;
+                        review.PanelTab = 0;
+                    }
+                }
                 owner.ActiveReview = review;
             }
             else
@@ -212,6 +225,7 @@ internal sealed partial class NavigationController
             }
             compare.Token.ThrowIfCancellationRequested();
             owner.Notify(nameof(owner.HasSelectedLayer));
+            owner.Notify(nameof(MainViewModel.ShowLayerModes));
             owner.EmptyMessage = sections.Count == 0 ? "This stack has no layers. Edit it to add branches." : "";
         }
         catch (OperationCanceledException) { }

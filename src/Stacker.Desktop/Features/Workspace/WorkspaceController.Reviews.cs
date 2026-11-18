@@ -87,16 +87,17 @@ internal sealed partial class WorkspaceController
         section ??= owner.Sections.FirstOrDefault(s => s.IsPrSnapshot) ?? owner.CreateDiscussionContext();
         if (section is null)
             return;
+        var ticket = runtime.Session.Ticket;
+        ReviewViewModel? review;
         try
         {
-            owner.ActiveReview = await EnsureReviewAsync(section);
+            review = await EnsureReviewAsync(section);
         }
         catch (Exception ex) { owner.Error = ex.Message; return; }
-        if (owner.ActiveReview is not null)
+        if (review is not null && runtime.Session.IsCurrent(ticket))
         {
-            owner.ActiveReview.PanelTab = tab;
-            if (tab == 0)
-                owner.ActiveReview.BeginPrComment();
+            owner.ActiveReview = review;
+            review.PanelTab = tab;
             owner.IsReviewOpen = true;
         }
     }

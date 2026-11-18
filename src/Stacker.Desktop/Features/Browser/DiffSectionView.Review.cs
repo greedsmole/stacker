@@ -34,6 +34,13 @@ public partial class DiffSectionView
         check.SetCurrentValue(ToggleButton.IsCheckedProperty, row.IsReviewed);
         AsyncHandler.Run(() => main.ToggleFileReviewedAsync(section, row), message => AsyncHandler.Report(this, message));
     }
+
+    private void MarkFileReviewedClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is DiffSectionViewModel { SelectedFileRow: { } row } section &&
+            TopLevel.GetTopLevel(this)?.DataContext is MainViewModel main)
+            AsyncHandler.Run(() => main.ToggleFileReviewedAsync(section, row), message => AsyncHandler.Report(this, message));
+    }
     private void WrapCodeClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
@@ -95,7 +102,7 @@ public partial class DiffSectionView
             return;
         if (!section.IsPrSnapshot)
         {
-            section.Message = section.HasPr ? "Review the PR snapshot to comment on code. Use Review PR in the file menu." : "Select a GitHub PR layer to comment on code.";
+            section.Message = section.HasPr ? "Choose Open PR diff to comment on code." : "Select a GitHub PR layer to comment on code.";
             return;
         }
         var session = await main.EnsureReviewAsync(section);
@@ -146,12 +153,16 @@ public partial class DiffSectionView
     private void CopyClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
-    if (DataContext is not DiffSectionViewModel vm)
+    if (DataContext is not DiffSectionViewModel { CanCopyPatch: true } vm)
         return;
     try
     {
         if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+        {
             await clipboard.SetTextAsync(vm.Patch);
+            if (TopLevel.GetTopLevel(this)?.DataContext is MainViewModel main)
+                main.Status = "Patch copied.";
+        }
     }
     catch (Exception ex) { vm.Message = "Cannot copy patch: " + ex.Message; }
 }, message => AsyncHandler.Report(this, message));

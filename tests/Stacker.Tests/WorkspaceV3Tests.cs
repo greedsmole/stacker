@@ -193,7 +193,8 @@ public sealed partial class WorkspaceV3Tests
         Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.Content?.ToString() == "Submit review");
         Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.IsVisible && b.Content?.ToString() == "Restore layer selection");
 
-        vm.IsReviewOpen = false;
+        window.FindControl<Button>("CloseReviewButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.False(window.FindControl<Border>("ReviewHost")!.IsVisible);
         inline.Text = "Keep this comment after rejection";
         var post = window.GetVisualDescendants().OfType<Button>().First(b => b.Content?.ToString() == "Post now" && b.IsEffectivelyVisible);
         await ((CommunityToolkit.Mvvm.Input.IAsyncRelayCommand)post.Command!).ExecuteAsync(post.CommandParameter);

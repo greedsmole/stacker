@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.DiffSectionView">
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" xmlns:converters="using:Avalonia.Data.Converters" x:Class="Stacker.Desktop.DiffSectionView">
  <UserControl.Styles>
   <Style Selector="Grid.diff-code.added"><Setter Property="Background" Value="{DynamicResource DiffAddedBrush}"/></Style>
   <Style Selector="Grid.diff-code.removed"><Setter Property="Background" Value="{DynamicResource DiffRemovedBrush}"/></Style>
@@ -65,8 +65,8 @@
            SizeChanged="FileHeaderSizeChanged">
     <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8">
      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" IsVisible="{Binding !!SelectedFile}" VerticalAlignment="Center">
-      <Border IsVisible="{Binding !IsReadOnlyComparison}"><local:FileChangeBadge Change="{Binding SelectedFile}"/></Border>
-      <TextBlock Grid.Column="1" Text="{Binding SelectedFile.DisplayPath}" IsVisible="{Binding !IsReadOnlyComparison}" FontWeight="SemiBold"
+      <local:FileChangeBadge Change="{Binding SelectedFile}"/>
+      <TextBlock Grid.Column="1" Text="{Binding SelectedFile.DisplayPath}" FontWeight="SemiBold"
                  VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SelectedFile.DisplayPath}"/>
       <TextBlock Grid.Column="2" Text="{Binding SelectedFile.Stats}" Classes="muted" FontSize="11" VerticalAlignment="Center"/>
      </Grid>
@@ -74,20 +74,39 @@
       <Button x:Name="FullFileButton" Content="{Binding FullFileActionLabel}" Click="FullFileClick" Classes="quiet" Cursor="Hand"
               IsVisible="{Binding ShowFullFileAction}" IsEnabled="{Binding !ContextUnavailable}" ToolTip.ShowOnDisabled="True"/>
       <ToggleButton Content="Wrap code" IsChecked="{Binding WrapCode, Mode=OneWay}" Click="WrapCodeClick" Classes="quiet" ToolTip.Tip="Wrap long lines to fit the diff pane"/>
-      <Button Content="Comment on file" Click="FileCommentClick" IsVisible="{Binding IsPrSnapshot}" Classes="quiet"/>
-      <Button Content="···" Classes="quiet" ToolTip.Tip="File actions" AutomationProperties.Name="File actions">
-       <Button.Flyout><MenuFlyout>
-        <MenuItem Header="Collapse unchanged lines" Click="CollapseContextClick" IsVisible="{Binding CanCollapsePartialContext}"/>
-        <MenuItem Header="Copy patch" Click="CopyClick"/>
-        <MenuItem Header="Review PR" Click="ReviewClick" IsVisible="{Binding HasPr}"/>
-       </MenuFlyout></Button.Flyout>
+      <Button Content="{Binding SelectedFileRow.ReviewButtonLabel}" Click="MarkFileReviewedClick"
+              IsVisible="{Binding SelectedFileRow.HasReviewStatus, FallbackValue=False}"
+              IsEnabled="{Binding SelectedFileRow.CanChangeReview, FallbackValue=False}" ToolTip.Tip="{Binding SelectedFileRow.ReviewAction}"
+              Classes="outline compact"/>
+      <Button Content="Comment on file" Click="FileCommentClick" IsVisible="{Binding IsPrSnapshot}" IsEnabled="{Binding !!SelectedFile}" Classes="quiet compact"/>
+      <Button x:Name="CollapseContextButton" Content="Collapse expanded context" Click="CollapseContextClick"
+              IsVisible="{Binding CanCollapsePartialContext}" Classes="quiet compact"/>
+      <Button Content="Copy patch" Click="CopyClick" IsVisible="{Binding !!SelectedFile}" IsEnabled="{Binding CanCopyPatch}" Classes="quiet compact"/>
+      <Button Content="Open PR diff" Click="ReviewClick" Classes="outline compact">
+       <Button.IsVisible>
+        <MultiBinding Converter="{x:Static converters:BoolConverters.And}">
+         <Binding Path="HasPr"/><Binding Path="!IsPrSnapshot"/><Binding Path="!IsReadOnlyComparison"/>
+        </MultiBinding>
+       </Button.IsVisible>
       </Button>
      </WrapPanel>
     </Grid>
    </Border>
    <ProgressBar Grid.Row="1" IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="2"/>
-   <StackPanel Grid.Row="2" IsVisible="{Binding ShowMessage}" Margin="14,4" Spacing="4"><TextBlock Text="{Binding Message}" Classes="muted" TextWrapping="Wrap"/><Button Content="Retry" Click="RetryClick" IsVisible="{Binding HasLoadError}" HorizontalAlignment="Left"/></StackPanel>
-   <StackPanel Grid.Row="3" Spacing="4"><Button Content="Comment on selected lines" Click="CommentSelectedClick" IsVisible="{Binding IsPrSnapshot}" Classes="quiet" HorizontalAlignment="Left" Margin="14,0" ToolTip.Tip="Select adjacent diff rows with Shift-click, then comment on the range"/><ScrollViewer MaxHeight="180"><ItemsControl ItemsSource="{Binding FileThreads}" Margin="14,0"><ItemsControl.ItemTemplate><DataTemplate><local:ThreadView/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer></StackPanel>
+   <StackPanel Grid.Row="2" IsVisible="{Binding ShowMessage}" Margin="14,4" Spacing="4"><SelectableTextBlock Text="{Binding Message}" Classes="muted" TextWrapping="Wrap"/><Button Content="Retry" Click="RetryClick" IsVisible="{Binding HasLoadError}" HorizontalAlignment="Left"/></StackPanel>
+   <StackPanel Grid.Row="3" Spacing="4">
+    <WrapPanel Margin="12,2" ItemSpacing="4">
+     <Button Content="Comment on selected lines" Click="CommentSelectedClick" IsVisible="{Binding IsPrSnapshot}"
+             Classes="quiet compact" ToolTip.Tip="Select adjacent diff rows with Shift-click, then comment on the range"/>
+     <ToggleButton x:Name="FileThreadsToggle" Content="{Binding FileThreads.Count, StringFormat='File threads ({0})'}"
+                   IsVisible="{Binding !!FileThreads.Count}" Classes="quiet compact"/>
+    </WrapPanel>
+    <ScrollViewer MaxHeight="156" IsVisible="{Binding #FileThreadsToggle.IsChecked}">
+     <ItemsControl ItemsSource="{Binding FileThreads}" Margin="14,0">
+      <ItemsControl.ItemTemplate><DataTemplate><local:ThreadView/></DataTemplate></ItemsControl.ItemTemplate>
+     </ItemsControl>
+    </ScrollViewer>
+   </StackPanel>
    <Grid Grid.Row="4" x:Name="DiffViewport" ClipToBounds="True">
    <ListBox x:Name="DiffLines" SelectionMode="Multiple" KeyDown="DiffKeyDown" ItemsSource="{Binding Lines}" Background="Transparent" BorderThickness="0" Padding="0" FontFamily="Menlo,Consolas,monospace" FontSize="13" ScrollViewer.HorizontalScrollBarVisibility="{Binding CodeHorizontalScroll}" ScrollViewer.VerticalScrollBarVisibility="Auto">
     <ListBox.Styles><Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="MinHeight" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style><Style Selector="Button.line-add"><Setter Property="Opacity" Value="0"/><Setter Property="Padding" Value="2,0"/><Setter Property="MinHeight" Value="0"/></Style><Style Selector="ListBoxItem:pointerover Button.line-add"><Setter Property="Opacity" Value="1"/></Style><Style Selector="Button.line-add:focus"><Setter Property="Opacity" Value="1"/></Style></ListBox.Styles>

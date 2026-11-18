@@ -221,24 +221,32 @@ public sealed partial class StackSyncUiTests
         Assert.Equal("base #8 → A", Assert.Single(github.Calls));
     }
 
-    // Scenario: Starting a layer creates the branch, checks it out, and appends it to the stack definition.
+    // Scenario: Starting a layer keeps the edited stack selected instead of restoring the previous stack.
     [AvaloniaFact]
     public async Task Adding_a_layer_creates_the_branch_and_appends_it_to_the_stack()
     {
         await using var f = new GitFixture();
         await Prepared(f, moveBase: false);
+        var store = new YamlStackStore();
+        var first = f.Stack with { Id = "first", Name = "First stack", Branches = ["refs/heads/A"] };
+        await store.SaveAsync(f.Root, [first, f.Stack], (await store.LoadAsync(f.Root)).Revision);
+        await f.Commit("Add a separate stack");
         using var vm = CreateVm(f);
         await vm.OpenRepositoryAsync(f.Root);
+        Assert.Equal(first.Id, vm.SelectedStack?.Id);
+        await vm.SelectGroupAsync(vm.LocalGroups.Single(group => group.Definition.Id == f.Stack.Id));
         var (ok, message) = await vm.AddLayerAsync("test", "feature/top", "refs/heads/C");
         Assert.True(ok, message);
         Assert.False(vm.HasError, vm.Error);
         Assert.Equal("feature/top", await f.Git("branch", "--show-current"));
         Assert.Equal(await f.Git("rev-parse", "C"), await f.Git("rev-parse", "HEAD"));
+        Assert.Equal(f.Stack.Id, vm.SelectedStack?.Id);
         Assert.Equal(4, vm.Layers.Count);
         Assert.Contains("refs/heads/feature/top", vm.SelectedStack!.Branches);
         Assert.Equal("feature/top", vm.Layers[3].Snapshot.Branch.Replace("refs/heads/", ""));
-        var saved = await new YamlStackStore().LoadAsync(f.Root);
-        Assert.Contains("refs/heads/feature/top", Assert.Single(saved.Stacks).Branches);
+        Assert.Equal(f.Stack.Id, (await vm.BuildRestackPlanAsync())?.StackId);
+        var saved = await store.LoadAsync(f.Root);
+        Assert.Contains("refs/heads/feature/top", Assert.Single(saved.Stacks, stack => stack.Id == f.Stack.Id).Branches);
     }
 
     // Scenario: The add-layer window creates the named branch from a real button press.

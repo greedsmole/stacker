@@ -10,7 +10,7 @@ public sealed partial class FileTreeNode(string name, string path, FileTreeNode?
     public string Name { get; } = name;
     public string Path { get; } = path;
     public FileChange? Change { get; } = change;
-    internal object? Item { get; } = item;
+    public object? Item { get; } = item;
     public DiffFileRow? ReviewRow => Item as DiffFileRow;
     public bool IsFolder => Change is null;
     public string AccessibleName => Change is { } file ? $"{file.DisplayPath} · {file.Kind}" : Name;

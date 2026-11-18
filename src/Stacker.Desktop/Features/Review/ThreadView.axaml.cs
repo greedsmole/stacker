@@ -59,8 +59,7 @@ public partial class ThreadView : UserControl
     var section = main.Sections.FirstOrDefault(s => s.IsPrSnapshot && s.AssociatedPr?.Number == Session?.PullRequest.Number);
     if (section is null)
         return;
-    section.Filter = "";
-    section.SelectedFile = section.Files.FirstOrDefault(f => f.NewPath == thread.Path);
+    section.SelectedFile = section.Result.Files.FirstOrDefault(f => f.NewPath == thread.Path);
     await section.LoadAsync(section.SelectedFile);
     if (TopLevel.GetTopLevel(this) is MainWindow window)
         window.GetVisualDescendants().OfType<DiffSectionView>().FirstOrDefault(v => ReferenceEquals(v.DataContext, section))?.ScrollTo(thread.Anchor);

@@ -1,0 +1,62 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.FileNavigatorView"
+             Background="{DynamicResource PanelBrush}">
+ <UserControl.Resources>
+  <DataTemplate x:Key="FileRowTemplate">
+   <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" ToolTip.Tip="{Binding DisplayPath}">
+    <StackPanel Spacing="2">
+     <TextBlock Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
+     <TextBlock Text="{Binding Directory}" IsVisible="{Binding HasDirectory}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis"/>
+    </StackPanel>
+    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+     <CheckBox DataContext="{Binding ReviewRow}" IsVisible="{Binding HasReviewStatus, FallbackValue=False}"
+               IsEnabled="{Binding CanChangeReview, FallbackValue=False}" IsChecked="{Binding IsReviewed, Mode=OneWay}"
+               Click="FileReviewedClick" MinWidth="23" MinHeight="24" Padding="0" VerticalAlignment="Center"
+               ToolTip.Tip="{Binding ReviewAction}" AutomationProperties.Name="{Binding ReviewAction}"/>
+     <local:FileChangeBadge Change="{Binding Change}"/>
+    </StackPanel>
+   </Grid>
+  </DataTemplate>
+ </UserControl.Resources>
+ <Grid RowDefinitions="Auto,*,Auto">
+  <Border Padding="12,12,12,10" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+   <StackPanel Spacing="8">
+    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+     <TextBlock x:Name="FilesHeading" Text="Files" Classes="pane-title" VerticalAlignment="Center"/>
+     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+      <ToggleButton x:Name="ListMode" Content="List" IsChecked="True" Classes="quiet compact" Click="ListModeClick"/>
+      <ToggleButton x:Name="FoldersMode" Content="Folders" Classes="quiet compact" Click="FoldersModeClick"/>
+     </StackPanel>
+    </Grid>
+    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+     <TextBox x:Name="FilterBox" Watermark="Filter paths…" MinWidth="0" TextChanged="FilterChanged"
+              AutomationProperties.Name="Filter changed files"/>
+     <Button x:Name="ClearFilter" Grid.Column="1" Content="Clear" Classes="quiet compact" Click="ClearFilterClick"
+             IsVisible="False" AutomationProperties.Name="Clear file filters"/>
+    </Grid>
+    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="2">
+     <TextBlock x:Name="FileProgress" Classes="muted" FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"/>
+     <ToggleButton x:Name="UnreviewedOnly" Grid.Column="1" Content="Unreviewed" Classes="quiet compact" Click="UnreviewedClick" IsVisible="False"/>
+    </Grid>
+   </StackPanel>
+  </Border>
+  <Grid Grid.Row="1" Margin="6">
+   <ListBox x:Name="FileList" Classes="file-list" ItemTemplate="{StaticResource FileRowTemplate}"
+            SelectionChanged="FlatSelectionChanged" AutomationProperties.Name="Changed files"
+            Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+   <TreeView x:Name="FileTree" Classes="file-tree" SelectionChanged="TreeSelectionChanged" IsVisible="False"
+             AutomationProperties.Name="Changed files by section or folder" AutoScrollToSelectedItem="True"
+             Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+    <TreeView.ItemTemplate>
+     <TreeDataTemplate ItemsSource="{Binding Children}">
+      <Grid>
+       <TextBlock Text="{Binding Name}" Classes="section-title" IsVisible="{Binding IsFolder}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}"/>
+       <ContentControl IsVisible="{Binding !IsFolder}" Content="{Binding Item}" ContentTemplate="{StaticResource FileRowTemplate}"/>
+      </Grid>
+     </TreeDataTemplate>
+    </TreeView.ItemTemplate>
+   </TreeView>
+  </Grid>
+  <TextBlock x:Name="FilesMessage" Grid.Row="2" Classes="muted" TextWrapping="Wrap" Margin="12,6,12,12"/>
+ </Grid>
+</UserControl>

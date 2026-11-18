@@ -213,13 +213,9 @@ public sealed class UiReviewTests
             await ClickGap(gaps[2], "Show 7 unchanged lines");
             Assert.DoesNotContain(gaps[2], section.Lines);
 
-            var actions = Assert.Single(view.GetVisualDescendants().OfType<Button>(), button => Equals(button.Content, "···"));
-            var flyout = Assert.IsType<MenuFlyout>(actions.Flyout);
-            flyout.ShowAt(actions);
-            var collapsePartial = Assert.Single(flyout.Items.OfType<MenuItem>(), item => Equals(item.Header, "Collapse unchanged lines"));
-            Assert.True(collapsePartial.IsVisible);
-            Assert.DoesNotContain(flyout.Items.OfType<MenuItem>(), item => Equals(item.Header, "Show full file"));
-            flyout.Hide();
+            var collapsePartial = view.FindControl<Button>("CollapseContextButton")!;
+            Assert.True(collapsePartial.IsEffectivelyVisible);
+            Assert.Equal("Collapse expanded context", collapsePartial.Content);
 
             section.WrapCode = true;
             Assert.Equal("Show full file", fullFile.Content);
@@ -316,13 +312,20 @@ public sealed class UiReviewTests
     [AvaloniaTheory]
     [InlineData("Dark")]
     [InlineData("Light")]
-    public async Task Workspace_toggles_independently_restore_all_file_panes_and_saved_visibility(string theme)
+    public async Task Shared_files_preserve_the_selected_layer_and_restore_pane_preferences(string theme)
     {
         await using var fixture = new GitFixture();
         await fixture.Linear();
+        await fixture.Write("A.txt", "Edited again in the third layer.\n");
+        const string binaryPath = "src/feature-modules/review-tooling/shared-resources/desktop-preview-icons/assets/theme/preview.bin";
+        var binary = Path.Combine(fixture.Root, binaryPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(binary)!);
+        await File.WriteAllBytesAsync(binary, [0, 47, 0, 255]);
+        await fixture.Commit("Edit the same file in a second layer");
         var store = new YamlStackStore();
         await store.SaveAsync(fixture.Root, [fixture.Stack], null);
         var settings = new JsonSettingsStore(Path.Combine(fixture.Root, "settings"));
+        var appData = new ApplicationStore(Path.Combine(fixture.Root, "app-data"));
         await settings.SaveAsync(new AppSettings { Theme = theme, LastRepository = fixture.Root, WindowWidth = 1060, WindowHeight = 640 });
 
         using var vm = CreateViewModel();
@@ -331,57 +334,75 @@ public sealed class UiReviewTests
         try
         {
             await Until(() => vm.Sections.Count == 1 && !vm.IsBusy);
-            vm.SelectLayers([vm.Layers[0], vm.Layers[2]]);
-            await vm.CompareAsync();
+            await vm.SelectLayerAsync(vm.Layers[0], false);
+            await vm.SelectLayerAsync(vm.Layers[2], true);
             Assert.Equal(2, vm.Sections.Count);
+            var pane = window.FindControl<FileNavigatorView>("SharedFiles")!;
+            var tree = pane.FindControl<TreeView>("FileTree")!;
+            await Until(() => tree.Items.Count == 2);
+            var laterLayer = Assert.IsType<FileTreeNode>(tree.Items[1]);
+            var samePath = Assert.Single(laterLayer.Children, node => node.Name == "A.txt");
+            var section = vm.Sections[1];
+            var binaryRow = Assert.Single(laterLayer.Children, node => node.Path == binaryPath);
+            Assert.Equal("preview.bin", binaryRow.Name);
+            tree.SelectedItem = binaryRow;
+            await Until(() => section.SelectedFile is { IsBinary: true } file && file.NewPath == binaryPath && !section.IsBusy);
+            Assert.Contains("Binary files", section.Patch);
+            tree.SelectedItem = Assert.Single(laterLayer.Children, node => node.Name == "C.txt");
+            await Until(() => section.SelectedFile?.NewPath == "C.txt" && !section.IsBusy);
+            tree.SelectedItem = samePath;
+            await Until(() => section.SelectedFile?.NewPath == "A.txt" && !section.IsBusy);
+            var selected = section.SelectedFile;
+            Assert.Equal("A.txt", selected?.NewPath);
+            Assert.Contains(section.Lines, line => line.Text.StartsWith("Edited again", StringComparison.Ordinal));
+
+            pane.FindControl<TextBox>("FilterBox")!.Text = "no-match";
+            await Until(() => tree.Items.Count == 0);
+            Assert.Same(selected, section.SelectedFile);
+            ClickAt(window, pane.FindControl<Button>("ClearFilter")!);
+            await Until(() => tree.Items.Count == 2 && tree.SelectedItem is FileTreeNode { Name: "A.txt" });
+            Assert.Same(selected, section.SelectedFile);
+
             var stacks = window.FindControl<ToggleButton>("StacksToggle")!;
             var files = window.FindControl<ToggleButton>("FilesToggle")!;
+            var focus = window.FindControl<ToggleButton>("FocusToggle")!;
             var stackPane = window.FindControl<Grid>("StacksPane")!;
-            var source = vm.Sections[0];
-            source.Filter = "A.txt";
-            var selected = source.SelectedFile;
-            Assert.NotNull(selected);
-
-            var views = CheckFilePanes(window, visible: true);
-            Assert.Equal(2, views.Length);
-            var sectionScroll = window.FindControl<ScrollViewer>("SectionScroll")!;
-            var firstGrid = views[0].FindControl<Grid>("ContentGrid")!;
-            firstGrid.ColumnDefinitions[0].Width = new(310);
-            window.FindControl<Grid>("Workspace")!.ColumnDefinitions[0].Width = new(344);
-            sectionScroll.Offset = Vector.Zero;
-            Capture(window, theme, "review-navigators");
+            var area = window.FindControl<Grid>("WorkArea")!;
+            Assert.True(area.ColumnDefinitions[2].ActualWidth >= 520);
+            var sections = window.FindControl<ScrollViewer>("SectionScroll")!.GetVisualDescendants().OfType<DiffSectionView>().ToArray();
+            Assert.Equal(2, sections.Length);
+            Assert.All(sections, view => Assert.False(view.FindControl<Grid>("FilePane")!.IsVisible));
+            Capture(window, theme, "shared-files");
+            var group = Assert.Single(vm.LocalGroups);
+            var disclosure = Assert.Single(stackPane.GetVisualDescendants().OfType<Button>(),
+                button => ReferenceEquals(button.DataContext, group) && button.Content is PathIcon);
+            ClickAt(window, disclosure);
+            Assert.False(group.IsExpanded);
+            ClickAt(window, disclosure);
+            Assert.True(group.IsExpanded);
+            Assert.False(vm.HasError, vm.Error);
 
             ClickAt(window, files);
-            CheckFilePanes(window, visible: false);
+            Assert.False(pane.IsVisible);
             Assert.True(stackPane.IsVisible);
             Assert.True(stacks.IsChecked);
 
-            ClickAt(window, stacks);
-            Assert.False(stackPane.IsVisible);
-            Assert.True(files.IsEffectivelyVisible && stacks.IsEffectivelyVisible);
-            Capture(window, theme, "review-navigators-hidden");
+            ClickAt(window, focus);
+            Assert.False(pane.IsVisible || stackPane.IsVisible);
+            Assert.True(focus.Focus());
+            Press(window, Key.Space);
+            Assert.False(pane.IsVisible);
+            Assert.True(stackPane.IsVisible);
 
             Assert.True(files.Focus());
             Press(window, Key.Space);
-            CheckFilePanes(window, visible: true);
-            Assert.False(stackPane.IsVisible);
-            Assert.Equal(310, firstGrid.ColumnDefinitions[0].ActualWidth);
-            Assert.Same(selected, source.SelectedFile);
-            Assert.Equal("A.txt", source.Filter);
-
-            Assert.True(stacks.Focus());
-            Press(window, Key.Space);
-            Assert.True(stackPane.IsVisible);
-            window.Width = 1320;
-            vm.IsReviewOpen = true;
-            Capture(window, theme, "review-navigators-docked");
-            Assert.Equal(3, Grid.GetColumn(window.FindControl<Border>("ReviewHost")!));
-            vm.IsReviewOpen = false;
+            Assert.True(pane.IsVisible);
+            Assert.Same(selected, section.SelectedFile);
+            Assert.Same(Assert.Single(Assert.IsType<FileTreeNode>(tree.Items[1]).Children, node => node.Name == "A.txt"), tree.SelectedItem);
 
             ClickAt(window, files);
             ClickAt(window, stacks);
-            await vm.SelectLayerAsync(vm.Layers[1], toggle: false);
-            Assert.Single(CheckFilePanes(window, visible: false));
+            Assert.False(stackPane.IsVisible || pane.IsVisible);
         }
         finally { window.Close(); await Until(() => !window.IsVisible); }
 
@@ -390,35 +411,128 @@ public sealed class UiReviewTests
         reopened.Show();
         try
         {
-            await Until(() => reopenedVm.Sections.Count == 1 && !reopenedVm.IsBusy);
-            var view = Assert.Single(CheckFilePanes(reopened, visible: false));
+            await Until(() => reopenedVm.Sections.Count == 2 && !reopenedVm.IsBusy);
+            var pane = reopened.FindControl<FileNavigatorView>("SharedFiles")!;
+            Assert.False(pane.IsVisible);
             Assert.False(reopened.FindControl<Grid>("StacksPane")!.IsVisible);
             var files = reopened.FindControl<ToggleButton>("FilesToggle")!;
             Assert.False(files.IsChecked);
             ClickAt(reopened, files);
-            CheckFilePanes(reopened, visible: true);
-            Assert.Equal(310, view.FindControl<Grid>("ContentGrid")!.ColumnDefinitions[0].ActualWidth);
+            Assert.True(pane.IsVisible);
+            var tree = pane.FindControl<TreeView>("FileTree")!;
+            await Until(() => tree.Items.Count == 2 && tree.SelectedItem is FileTreeNode selected &&
+                Assert.IsType<FileTreeNode>(tree.Items[1]).Children.Contains(selected));
+            Assert.Equal(AppSettings.DefaultFilesWidth, reopened.FindControl<Grid>("WorkArea")!.ColumnDefinitions[0].ActualWidth);
         }
         finally { reopened.Close(); await Until(() => !reopened.IsVisible); }
 
-        MainViewModel CreateViewModel() => new(fixture.Reader, store, settings, new GitExecutable(), new(fixture.Reader), new(fixture.Reader));
+        MainViewModel CreateViewModel() => new(fixture.Reader, store, settings, new GitExecutable(), new(fixture.Reader), new(fixture.Reader),
+            applicationStore: appData);
+    }
 
-        static DiffSectionView[] CheckFilePanes(MainWindow window, bool visible)
+    [AvaloniaTheory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public async Task Pr_discussion_docks_at_wide_width_and_preserves_a_pending_review_across_focus_and_resize(string theme)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "stacker-review-ui-" + Guid.NewGuid().ToString("N"));
+        using var services = Composition.Build(root);
+        var vm = services.GetRequiredService<MainViewModel>();
+        vm.Settings.Theme = theme;
+        vm.Settings.WindowWidth = 1060;
+        vm.Settings.WindowHeight = 640;
+        await vm.SaveSettingsAsync();
+
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
+        try
         {
-            window.UpdateLayout();
-            var views = window.FindControl<ScrollViewer>("SectionScroll")!.GetVisualDescendants().OfType<DiffSectionView>().ToArray();
-            Assert.NotEmpty(views);
-            foreach (var view in views)
-            {
-                Assert.Equal(visible, view.FindControl<Grid>("FilePane")!.IsVisible);
-                Assert.Equal(visible, view.FindControl<GridSplitter>("FileSplitter")!.IsVisible);
-                var columns = view.FindControl<Grid>("ContentGrid")!.ColumnDefinitions;
-                Assert.Equal(visible ? 1 : 0, columns[1].ActualWidth);
-                if (!visible)
-                    Assert.Equal(0, columns[0].ActualWidth);
-            }
-            return views;
+            await Until(() => window.FindControl<ToggleButton>("FocusToggle")!.IsEnabled == false);
+            await vm.OpenDemoAsync();
+            var group = vm.RemoteGroups.First(g => g.Layers.Any(layer => layer.PullRequest?.Number == 102));
+            await vm.SelectLayerAsync(group.Layers.Single(layer => layer.PullRequest?.Number == 102), false);
+            var review = Assert.IsType<ReviewViewModel>(vm.ActiveReview);
+            var section = Assert.Single(vm.Sections);
+            await Until(() => !section.IsBusy && section.Lines.Any(row => row.CanComment));
+            var selected = section.SelectedFile;
+            var inspector = window.FindControl<Border>("ReviewHost")!;
+            var workspace = window.FindControl<Grid>("DiffWorkspace")!;
+            var reviewButton = window.FindControl<Button>("ReviewButton")!;
+            var focus = window.FindControl<ToggleButton>("FocusToggle")!;
+            Capture(window, theme, "pr-narrow-diff");
+            Assert.False(inspector.IsVisible);
+            Assert.True(workspace.IsVisible);
+
+            window.Width = 1450;
+            window.Height = 880;
+            Capture(window, theme, "pr-docked-discussion");
+            Assert.True(inspector.IsVisible);
+            Assert.True(workspace.IsVisible);
+            Assert.False(vm.IsReviewOpen);
+            Assert.Equal(0, review.PanelTab);
+            Assert.False(review.IsPrComposerOpen);
+            Assert.False(review.CanPublish);
+
+            ClickAt(window, reviewButton);
+            await Until(() => review.PanelTab == 3);
+            var line = section.Lines.First(row => row.CanComment && row.NewLineNumber is not null);
+            review.SetSelection([line]);
+            review.Composer = "Keep this local draft when changing the layout.";
+            await review.AddToDraftCommand.ExecuteAsync(null);
+            Assert.Single(review.DraftComments);
+            Assert.Equal("Review (1)", reviewButton.Content);
+
+            ClickAt(window, focus);
+            Assert.False(inspector.IsVisible);
+            Assert.True(workspace.IsVisible);
+            ClickAt(window, focus);
+            Assert.True(inspector.IsVisible);
+
+            window.Width = 1060;
+            window.Height = 640;
+            Capture(window, theme, "pr-compact-review");
+            Assert.True(inspector.IsVisible);
+            Assert.False(workspace.IsVisible);
+            Assert.Same(review, vm.ActiveReview);
+            Assert.Equal(3, review.PanelTab);
+            Assert.Equal("Keep this local draft when changing the layout.", Assert.Single(review.DraftComments).Body);
+            Assert.Same(selected, section.SelectedFile);
+            Assert.False(review.CanPublish);
+
+            var back = window.FindControl<Button>("CloseReviewButton")!;
+            Assert.Equal("Back to diff", back.Content);
+            Assert.True(back.Focus());
+            Press(window, Key.Space);
+            Assert.False(inspector.IsVisible);
+            Assert.True(workspace.IsVisible);
+            Assert.Same(review, vm.ActiveReview);
         }
+        finally { window.Close(); await Until(() => !window.IsVisible); }
+    }
+
+    [AvaloniaFact]
+    public async Task History_tab_stays_inactive_while_changes_are_pending()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "stacker-ui-" + Guid.NewGuid().ToString("N"));
+        using var services = Composition.Build(root);
+        var vm = services.GetRequiredService<MainViewModel>();
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
+        try
+        {
+            await Until(() => (bool)typeof(MainWindow).GetField("_ready", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
+            await vm.OpenDemoAsync();
+            await vm.SelectGroupAsync(vm.LocalGroups[0]);
+            vm.HasPendingChanges = true;
+
+            var historyTab = window.FindControl<ToggleButton>("HistoryTab")!;
+            ClickAt(window, historyTab);
+
+            await Until(() => vm.Error.Contains("Apply Update changes", StringComparison.Ordinal));
+            Assert.False(historyTab.IsChecked);
+            Assert.True(window.FindControl<ToggleButton>("ChangesTab")!.IsChecked);
+        }
+        finally { await vm.PrepareCloseAsync(); window.Close(); }
     }
 
     [AvaloniaTheory]
@@ -484,8 +598,13 @@ public sealed class UiReviewTests
             Assert.False(diffView.FindControl<Grid>("FilePane")!.IsVisible);
             var viewport = diffView.FindControl<Grid>("DiffViewport")!;
             Assert.True(viewport.Bounds.Width >= 760 && viewport.Bounds.Height >= 360, $"History diff viewport: {viewport.Bounds.Size}");
-            Assert.False(historyPanel.FindControl<ComboBox>("ReviewFiles")!.IsVisible);
-            Assert.True(historyPanel.FindControl<ComboBox>("HistoryDiffFiles")!.IsVisible);
+            var browse = historyPanel.FindControl<Button>("HistoryFilesButton")!;
+            Assert.True(browse.IsEffectivelyVisible);
+            var filePicker = Assert.IsType<Flyout>(browse.Flyout);
+            filePicker.ShowAt(browse);
+            var navigator = Assert.IsType<FileNavigatorView>(filePicker.Content);
+            Assert.NotEmpty(navigator.FindControl<ListBox>("FileList")!.Items);
+            filePicker.Hide();
             Capture(window, theme, "history-document");
             var tools = historyPanel.FindControl<Button>("HistoryToolsButton")!;
             var flyout = Assert.IsType<Flyout>(tools.Flyout);
@@ -522,22 +641,25 @@ public sealed class UiReviewTests
             Capture(unsaved, theme, "unsaved");
             Press(unsaved, Key.Escape);
             Assert.Equal(UnsavedCloseChoice.ContinueEditing, await unsavedChoice);
-            var stack = vm.LocalGroups[0].Definition;
-            var add = new AddLayerWindow(stack, (_, _, _) => Task.FromResult((false, "Not executed in visual review")));
-            add.Show(window);
+            ClickAt(window, window.FindControl<Button>("AddLayerButton")!);
+            await Until(() => window.OwnedWindows.OfType<AddLayerWindow>().Any());
+            var add = window.OwnedWindows.OfType<AddLayerWindow>().Single();
             Minimum(add);
             Click(add, "Create layer");
             Capture(add, theme, "add-layer-validation");
-            Assert.Contains("Enter a branch", add.FindControl<TextBlock>("ErrorLabel")!.Text);
+            Assert.Contains("Enter a branch", add.FindControl<SelectableTextBlock>("ErrorLabel")!.Text);
             add.Close();
-            var edit = new StackEditorWindow(vm.Repository!, stack, _ => Task.FromResult(false));
-            edit.Show(window);
+            var editButton = window.FindControl<Button>("EditStackButton")!;
+            Assert.True(editButton.Focus());
+            Press(window, Key.Space);
+            await Until(() => window.OwnedWindows.OfType<StackEditorWindow>().Any());
+            var edit = window.OwnedWindows.OfType<StackEditorWindow>().Single();
             Minimum(edit);
             Capture(edit, theme, "stack-editor");
             edit.Close();
-            await vm.RefreshWorkingTreeAsync();
-            var commit = new CommitWindow(vm);
-            commit.Show(window);
+            ClickAt(window, window.FindControl<Button>("CommitStackButton")!);
+            await Until(() => window.OwnedWindows.OfType<CommitWindow>().Any());
+            var commit = window.OwnedWindows.OfType<CommitWindow>().Single();
             Minimum(commit);
             Capture(commit, theme, "commit-clean");
             Assert.False(commit.FindControl<Button>("CommitButton")!.IsEnabled);
@@ -550,12 +672,11 @@ public sealed class UiReviewTests
             await Task.Delay(30);
             Click(dirtyCommit, "Commit");
             Capture(dirtyCommit, theme, "commit-validation");
-            Assert.Equal("Enter a commit message.", dirtyCommit.FindControl<TextBlock>("ErrorLabel")!.Text);
+            Assert.Equal("Enter a commit message.", dirtyCommit.FindControl<SelectableTextBlock>("ErrorLabel")!.Text);
             dirtyCommit.Close();
-            var plan = await vm.BuildRestackPlanAsync();
-            Assert.NotNull(plan);
-            var sync = new SyncPreviewWindow(plan!, vm, false);
-            sync.Show(window);
+            Click(window, "Preview restack…");
+            await Until(() => window.OwnedWindows.OfType<SyncPreviewWindow>().Any());
+            var sync = window.OwnedWindows.OfType<SyncPreviewWindow>().Single();
             Minimum(sync);
             Capture(sync, theme, "sync-preview");
             sync.Close();
