@@ -50,7 +50,9 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     public bool HasPr => AssociatedPr is not null;
     public string ReviewAction => IsPrSnapshot ? "Comments & review" : "Open PR changes";
     public string Title => AssociatedPr?.Label ?? Result.Layer.Replace("refs/heads/", "").Replace("refs/remotes/", "");
-    public string Comparison => $"{(IsPrSnapshot ? AssociatedPr?.BaseRef : Result.ParentRef.Replace("refs/heads/", ""))} → {Title}   ·   {Result.BaseSha[..8]}…{Result.HeadSha[..8]}";
+    public string Comparison => IsPrSnapshot && AssociatedPr is { } pr
+        ? $"{pr.BaseRef} → {pr.HeadRef}   ·   {Result.BaseSha[..8]}…{Result.HeadSha[..8]}"
+        : $"{Result.ParentRef.Replace("refs/heads/", "")} → {Title}   ·   {Result.BaseSha[..8]}…{Result.HeadSha[..8]}";
     public string Summary => $"{Result.Files.Count} files   +{Result.Additions}  −{Result.Deletions}";
     public string? Warning => Result.Warning;
     public bool HasWarning => Warning is not null;
@@ -62,8 +64,10 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     {
         get; set;
     }
+    internal bool IsActiveFileSection { get; set; }
     internal Task SelectedFileLoad { get; private set; } = Task.CompletedTask;
     private readonly Dictionary<FileChange, DiffFileRow> _fileRows;
+    internal IEnumerable<DiffFileRow> AllFileRows => _fileRows.Values;
     public IReadOnlyList<FileChange> Files { get; private set; } = [];
     public BatchCollection<DiffFileRow> VisibleFiles { get; } = [];
     internal ChangeVersion? ReviewVersion
@@ -88,7 +92,7 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     }
     [ObservableProperty] private string _filter = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowMessage))] private string _message = "Select a file to view changes.";
-    [ObservableProperty] private bool _isBusy;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanCopyPatch))] private bool _isBusy;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowMessage))] private bool _hasLoadError;
     public bool ShowMessage => Message.Length > 0 || HasLoadError;
     [ObservableProperty] private bool _showSectionHeader;
@@ -100,7 +104,8 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     partial void OnShowSectionHeaderChanged(bool value) => OnPropertyChanged(nameof(IsContentVisible));
     partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(IsContentVisible));
     public ObservableCollection<ReviewThread> FileThreads { get; } = [];
-    [ObservableProperty] private string _patch = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(CanCopyPatch))] private string _patch = "";
+    public bool CanCopyPatch => !IsBusy && Patch.Length > 0;
     [ObservableProperty] private bool _isExpanded = true;
     [ObservableProperty] private bool _wrapCode;
     public ScrollBarVisibility CodeHorizontalScroll => WrapCode ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
@@ -142,27 +147,23 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
     {
         Filter = old.Filter;
         IsExpanded = old.IsExpanded;
-        SelectedFile = Files.FirstOrDefault(f => f.NewPath == old.SelectedFile?.NewPath) ?? Files.FirstOrDefault();
+        IsActiveFileSection = old.IsActiveFileSection;
+        SelectedFile = Result.Files.FirstOrDefault(f => f.NewPath == old.SelectedFile?.NewPath) ?? Result.Files.FirstOrDefault();
         ScrollX = old.ScrollX;
         ScrollY = old.ScrollY;
     }
     partial void OnFilterChanged(string value) => UpdateFilter();
     private void UpdateFilter()
     {
-        var selected = SelectedFile;
         _filtering = true;
         Files = Result.Files.Where(f => f.DisplayPath.Contains(Filter, StringComparison.OrdinalIgnoreCase)).ToArray();
         VisibleFiles.ReplaceAll(Files.Select(file => _fileRows[file]));
-        SelectedFile = selected is not null && Files.Contains(selected) ? selected : null;
         if (GroupFilesByFolder)
             RebuildFolderFiles();
         OnPropertyChanged(nameof(FileCountLabel));
         OnPropertyChanged(nameof(HasNoFileMatches));
         _filtering = false;
-        if (SelectedFile == selected)
-            OnPropertyChanged(nameof(SelectedFileRow));
-        if (SelectedFile is null && selected is not null)
-            _ = LoadAsync(null);
+        OnPropertyChanged(nameof(SelectedFileRow));
     }
     internal void SetReviewStatuses(IReadOnlyList<FileReviewStatus> statuses)
     {

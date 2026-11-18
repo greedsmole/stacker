@@ -10,4 +10,7 @@ namespace Stacker.Core;
 /// <param name="X">Horizontal scroll offset of the diff list, in the control's device-independent units.</param>
 /// <param name="Y">Vertical scroll offset of the diff list, in the control's device-independent units.</param>
 /// <param name="Expanded">Whether the section was expanded.</param>
-public sealed record SectionViewState(string Layer, string? File, string Filter, double X, double Y, bool Expanded);
+public sealed record SectionViewState(string Layer, string? File, string Filter, double X, double Y, bool Expanded)
+{
+    public bool IsActiveFileSection { get; init; }
+}

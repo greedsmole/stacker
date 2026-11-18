@@ -39,6 +39,8 @@ public sealed class AppSettings
     {
         get; set;
     }
+    /// <summary>Skips movement and fades on desktop controls when enabled.</summary>
+    public bool ReduceMotion { get; set; }
     public const int MinDiffLineHeight = 16;
     public const int MaxDiffLineHeight = 26;
     public const int DefaultDiffLineHeight = 18;
@@ -81,19 +83,21 @@ public sealed class AppSettings
     /// <summary>Shell theme name, <c>Dark</c> or <c>Light</c>; any other stored value is reset to <c>Dark</c> on load.</summary>
     /// <remarks>The theme is part of the diff view cache key, so switching it rebuilds highlighted sections instead of reusing tokens from the other palette.</remarks>
     public string Theme { get; set; } = "Dark";
-    /// <summary>Width of the navigation column in logical pixels; default 270.</summary>
-    /// <remarks>Loading clamps the stored value to 200-500 and falls back to 270 when it is not a finite number, so a corrupt value cannot collapse or hide
+    /// <summary>Width of the navigation column in logical pixels; default 240.</summary>
+    /// <remarks>Loading clamps the stored value to 200-500 and falls back to 240 when it is not a finite number, so a corrupt value cannot collapse or hide
     /// the column. The pane enforces the same limits while the user resizes it.</remarks>
-    public double NavigationWidth { get; set; } = 270;
+    public const double DefaultNavigationWidth = 240;
+    public double NavigationWidth { get; set; } = DefaultNavigationWidth;
     public bool StacksHidden
     {
         get; set;
     }
-    /// <summary>Width of the per-comparison file column in logical pixels; default 290.</summary>
+    /// <summary>Width of the shared file column in logical pixels; default 248.</summary>
     /// <remarks>Loading clamps the stored value to 200-600 and falls back to 290 when it is not finite. The pane saves the width the user actually dragged to,
     /// which is why the stored value is re-clamped on the next load.</remarks>
-    public double FilesWidth { get; set; } = 290;
-    /// <summary>Hides the file navigator in every Changes comparison section.</summary>
+    public const double DefaultFilesWidth = 248;
+    public double FilesWidth { get; set; } = DefaultFilesWidth;
+    /// <summary>Hides the shared file navigator in Changes.</summary>
     public bool FilesHidden { get; set; }
     /// <summary>Initial window width in logical pixels; default 1400.</summary>
     /// <remarks>Loading clamps the stored value to 1000-4000 and falls back to 1400 when it is not finite, so a window cannot be restored below the layout's

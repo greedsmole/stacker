@@ -15,6 +15,12 @@ public sealed partial class MainViewModel
     /// <summary>Shown in the main window whenever an operation or a conflict needs the user.</summary>
     public bool HasOperation => WorkingTree is { NeedsAttention: true };
     public string OperationSummary => WorkingTree?.Summary ?? "";
+    public string CheckoutLabel => WorkingTree switch
+    {
+        { Branch: { } branch } => $"Checked out: {branch}",
+        not null => "Detached HEAD",
+        _ => "Current branch unavailable"
+    };
     public bool CanContinueOperation => WorkingTree is { CanContinue: true };
     public bool CanAbortOperation => WorkingTree is { CanAbort: true };
     public bool HasConflicts => WorkingTree is { HasConflicts: true };
@@ -29,6 +35,7 @@ public sealed partial class MainViewModel
     {
         OnPropertyChanged(nameof(HasOperation));
         OnPropertyChanged(nameof(OperationSummary));
+        OnPropertyChanged(nameof(CheckoutLabel));
         OnPropertyChanged(nameof(CanContinueOperation));
         OnPropertyChanged(nameof(CanAbortOperation));
         OnPropertyChanged(nameof(HasConflicts));

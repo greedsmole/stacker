@@ -42,13 +42,13 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
     }
     public IReadOnlyList<string> DecisionLabels { get; } = ["Comment", "Approve", "Request changes"];
     [ObservableProperty] internal int _panelTab;
+    [ObservableProperty] private bool _isPrComposerOpen;
     partial void OnPanelTabChanged(int value)
     {
+        if (value != 0)
+            IsPrComposerOpen = false;
         if (value == 1 || value == 2)
             CloseInlineEditors();
-        // The discussion tab always edits the pull-request buffer, never whatever reply was open last.
-        if (value == 0)
-            SelectComposer("pr");
     }
     public event Action? DiscussionChanged;
     public void Attach(DiffSectionViewModel section)
@@ -86,6 +86,8 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
             return;
         _switchingComposer = true;
         _composerKey = ComposerKey.Parse(key).OrThrow();
+        if (_composerKey != ComposerKey.Pr)
+            IsPrComposerOpen = false;
         Composer = _draft.ContextComposers.GetValueOrDefault(key, "");
         _switchingComposer = false;
     }
@@ -106,6 +108,7 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(SelectedCode));
         SelectComposer("pr");
         PanelTab = 0;
+        IsPrComposerOpen = true;
     }
     public void BeginReply(ReviewThread thread)
     {

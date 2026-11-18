@@ -77,6 +77,7 @@ public partial class MainWindow
             Vm.Settings.WindowWidth = Width;
             Vm.Settings.WindowHeight = Height;
             RememberStacksWidth();
+            RememberFilesWidth();
             while (true)
             {
                 _closePhase = ClosePhase.Preparing;

@@ -12,7 +12,7 @@ internal sealed class FileFolderTree
     public FileTreeNode? Find(object? item) => item is null ? null : _items.GetValueOrDefault(item);
 
     internal static FileFolderTree Create<T>(IEnumerable<T> items, Func<T, FileChange> fileFor, bool expandFolders = false,
-        Func<T, (int Index, string Title)>? sectionFor = null) where T : class
+        Func<T, (int Index, string Title)>? sectionFor = null, bool groupByFolder = true) where T : class
     {
         var tree = new FileFolderTree();
         var sections = new Dictionary<int, FileTreeNode>();
@@ -28,7 +28,7 @@ internal sealed class FileFolderTree
                 var (index, title) = sectionFor(item);
                 if (!sections.TryGetValue(index, out var section))
                 {
-                    section = new(title, "", parent);
+                    section = new(title, "", parent) { IsExpanded = true };
                     sections.Add(index, section);
                     parent.Add(section);
                 }
@@ -37,7 +37,7 @@ internal sealed class FileFolderTree
 
             // Git paths always use '/'. A backslash is a valid character in a Git file name.
             var parts = (file.Kind == FileChangeKind.Deleted ? file.OldPath : file.NewPath).Split('/');
-            for (var depth = 0; depth < parts.Length - 1; depth++)
+            for (var depth = 0; groupByFolder && depth < parts.Length - 1; depth++)
             {
                 var name = parts[depth];
                 if (!folders.TryGetValue((parent, name), out var folder))
@@ -57,6 +57,8 @@ internal sealed class FileFolderTree
             tree._items.Add(item, node);
         }
 
+        if (!groupByFolder)
+            return tree;
         if (sectionFor is null)
             tree._root.Sort();
         else

@@ -36,7 +36,7 @@ public sealed partial class MainViewModel
                     return;
                 var section = Sections.FirstOrDefault();
                 if (section is not null && file is not null)
-                    section.SelectedFile = section.Files.FirstOrDefault(f => f.NewPath == file.NewPath);
+                    section.SelectedFile = section.Result.Files.FirstOrDefault(f => f.NewPath == file.NewPath);
                 _runtime.Session.Select(new(node.Id, section is null ? null : ComparisonId.For(node.Id, section.Result.BaseSha, section.Result.HeadSha).Value, file?.NewPath));
             }
             finally { _historySelectionsInProgress--; }

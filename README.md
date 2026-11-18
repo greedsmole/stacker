@@ -14,9 +14,9 @@ dotnet run --project src/Stacker.Desktop -- --demo
 dotnet run --project src/Stacker.Desktop -- /path/to/repository
 ```
 
-Build a package for your computer with `make publish`, or choose a target with `make publish RID=win-x64`. The direct Python command `python3 scripts/package.py osx-arm64` writes `artifacts/Stacker-0.8.2-osx-arm64.tar.gz`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe` with its adjacent files. The packages include .NET. Install Git and the optional GitHub CLI separately. The macOS app bundles ship without Developer ID signing or notarization.
+Build a package for your computer with `make publish`, or choose a target with `make publish RID=win-x64`. The direct Python command `python3 scripts/package.py osx-arm64` writes `artifacts/Stacker-0.9.0-osx-arm64.tar.gz`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe` with its adjacent files. The packages include .NET. Install Git and the optional GitHub CLI separately. The macOS app bundles ship without Developer ID signing or notarization.
 
-Download the packages from [the v0.8.2 release](https://github.com/greedsmole/stacker/releases/tag/v0.8.2). See the [release notes](docs/releases/v0.8.2.md) for changes and package details.
+Download the packages from [the v0.9.0 release](https://github.com/greedsmole/stacker/releases/tag/v0.9.0). See the [release notes](docs/releases/v0.9.0.md) for changes and package details.
 
 ## Navigation and comparisons
 
@@ -33,25 +33,25 @@ For `main → A → B → C`:
 
 At the last layer, Through this layer equals Entire stack. Selected layers keep their own parents. Checkboxes and Cmd/Ctrl-click toggle layers within one stack. Returning to a stack automatically restores its selection, mode, file, filter and scroll position. These are also saved across restarts, together with group expansion. The last available repository reopens on launch.
 
-The repository switcher contains recent folders, Open folder and Open demo. Stack editing lives in each stack's menu. The workspace uses a single toolbar and an embedded PR inspector, which overlays the right side below 1320 logical pixels.
+The repository switcher contains recent folders, Open folder and Open demo. In **Stacks & PRs**, switch between **Pull requests** and **Local stacks**. Select a local stack to see its actions in the header. Stacker opens Discussion alongside a selected PR when the diff has room. In a smaller window, **Discussion** and **Review** open a separate view with **Back to diff**.
 
 **Standalone pull requests:** PRs outside discovered stacks appear under **Pull requests** as direct review entries. Click one to open its server base/head changes, code threads, discussion and review controls. No stack definition is needed.
 
 **Search:** choose **Find**, or press Cmd/Ctrl+P for file names and Cmd/Ctrl+Shift+F for changed text. File search checks paths across all visible comparison sections. Changed text search checks added and removed lines in their pinned diff snapshots; optional Regex uses a bounded match time. Select a result to open its file and scroll to the line. Search runs on demand, can be cancelled and reports files whose patches exceed the display limit.
 
-Use **Folders** in the **Files** pane to switch between a flat list and the folder tree. Both views use the same filter, and Stacker remembers the preference. In History, **Folders** opens a picker above the diff. The outlined Git status letters show added (`A`), modified (`M`), deleted (`D`), renamed (`R`), copied (`C`) and type-changed (`T`) files. Hover over a letter for the full path and change details.
+The **Files** pane shows filenames above their parent paths. Switch between **List** and **Folders** to browse the same comparison, or filter by path while leaving the current diff open. In comparisons with several layers, files are grouped by layer. **Browse files…** in History uses the same controls. The outlined Git status letters show added (`A`), modified (`M`), deleted (`D`), renamed (`R`), copied (`C`) and type-changed (`T`) files.
 
-**Command log** shows Git and GitHub CLI calls in the current session with duration, exit status and available error details. Use **GitHub only** to see `gh` calls. Review text goes through stdin and credentials are redacted from diagnostic output. **Saved operations** opens the workspace journal of write attempts, including GitHub publications.
+**More → Command log** shows Git and GitHub CLI calls in the current session with duration, exit status and available error details. Use **GitHub only** to see `gh` calls. Review text goes through stdin and credentials are redacted from diagnostic output. **Saved operations** opens the workspace journal of write attempts, including GitHub publications.
 
 **Refresh and background updates:** one Refresh checks local refs and GitHub. GitHub PR metadata and the selected PR's discussion are also read every 60 seconds while the window is active. Losing focus pauses the timer; regaining focus only restarts the delay. Background reads never download Git objects. Comments update in place; changed code or stack structure waits behind **New changes available → Update changes**. Temporary failures back off to 2/4/8 minutes, authentication failures suspend the loop, and previous data remains visible. Settings can disable background refresh.
 
-The diff displays code, line numbers and compact hunk ranges. Git headers (`diff --git`, `index`, `---/+++`) are omitted; rename/mode/binary/submodule information is shown as file metadata. Missing final newlines remain visible. Text selection copies source text, and Cmd/Ctrl+C on selected diff rows omits markers and line numbers. **Copy patch** in the file menu still copies the original patch.
+The diff displays code, line numbers and compact hunk ranges. Git headers (`diff --git`, `index`, `---/+++`) are omitted; rename/mode/binary/submodule information is shown as file metadata. Missing final newlines remain visible. Text selection copies source text, and Cmd/Ctrl+C on selected diff rows omits markers and line numbers. **Copy patch** above the diff copies the original patch.
 
 Click an unchanged-lines row to reveal up to 20 lines beside a change. Between hunks, the up arrow reveals lines above the next hunk. Click **Show full file** in the diff header to reveal every unchanged line. The button then reads **Collapse unchanged lines**.
 
 Use **Wrap code** above a diff to fit long lines to the pane; the preference is saved. For a multi-line comment, Shift-click adjacent code rows and choose **Comment on selected lines**. The editor shows the line range before you add it to a review or post it. Mixed added/removed sides are rejected with an explanation.
 
-Use **Stacks & PRs** and **Files** in the Changes toolbar to show or hide either sidebar. **Files** controls the file list in every comparison section. Stacker remembers both choices. **Settings → Diff line height** controls code spacing. In a single-layer or pull-request diff, the checkbox beside each file records a personal review checkpoint in **History**.
+Use **Stacks & PRs** and **Files** to show or hide either sidebar. **Focus** temporarily hides both sidebars and the review inspector. Use **Exit focus** to restore the layout. **Settings → Diff line height** controls code spacing, and **Reduce motion** turns off workspace transitions. In a single-layer or PR diff, **Mark reviewed** or the checkbox beside a file records a personal checkpoint in **History**. The Files pane shows progress and offers **Unreviewed** when checkpoints are available.
 
 ## Reproducible demo
 
@@ -99,7 +99,7 @@ Select a GitHub PR layer: its changes and discussion load automatically. The hea
 
 - **Line / range:** click the + beside a line, or Shift-click line numbers to extend a range on one side. An inline composer offers **Add to review** (local draft) and **Post now** (immediate publication).
 - **File:** **Comment on file** opens a composer for the selected file, including binary files. Publish explicitly with Post comment.
-- **PR:** **Discussion** displays general comments and review decisions and provides its own PR composer.
+- **PR:** **Discussion** displays general comments and review decisions. Choose **Comment on PR…** to start writing.
 - **Threads:** current threads appear with the code; replies and resolve/reopen actions are contextual. Resolved threads collapse. Outdated threads remain in the inspector and are never attached to an arbitrary current line.
 - **Submit a review** by using **Add to review** on each line, then **Review (N) → Submit review** to send the comments together. Each draft shows the file and line range. Request changes requires an explanation.
 
@@ -119,7 +119,7 @@ Not included: editing/deleting published comments, emoji reactions, GitLab, merg
 
 ## Starting and extending a stack
 
-**Add layer…** in a local stack's `···` menu creates the next branch: give it a name and a start point (the current checkout, the stack's base, or any layer). Stacker creates and checks the branch out, then appends it to the stack definition — your commits, and committing the updated `.stackpr.yml`, stay with you. A layer that has no commits yet is still valid: it follows its parent, so a restack carries it along.
+**Add layer…** in the selected local stack's header creates the next branch: give it a name and a start point (the current checkout, the stack's base, or any layer). Stacker creates and checks the branch out, then appends it to the stack definition — your commits, and committing the updated `.stackpr.yml`, stay with you. A layer that has no commits yet is still valid: it follows its parent, so a restack carries it along.
 
 Starting a layer is refused when the working tree is dirty, when a rebase, merge or cherry-pick is in progress, when the name already exists, or when the name is not a valid Git branch name. If the branch you start from does not carry `.stackpr.yml`, Stacker writes the definition onto the new branch.
 
@@ -136,21 +136,21 @@ Stacker runs the local Git a stacked workflow needs, and never hides what it is 
 
 The banner survives closing the app, and it also notices a rebase, merge, cherry-pick or revert that was started in a terminal.
 
-**Everyday local commands.** **Commit…** in a stack's menu stages the working tree (optionally including new files) and commits it with your message — your hooks and signing configuration run exactly as in a terminal. **Stash and restack** takes your uncommitted *tracked* changes out of the way, restacks, and keeps a saved stash entry. Choose it in the sync window and press **Restore selected stash**; multiple saved entries survive later restacks and restarts. A conflicting restore simply shows up as conflicts to resolve. Untracked files are not stashed automatically; Git can still refuse a checkout or rebase that would overwrite them. The sync window can also check out another branch (`Switch`), and **the working tree** line always shows what the repository currently holds.
+**Everyday local commands.** **Commit…** in the stack header stages the working tree (optionally including new files) and commits it with your message — your hooks and signing configuration run exactly as in a terminal. **Stash and restack** takes your uncommitted *tracked* changes out of the way, restacks, and keeps a saved stash entry. Choose it in the sync window and press **Restore selected stash**; multiple saved entries survive later restacks and restarts. A conflicting restore simply shows up as conflicts to resolve. Untracked files are not stashed automatically; Git can still refuse a checkout or rebase that would overwrite them. The sync window can also check out another branch (**Switch branch**), and **the working tree** line always shows what the repository currently holds.
 
 ## Restacking and publishing
 
-Local stacks can be rewritten in place. **Restack…** appears in a stack's `···` menu and in the comparison header whenever a local stack is selected. It opens a preview first: every layer, its parent, the commits it will replay, and any blocker. Nothing is written until you press **Restack (local)**, and the preview re-reads the repository so it cannot describe a stale snapshot.
+Local stacks can be rewritten in place. **Preview restack…** appears in the comparison header whenever a local stack is selected. It opens a preview first: every layer, its parent, the commits it will replay, and any blocker. Nothing is written until you press **Restack (local)**, and the preview re-reads the repository so it cannot describe a stale snapshot.
 
 - **What moves:** each layer is replayed onto its parent with `git rebase --onto`, starting at the lowest diverged layer and cascading upward. Only the branches of that stack move; other refs, the index and unrelated files are left alone.
 - **Before anything runs:** the tracked working tree must be clean (untracked files are ignored, and *Stash and restack* clears the rest), no rebase, merge or cherry-pick may be in progress, no stack branch may be checked out in another worktree, and a layer with merge commits is refused until you tick **Preserve merge commits** (`--rebase-merges`). Every rewritten branch is backed up under `refs/stacker/backup/<timestamp-and-operation-id>/<branch>` first; the ten most recent runs are kept.
 - **Conflicts:** the restack stops and leaves the rebase for you — see **Working on the stack locally** above. An unexpected failure attempts to restore the refs it can prove it owns. If that proof is missing, recovery stops and reports it; conflicting work is left for resolution.
-- **Undo:** a successful restack is journaled outside the repository. **Undo last restack** in the stack menu restores completed rebase effects and refuses when the working tree is dirty or an affected branch has moved since. All target refs are checked before one expected-SHA Git ref transaction restores them. Unexecuted layers are excluded. Undo never changes remote branches.
+- **Undo:** a successful restack is journaled outside the repository. **Undo last restack** in the preview restores completed rebase effects and refuses when the working tree is dirty or an affected branch has moved since. All target refs are checked before one expected-SHA Git ref transaction restores them. Unexecuted layers are excluded. Undo never changes remote branches.
 - **Pushing:** **Push the stack** publishes every layer under an explicit `--force-with-lease`, including fast-forward updates and branches expected to be absent. All remote layers are fetched and checked against the preview before the first push. A mismatch at that point prevents every push. A race or network failure during later pushes may leave a partially published stack; the message and journal retain the known completed branches. Stacker never uses a bare `--force`.
 - **Pull requests:** **Check pull requests** reads the live open pull requests and lists what each layer needs — a new pull request into its parent, or a new base when a layer's parent changed. Nothing is written until you press **Publish**. Layers are matched by repository and branch identity only: a fork's pull request is never borrowed, and two open pull requests for one layer are refused rather than guessed at. A new pull request is titled with the layer's newest commit subject. The checked plan is pinned to the repository and GitHub identity and is compared with live PRs before writing. A second successful check reports nothing left to do; an uncertain publication is inspected before retrying.
 - Existing pull requests pick up the rewritten commits by themselves. Drafts pinned to the previous commits are flagged by the existing stale-draft handling, and the demo repository disables every remote action.
 
-The **Command log** tab records the Git and GitHub CLI calls these actions run.
+**More → Command log** records the Git and GitHub CLI calls these actions run.
 
 ## Syntax highlighting
 

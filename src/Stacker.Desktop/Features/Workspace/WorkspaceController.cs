@@ -108,7 +108,11 @@ internal sealed partial class WorkspaceController(IWorkspaceActionsPresentation 
             var current = runtime._displayedStateKey;
             foreach (var stale in active.Comparisons.Keys.Where(key => !string.Equals(key, current, StringComparison.Ordinal)).Take(Math.Max(0, active.Comparisons.Count - (active.Comparisons.ContainsKey(current) ? 40 : 39))).ToArray())
                 active.Comparisons.Remove(stale);
-            active.Comparisons[current] = owner.Sections.Select(s => new SectionViewState(s.Result.Layer, s.SelectedFile?.NewPath, s.Filter, s.ScrollX, s.ScrollY, s.IsExpanded)).ToArray();
+            active.Comparisons[current] = owner.Sections.Select(s =>
+                new SectionViewState(s.Result.Layer, s.SelectedFile?.NewPath, s.Filter, s.ScrollX, s.ScrollY, s.IsExpanded)
+                {
+                    IsActiveFileSection = s.IsActiveFileSection
+                }).ToArray();
         }
     }
 
@@ -149,10 +153,11 @@ internal sealed partial class WorkspaceController(IWorkspaceActionsPresentation 
                 if (saved.FirstOrDefault(s => s.Layer == section.Result.Layer) is { } view)
                 {
                     section.Filter = view.Filter;
-                    section.SelectedFile = section.Files.FirstOrDefault(f => f.NewPath == view.File) ?? section.Files.FirstOrDefault();
+                    section.SelectedFile = section.Result.Files.FirstOrDefault(f => f.NewPath == view.File) ?? section.Result.Files.FirstOrDefault();
                     section.ScrollX = view.X;
                     section.ScrollY = view.Y;
                     section.IsExpanded = view.Expanded;
+                    section.IsActiveFileSection = view.IsActiveFileSection;
                 }
     }
 

@@ -150,7 +150,12 @@ internal sealed partial class NavigationController(INavigationPresentation owner
                     owner.LocalGroups.Add(group);
                 }
                 await owner.RefreshSyncAvailabilityAsync(refresh.Token);
-                var selected = sameRepo && previousGroup?.IsRemote == true ? previousGroup : groups.FirstOrDefault(g => owner.GroupKey(g) == runtime._workspace.ActiveGroup) ?? groups.FirstOrDefault(g => g.Definition.Id == previousGroup?.Definition.Id) ?? groups.FirstOrDefault();
+                // Navigation saves the view being left. A refresh should prefer the group currently on screen.
+                var selected = sameRepo && previousGroup?.IsRemote == true
+                    ? previousGroup
+                    : (sameRepo ? groups.FirstOrDefault(g => g.Definition.Id == previousGroup?.Definition.Id) : null)
+                        ?? groups.FirstOrDefault(g => owner.GroupKey(g) == runtime._workspace.ActiveGroup)
+                        ?? groups.FirstOrDefault();
                 if (selected is not null)
                 {
                     SetActiveGroup(selected);
@@ -178,6 +183,8 @@ internal sealed partial class NavigationController(INavigationPresentation owner
                     runtime._suppress = false;
                     owner.Layers.Clear();
                     owner.Sections.Clear();
+                    owner.Notify(nameof(owner.IsLocalSelected));
+                    owner.Notify(nameof(owner.IsRemoteStackSelected));
                     owner.EmptyMessage = "Create a stack, or connect GitHub to discover PRs.";
                 }
             }

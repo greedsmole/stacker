@@ -186,6 +186,7 @@ internal sealed partial class GitHubController(IGitHubPresentation owner, Worksp
         owner.Notify(nameof(owner.CanReview));
         owner.Notify(nameof(owner.HasRemoteGroups));
         owner.Notify(nameof(owner.HasOtherGroups));
+        owner.Notify(nameof(owner.ShowPrEmpty));
     }
 
     public PullRequest? FindLocalPr(string branch)

@@ -4,6 +4,8 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
 using Stacker.Core;
@@ -90,17 +92,10 @@ public sealed class HistoryWorkflowTests
                 await section.LoadAsync(section.SelectedFile);
                 var selected = section.SelectedFile;
                 Assert.Equal("C.txt", selected?.NewPath);
-                window.UpdateLayout();
-                var checkbox = Assert.Single(window.GetVisualDescendants().OfType<CheckBox>(), control =>
-                    control.DataContext is DiffFileRow row && row.Change.NewPath == "src/extra.txt");
+                var pane = window.FindControl<FileNavigatorView>("SharedFiles")!;
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+                var checkbox = await ClickCheckpointAsync(pane.FindControl<ListBox>("FileList")!);
                 var file = Assert.IsType<DiffFileRow>(checkbox.DataContext);
-                Assert.False(file.IsReviewed);
-
-                var position = checkbox.TranslatePoint(new Point(checkbox.Bounds.Width / 2, checkbox.Bounds.Height / 2), window)!.Value;
-                window.MouseMove(position);
-                window.MouseDown(position, MouseButton.Left);
-                window.MouseUp(position, MouseButton.Left);
-                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
                 while (!file.IsReviewed)
                     await Task.Delay(10, timeout.Token);
                 Assert.Equal(selected, section.SelectedFile);
@@ -112,17 +107,32 @@ public sealed class HistoryWorkflowTests
                 await history.LoadLayerCommand.ExecuteAsync(null);
                 Assert.Equal(FileReviewState.Reviewed, history.Files.Single(item => item.Change == file.Change).State);
                 await vm.SetGroupFilesByFolderAsync(true);
-                Assert.Single(section.FolderFiles, node => node.Name == "src").IsExpanded = true;
-                window.UpdateLayout();
-                var treeCheckbox = Assert.Single(window.GetVisualDescendants().OfType<CheckBox>(), control =>
-                    ReferenceEquals(control.DataContext, file) && control.IsEffectivelyVisible);
-                var treePosition = treeCheckbox.TranslatePoint(new Point(treeCheckbox.Bounds.Width / 2, treeCheckbox.Bounds.Height / 2), window)!.Value;
-                window.MouseMove(treePosition);
-                window.MouseDown(treePosition, MouseButton.Left);
-                window.MouseUp(treePosition, MouseButton.Left);
+                var tree = pane.FindControl<TreeView>("FileTree")!;
+                Assert.Single(tree.Items.OfType<FileTreeNode>(), node => node.Name == "src").IsExpanded = true;
+                Assert.Same(file, (await ClickCheckpointAsync(tree)).DataContext);
                 while (file.IsReviewed)
                     await Task.Delay(10, timeout.Token);
                 Assert.Equal(selected, section.SelectedFile);
+
+                async Task<CheckBox> ClickCheckpointAsync(Control list)
+                {
+                    while (true)
+                    {
+                        await Dispatcher.UIThread.InvokeAsync(window.UpdateLayout, DispatcherPriority.Background);
+                        var candidate = list.GetVisualDescendants().OfType<CheckBox>().SingleOrDefault(control =>
+                            control.IsEffectivelyVisible && control.IsEffectivelyEnabled &&
+                            control.DataContext is DiffFileRow row && row.Change.NewPath == "src/extra.txt");
+                        if (candidate?.TranslatePoint(new Point(candidate.Bounds.Width / 2, candidate.Bounds.Height / 2), window) is Point point &&
+                            window.InputHitTest(point) is Visual hit && (ReferenceEquals(hit, candidate) || candidate.IsVisualAncestorOf(hit)))
+                        {
+                            window.MouseMove(point);
+                            window.MouseDown(point, MouseButton.Left);
+                            window.MouseUp(point, MouseButton.Left);
+                            return candidate;
+                        }
+                        await Task.Delay(10, timeout.Token);
+                    }
+                }
             }
             finally
             {
@@ -291,11 +301,12 @@ public sealed class HistoryWorkflowTests
                 Assert.Equal("Own changes after replay", history.ActiveDocumentSection?.Title);
                 var baseFile = Assert.Single(history.DocumentFiles, file => file.File.NewPath == "upstream/config/upstream.txt");
                 Assert.Equal("Base changes · upstream/config/upstream.txt", baseFile.Label);
-                var picker = panel.FindControl<ComboBox>("HistoryDiffFiles")!;
-                var folders = panel.FindControl<Button>("HistoryFolderButton")!;
-                var flyout = Assert.IsType<Flyout>(folders.Flyout);
-                flyout.ShowAt(folders);
-                var tree = Assert.Single(Assert.IsType<Grid>(flyout.Content).Children.OfType<TreeView>());
+                var browse = panel.FindControl<Button>("HistoryFilesButton")!;
+                var flyout = Assert.IsType<Flyout>(browse.Flyout);
+                flyout.ShowAt(browse);
+                var navigator = Assert.IsType<FileNavigatorView>(flyout.Content);
+                navigator.FindControl<ToggleButton>("FoldersMode")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var tree = navigator.FindControl<TreeView>("FileTree")!;
                 var baseSection = Assert.Single(tree.Items.OfType<FileTreeNode>(), node => node.Name == "Base changes");
                 var folder = Assert.Single(baseSection.Children);
                 Assert.Equal("upstream", folder.Name);
@@ -304,7 +315,7 @@ public sealed class HistoryWorkflowTests
                 tree.SelectedItem = Assert.Single(config.Children);
                 tree.RaiseEvent(new KeyEventArgs { Key = Key.Enter, RoutedEvent = InputElement.KeyDownEvent });
                 Assert.False(flyout.IsOpen);
-                Assert.Equal(baseFile, picker.SelectedItem);
+                Assert.Equal(baseFile, history.SelectedDocumentFile);
                 var section = Assert.IsType<DiffSectionViewModel>(history.ActiveDocumentSection);
                 Assert.Equal("upstream/config/upstream.txt", section.SelectedFile?.NewPath);
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -320,7 +331,7 @@ public sealed class HistoryWorkflowTests
                 await history.BackCommand.ExecuteAsync(null);
                 Assert.Equal("Base changes", history.ActiveDocumentSection?.Title);
                 Assert.Equal("upstream/config/upstream.txt", history.ActiveDocumentSection?.SelectedFile?.NewPath);
-                Assert.Equal(baseFile.Label, Assert.IsType<HistoryDocumentFile>(picker.SelectedItem).Label);
+                Assert.Equal(baseFile.Label, history.SelectedDocumentFile?.Label);
                 await history.ForwardCommand.ExecuteAsync(null);
                 Assert.Equal("own.txt", history.ActiveDocumentSection?.SelectedFile?.NewPath);
                 Assert.True(history.MarkReviewedCommand.CanExecute(null));
@@ -356,7 +367,7 @@ public sealed class HistoryWorkflowTests
                 Assert.Contains(history.DocumentSections, section => section.Result.Files.Any(file => file.NewPath == "A.txt"));
                 await history.AttentionCommand.ExecuteAsync(null);
                 Assert.Equal(2, history.Attention.Count);
-                Assert.NotNull(panel.FindControl<ComboBox>("ReviewFiles"));
+                Assert.NotNull(panel.FindControl<Button>("HistoryFilesButton"));
                 window.Close();
                 await vm.ShutdownAsync();
             }

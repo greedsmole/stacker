@@ -39,7 +39,7 @@ public sealed partial class ReviewToolsTests
         Assert.True(Assert.Single(vm.Sections).IsPrSnapshot);
         Assert.Equal([42L], Assert.Single(cache.Requests));
         Assert.True(vm.HasPrDiscussion);
-        Assert.StartsWith("Pull request", vm.ComparisonTitle);
+        Assert.Equal(hub.Current.Label, vm.ComparisonTitle);
         await vm.FlushReviewsAsync();
     }
 

@@ -8,10 +8,18 @@ namespace Stacker.Desktop;
 public partial class ReviewPanel : UserControl
 {
     public ReviewPanel() => InitializeComponent();
-    private void TabChanged(object? sender, SelectionChangedEventArgs e)
+    private void StartPrCommentClick(object? sender, RoutedEventArgs e)
     {
-        if (ReferenceEquals(sender, e.Source) && DataContext is ReviewViewModel vm && vm.PanelTab == 0)
-            vm.BeginPrComment();
+        if (DataContext is not ReviewViewModel { IsBusy: false } vm)
+            return;
+        vm.BeginPrComment();
+        PrCommentBox.Focus();
+    }
+    private void ClosePrCommentClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ReviewViewModel vm)
+            vm.IsPrComposerOpen = false;
+        StartPrCommentButton.Focus();
     }
     private void EditDraftClick(object? sender, RoutedEventArgs e)
     {

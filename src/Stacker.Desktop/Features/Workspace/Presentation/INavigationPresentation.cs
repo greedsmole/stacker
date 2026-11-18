@@ -74,6 +74,10 @@ internal interface INavigationPresentation
     {
         get;
     }
+    global::System.Boolean IsRemoteStackSelected
+    {
+        get;
+    }
     global::System.Boolean IsReviewOpen
     {
         get; set;
@@ -135,6 +139,10 @@ internal interface INavigationPresentation
     global::Stacker.Core.AppSettings Settings
     {
         get; set;
+    }
+    global::System.Boolean ShowLayerModes
+    {
+        get;
     }
     void SetWindowActive(global::System.Boolean @active);
     global::System.Collections.ObjectModel.ObservableCollection<global::Stacker.Core.StackDefinition> Stacks
