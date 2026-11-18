@@ -184,7 +184,7 @@ internal sealed partial class NavigationController(INavigationPresentation owner
                     owner.Layers.Clear();
                     owner.Sections.Clear();
                     owner.Notify(nameof(owner.IsLocalSelected));
-                    owner.Notify(nameof(MainViewModel.IsRemoteStackSelected));
+                    owner.Notify(nameof(owner.IsRemoteStackSelected));
                     owner.EmptyMessage = "Create a stack, or connect GitHub to discover PRs.";
                 }
             }

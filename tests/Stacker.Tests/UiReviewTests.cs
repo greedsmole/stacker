@@ -435,8 +435,9 @@ public sealed class UiReviewTests
     [InlineData("Light")]
     public async Task Pr_discussion_docks_at_wide_width_and_preserves_a_pending_review_across_focus_and_resize(string theme)
     {
-        var root = Path.Combine(Path.GetTempPath(), "stacker-review-ui-" + Guid.NewGuid().ToString("N"));
-        using var services = Composition.Build(root);
+        // Keep the demo's generated history reference paths short enough for Git on Windows.
+        var root = Directory.CreateTempSubdirectory("stacker-review-");
+        using var services = Composition.Build(root.FullName);
         var vm = services.GetRequiredService<MainViewModel>();
         vm.Settings.Theme = theme;
         vm.Settings.WindowWidth = 1060;
@@ -447,9 +448,10 @@ public sealed class UiReviewTests
         window.Show();
         try
         {
-            await Until(() => window.FindControl<ToggleButton>("FocusToggle")!.IsEnabled == false);
+            await Until(() => (bool)typeof(MainWindow).GetField("_ready", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
             await vm.OpenDemoAsync();
-            var group = vm.RemoteGroups.First(g => g.Layers.Any(layer => layer.PullRequest?.Number == 102));
+            var group = vm.RemoteGroups.SingleOrDefault(g => g.Layers.Any(layer => layer.PullRequest?.Number == 102));
+            Assert.True(group is not null, $"Demo PR #102 is unavailable. {vm.Error} {vm.GitHubStatus}");
             await vm.SelectLayerAsync(group.Layers.Single(layer => layer.PullRequest?.Number == 102), false);
             var review = Assert.IsType<ReviewViewModel>(vm.ActiveReview);
             var section = Assert.Single(vm.Sections);
@@ -507,7 +509,13 @@ public sealed class UiReviewTests
             Assert.True(workspace.IsVisible);
             Assert.Same(review, vm.ActiveReview);
         }
-        finally { window.Close(); await Until(() => !window.IsVisible); }
+        finally
+        {
+            window.Close();
+            await Until(() => !window.IsVisible);
+            services.Dispose();
+            GitFixture.DeleteDirectory(root.FullName);
+        }
     }
 
     [AvaloniaFact]

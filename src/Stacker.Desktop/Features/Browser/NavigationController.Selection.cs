@@ -30,8 +30,8 @@ internal sealed partial class NavigationController
             owner.Layers.Add(layer);
         owner.Notify(nameof(owner.BaseLabel));
         owner.Notify(nameof(owner.IsLocalSelected));
-        owner.Notify(nameof(MainViewModel.IsRemoteStackSelected));
-        owner.Notify(nameof(MainViewModel.ShowLayerModes));
+        owner.Notify(nameof(owner.IsRemoteStackSelected));
+        owner.Notify(nameof(owner.ShowLayerModes));
         owner.Notify(nameof(owner.CanRestackActiveStack));
     }
 
@@ -225,7 +225,7 @@ internal sealed partial class NavigationController
             }
             compare.Token.ThrowIfCancellationRequested();
             owner.Notify(nameof(owner.HasSelectedLayer));
-            owner.Notify(nameof(MainViewModel.ShowLayerModes));
+            owner.Notify(nameof(owner.ShowLayerModes));
             owner.EmptyMessage = sections.Count == 0 ? "This stack has no layers. Edit it to add branches." : "";
         }
         catch (OperationCanceledException) { }

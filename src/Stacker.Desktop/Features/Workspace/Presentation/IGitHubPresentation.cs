@@ -98,4 +98,8 @@ internal interface IGitHubPresentation
     }
     global::System.Threading.Tasks.Task SelectLayerAsync(global::Stacker.Desktop.ViewModels.LayerViewModel @layer, global::System.Boolean @toggle);
     void SetActiveGroup(global::Stacker.Desktop.ViewModels.StackGroupViewModel @group);
+    global::System.Boolean ShowPrEmpty
+    {
+        get;
+    }
 }
