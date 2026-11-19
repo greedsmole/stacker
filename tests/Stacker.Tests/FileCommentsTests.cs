@@ -262,7 +262,7 @@ public sealed class FileCommentsTests
         window.Show();
         var headers = window.GetVisualDescendants().OfType<TabItem>().Select(t => t.Header?.ToString()).ToArray();
         Assert.Contains("Discussion", headers);
-        Assert.Contains("File", headers);
+        Assert.Contains("File comments", headers);
         Assert.False(vm.CanPostFile);
         vm.SelectedReviewFile = "Auth.cs";
         Assert.Single(vm.FileThreads);

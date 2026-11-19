@@ -144,6 +144,5 @@ public partial class MainWindow
     private DiffSectionView? FindDiffSection(DiffSectionViewModel section) =>
         SectionScroll.GetVisualDescendants().OfType<DiffSectionView>().FirstOrDefault(view => ReferenceEquals(view.DataContext, section));
 
-    private void PreviousFileClick(object? sender, RoutedEventArgs e) => SharedFiles.Step(-1);
-    private void NextFileClick(object? sender, RoutedEventArgs e) => SharedFiles.Step(1);
+    internal void NavigateFile(int direction) => SharedFiles.Step(direction);
 }

@@ -7,10 +7,10 @@ namespace Stacker.Core;
 public sealed class AppSettings
 {
     /// <summary>Bumped when a property is renamed or its meaning changes; unknown files are treated as defaults.</summary>
-    /// <remarks>Schema 3 is current. Loading resets <see cref="SchemaVersion"/> to this value, so a stored document is read in place rather than migrated
+    /// <remarks>Schema 4 introduces the compact workspace defaults. Loading resets <see cref="SchemaVersion"/> to this value after migration,
     /// field by field: a property that is absent from the document keeps its default, and renaming or reinterpreting one is therefore what the bump records.
     /// A greater stored value blocks writes instead of being downgraded, because an older build would otherwise drop fields it cannot see.</remarks>
-    public const int CurrentSchema = 3;
+    public const int CurrentSchema = 4;
     /// <summary>The schema stamp read from the settings document and rewritten on every save.</summary>
     /// <remarks>Defaults to <see cref="CurrentSchema"/> so a fresh instance serializes at the current version. Only the comparison against
     /// <see cref="CurrentSchema"/> matters: greater blocks writes, smaller triggers no field-by-field migration.</remarks>
@@ -88,14 +88,12 @@ public sealed class AppSettings
     /// the column. The pane enforces the same limits while the user resizes it.</remarks>
     public const double DefaultNavigationWidth = 240;
     public double NavigationWidth { get; set; } = DefaultNavigationWidth;
-    public bool StacksHidden
-    {
-        get; set;
-    }
-    /// <summary>Width of the shared file column in logical pixels; default 248.</summary>
-    /// <remarks>Loading clamps the stored value to 200-600 and falls back to 290 when it is not finite. The pane saves the width the user actually dragged to,
+    /// <summary>Stacks open on request so the selected comparison gets the main workspace.</summary>
+    public bool StacksHidden { get; set; } = true;
+    /// <summary>Width of the shared file column in logical pixels; default 220.</summary>
+    /// <remarks>Loading clamps the stored value to 200-600 and falls back to 220 when it is not finite. The pane saves the width the user actually dragged to,
     /// which is why the stored value is re-clamped on the next load.</remarks>
-    public const double DefaultFilesWidth = 248;
+    public const double DefaultFilesWidth = 220;
     public double FilesWidth { get; set; } = DefaultFilesWidth;
     /// <summary>Hides the shared file navigator in Changes.</summary>
     public bool FilesHidden { get; set; }

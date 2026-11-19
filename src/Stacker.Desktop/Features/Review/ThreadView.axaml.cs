@@ -18,7 +18,11 @@ public partial class ThreadView : UserControl
     {
         InitializeComponent();
         Loaded += (_, _) => UpdateOriginalCode();
-        DataContextChanged += (_, _) => UpdateOriginalCode();
+        DataContextChanged += (_, _) =>
+        {
+            Disclosure.IsChecked = false;
+            UpdateOriginalCode();
+        };
     }
     private void UpdateOriginalCode()
     {

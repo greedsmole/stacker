@@ -43,6 +43,15 @@ public sealed class JsonSettingsStore(string? directory = null, IAtomicFile? fil
                 _blockedWrite = "settings.json was saved by a newer Stacker version. It was preserved; use that version to read it.";
                 throw new StackerException(_blockedWrite);
             }
+            using var document = JsonDocument.Parse(bytes.Value);
+            var hasSchema = document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty(nameof(AppSettings.SchemaVersion), out _);
+            if (!hasSchema || settings.SchemaVersion < 4)
+            {
+                settings.StacksHidden = true;
+                if (settings.FilesWidth == 248)
+                    settings.FilesWidth = AppSettings.DefaultFilesWidth;
+            }
             settings.RecentRepositories ??= [];
             settings.Theme = settings.Theme is "Light" or "Dark" ? settings.Theme : "Dark";
             settings.DiffLineHeight = Math.Clamp(settings.DiffLineHeight, AppSettings.MinDiffLineHeight, AppSettings.MaxDiffLineHeight);

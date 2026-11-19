@@ -2,53 +2,56 @@
         x:Class="Stacker.Desktop.ClassDiagramWindow" Title="C# class diagram"
         Width="1280" Height="800" MinWidth="940" MinHeight="600" WindowStartupLocation="CenterOwner">
  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
-  <Border Background="{DynamicResource PanelBrush}" Padding="16,12" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
-   <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="10">
-    <TextBlock Text="C# class diagram" Classes="view-title" VerticalAlignment="Center"/>
-    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+  <Border Background="{DynamicResource PanelBrush}" Padding="24,16" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+   <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="{DynamicResource StackerSpace16}">
+    <StackPanel Spacing="{DynamicResource StackerSpace4}">
+     <TextBlock Text="C# class diagram" Classes="view-title"/>
+     <TextBlock Text="Inspect types, declarations and relationships across revisions." Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}"/>
+    </StackPanel>
+    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="{DynamicResource StackerSpace8}">
      <Button x:Name="RefreshButton" Content="Refresh revisions" Click="RefreshClick" Classes="quiet"/>
      <Button Content="Close" Click="CloseClick" IsCancel="True" Classes="quiet"/>
     </StackPanel>
-    <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="2*,Auto,2*,Auto" ColumnSpacing="10">
-     <StackPanel Spacing="4">
-      <TextBlock Text="Revision" Classes="muted"/>
+    <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="2*,Auto,2*,Auto" ColumnSpacing="{DynamicResource StackerSpace8}">
+     <StackPanel Spacing="{DynamicResource StackerSpace4}">
+      <TextBlock Text="Revision" Classes="section-title"/>
       <ComboBox x:Name="Revisions" HorizontalAlignment="Stretch" SelectionChanged="RangeChanged" AutomationProperties.Name="Revision"/>
      </StackPanel>
-     <StackPanel Grid.Column="1" Spacing="4">
-      <TextBlock Text="View" Classes="muted"/>
+     <StackPanel Grid.Column="1" Spacing="{DynamicResource StackerSpace4}">
+      <TextBlock Text="View" Classes="section-title"/>
       <ComboBox x:Name="Modes" MinWidth="148" SelectionChanged="RangeChanged" AutomationProperties.Name="Diagram view"/>
      </StackPanel>
-     <StackPanel Grid.Column="2" Spacing="4">
-      <TextBlock Text="Analysis scope" Classes="muted"/>
+     <StackPanel Grid.Column="2" Spacing="{DynamicResource StackerSpace4}">
+      <TextBlock Text="Analysis scope" Classes="section-title"/>
       <ComboBox x:Name="Scopes" HorizontalAlignment="Stretch" SelectionChanged="ScopeChanged" AutomationProperties.Name="Analysis scope"/>
      </StackPanel>
-     <StackPanel Grid.Column="3" VerticalAlignment="Bottom" Orientation="Horizontal" Spacing="4">
+     <StackPanel Grid.Column="3" VerticalAlignment="Bottom" Orientation="Horizontal" Spacing="{DynamicResource StackerSpace4}">
       <Button x:Name="LoadButton" Content="Analyze C#" Click="LoadClick" Classes="primary" IsEnabled="False"/>
       <Button x:Name="CancelButton" Content="Cancel analysis" Click="CancelClick" IsVisible="False" Classes="quiet"/>
      </StackPanel>
     </Grid>
    </Grid>
   </Border>
-  <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="16,8" ColumnSpacing="10">
-   <SelectableTextBlock x:Name="Range" TextWrapping="Wrap"/>
+  <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="24,8" ColumnSpacing="{DynamicResource StackerSpace12}">
+   <SelectableTextBlock x:Name="Range" TextWrapping="Wrap" VerticalAlignment="Center" FontFamily="Menlo,Consolas,monospace" FontSize="{DynamicResource StackerCaptionFontSize}"/>
    <Button Grid.Column="1" x:Name="CoverageButton" Content="Analysis details" Click="CoverageClick" Classes="quiet" IsEnabled="False"/>
   </Grid>
   <ProgressBar Grid.Row="2" x:Name="Progress" Height="2" IsIndeterminate="True" IsVisible="False"/>
-  <Grid Grid.Row="3" ColumnDefinitions="220,*,265" Background="{DynamicResource CanvasBrush}">
-   <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,1,1" Padding="10">
-    <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="6">
-     <TextBlock Text="Types" FontWeight="SemiBold"/>
+  <Grid Grid.Row="3" ColumnDefinitions="228,*,272" Background="{DynamicResource CanvasBrush}">
+   <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,1,1" Padding="12">
+    <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="{DynamicResource StackerSpace8}">
+     <TextBlock Text="Types" Classes="pane-title"/>
      <TextBox Grid.Row="1" x:Name="TypeQuery" Watermark="Filter types…" TextChanged="TypeFilterChanged" AutomationProperties.Name="Filter types by project, namespace or name"/>
      <CheckBox Grid.Row="2" x:Name="ChangesOnly" Content="Changed types only" IsCheckedChanged="TypeFilterChanged" IsEnabled="False"/>
-     <ListBox Grid.Row="3" x:Name="TypeList" SelectionChanged="TypeSelected" AutomationProperties.Name="C# types"/>
+     <ListBox Grid.Row="3" x:Name="TypeList" Background="Transparent" BorderThickness="0" SelectionChanged="TypeSelected" AutomationProperties.Name="C# types"/>
     </Grid>
    </Border>
    <Grid Grid.Column="1" RowDefinitions="Auto,*" Background="{DynamicResource CanvasBrush}">
-    <WrapPanel Margin="8,5" ItemSpacing="4">
+    <WrapPanel Margin="12,8" ItemSpacing="{DynamicResource StackerSpace4}" LineSpacing="{DynamicResource StackerSpace4}">
      <ComboBox x:Name="EdgeKinds" SelectionChanged="EdgeFilterChanged" AutomationProperties.Name="Relationship kind"/>
-     <Button Content="−" Click="ZoomOut" Classes="quiet" AutomationProperties.Name="Zoom out"/>
-     <Button x:Name="ZoomReset" Content="100%" Click="ResetZoom" Classes="quiet" AutomationProperties.Name="Reset zoom"/>
-     <Button Content="+" Click="ZoomIn" Classes="quiet" AutomationProperties.Name="Zoom in"/>
+     <Button Content="−" Click="ZoomOut" Classes="quiet compact" AutomationProperties.Name="Zoom out"/>
+     <Button x:Name="ZoomReset" Content="100%" Click="ResetZoom" Classes="quiet compact" AutomationProperties.Name="Reset zoom"/>
+     <Button Content="+" Click="ZoomIn" Classes="quiet compact" AutomationProperties.Name="Zoom in"/>
      <Button x:Name="ExpandButton" Content="Expand neighbors" Click="ExpandClick" Classes="quiet" IsEnabled="False"/>
      <Button x:Name="MoreButton" Content="More changes" Click="MoreClick" Classes="quiet" IsVisible="False"/>
     </WrapPanel>
@@ -61,19 +64,19 @@
      </ScrollViewer>
     </Border>
    </Grid>
-   <Border Grid.Column="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1,1,0,1" Padding="10">
-    <Grid RowDefinitions="Auto,*" RowSpacing="6">
-     <TextBlock x:Name="InspectorTitle" Text="Type details" FontWeight="SemiBold" TextWrapping="Wrap"/>
+   <Border Grid.Column="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1,1,0,1" Padding="12">
+    <Grid RowDefinitions="Auto,*" RowSpacing="{DynamicResource StackerSpace8}">
+     <TextBlock x:Name="InspectorTitle" Text="Type details" Classes="pane-title" TextWrapping="Wrap"/>
      <TabControl Grid.Row="1" Padding="0">
       <TabItem Header="Members">
-       <Grid RowDefinitions="*,Auto" RowSpacing="6">
-        <ListBox x:Name="MemberList" SelectionChanged="DetailSelected" AutomationProperties.Name="Members and declarations"/>
+       <Grid RowDefinitions="*,Auto" RowSpacing="{DynamicResource StackerSpace4}">
+        <ListBox x:Name="MemberList" Background="Transparent" BorderThickness="0" SelectionChanged="DetailSelected" AutomationProperties.Name="Members and declarations"/>
         <Button Grid.Row="1" x:Name="SourceButton" Content="Open declaration" Click="SourceClick" IsEnabled="False" Classes="quiet"/>
        </Grid>
       </TabItem>
       <TabItem Header="Relationships">
-       <Grid RowDefinitions="*,Auto" RowSpacing="6">
-        <ListBox x:Name="RelationshipList" SelectionChanged="RelationshipSelected" AutomationProperties.Name="Relationships"/>
+       <Grid RowDefinitions="*,Auto" RowSpacing="{DynamicResource StackerSpace4}">
+        <ListBox x:Name="RelationshipList" Background="Transparent" BorderThickness="0" SelectionChanged="RelationshipSelected" AutomationProperties.Name="Relationships"/>
         <Button Grid.Row="1" x:Name="NeighborButton" Content="Focus related type" Click="NeighborClick" IsEnabled="False" Classes="quiet"/>
        </Grid>
       </TabItem>
@@ -81,7 +84,7 @@
     </Grid>
    </Border>
   </Grid>
-  <ScrollViewer Grid.Row="4" MaxHeight="64" Margin="16,8" HorizontalScrollBarVisibility="Disabled">
+  <ScrollViewer Grid.Row="4" MaxHeight="64" Margin="24,8" HorizontalScrollBarVisibility="Disabled">
    <SelectableTextBlock x:Name="Status" TextWrapping="Wrap" Classes="muted"/>
   </ScrollViewer>
  </Grid>

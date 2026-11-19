@@ -1,63 +1,232 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.ReviewPanel">
- <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="16" RowSpacing="12">
-  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="5">
-   <TextBlock Text="{Binding Title}" Classes="pane-title" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}"/>
-   <Button Grid.Column="1" x:Name="ReviewClassDiagramButton" Content="Class diagram" Click="ClassDiagramClick" Classes="quiet compact"
-           IsVisible="{Binding $parent[Window].DataContext.HasCSharpGraph}"/>
-  </Grid>
-  <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding HasReviewStatus}">
-   <ScrollViewer MaxHeight="84" HorizontalScrollBarVisibility="Disabled">
-    <SelectableTextBlock Text="{Binding ReviewStatus}" TextWrapping="Wrap"/>
-   </ScrollViewer>
-   <Button Grid.Column="1" Content="GitHub log" Command="{Binding $parent[Window].DataContext.ShowGitHubLogCommand}" IsVisible="{Binding HasPublicationProblem}" Classes="quiet" VerticalAlignment="Top"/>
-  </Grid>
-  <StackPanel Grid.Row="2" Spacing="6"><Button Content="Retry loading review" Command="{Binding RetryInitializeCommand}" IsVisible="{Binding !IsInitialized}"/>
-   <Border IsVisible="{Binding HasRecoveredText}" Classes="notice" Padding="10"><StackPanel Spacing="6"><TextBlock Text="Recovered draft: choose its destination before posting" TextWrapping="Wrap"/><SelectableTextBlock Text="{Binding RecoveredText}" TextWrapping="Wrap" MaxHeight="100"/><Button Content="Use in current editor" Command="{Binding RestoreRecoveredTextCommand}"/></StackPanel></Border>
-   <Button Content="Recheck draft against current PR" Command="{Binding UseCurrentVersionCommand}" IsVisible="{Binding HasStaleDraft}"/>
-   <StackPanel IsVisible="{Binding HasPendingPublication}" IsEnabled="{Binding !IsBusy}" Spacing="6"><Button Content="Check publication status" Command="{Binding ReloadCommand}"/><Button Content="I checked GitHub: allow retry" Command="{Binding UnlockRetryCommand}"/></StackPanel>
-  </StackPanel>
-  <TabControl Grid.Row="3" SelectedIndex="{Binding PanelTab}" IsEnabled="{Binding CanEditDraft}">
-   <TabItem Header="Discussion"><Grid RowDefinitions="*,Auto" RowSpacing="10">
-    <ScrollViewer><StackPanel Spacing="16">
-     <ItemsControl ItemsSource="{Binding Comments}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Spacing="5" Margin="0,10"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding CreatedAt, StringFormat={}{0:g}}" Classes="muted" FontSize="11"/></Grid><local:ReviewBodyView Body="{Binding DisplayBody}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-     <TextBlock Text="No discussion yet." IsVisible="{Binding !Comments.Count}" Classes="muted"/>
-     <TextBlock Text="Review decisions" Classes="label" IsVisible="{Binding !!Reviews.Count}"/>
-     <ItemsControl ItemsSource="{Binding Reviews}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Spacing="5" Margin="0,6"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><TextBlock Text="{Binding State}" Classes="muted"/><local:ReviewBodyView Body="{Binding DisplayBody}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-    </StackPanel></ScrollViewer>
-    <Button x:Name="StartPrCommentButton" Grid.Row="1" Content="Comment on PR…" Click="StartPrCommentClick" Classes="outline"
-            IsVisible="{Binding !IsPrComposerOpen}" HorizontalAlignment="Left"/>
-    <StackPanel Grid.Row="1" Spacing="8" IsVisible="{Binding IsPrComposerOpen}">
-     <TextBox x:Name="PrCommentBox" Text="{Binding Composer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="72" MaxHeight="160"
-              AutomationProperties.Name="Pull request comment" Watermark="Comment on this pull request…"/>
-     <WrapPanel HorizontalAlignment="Right" ItemSpacing="6">
-      <Button Content="Close editor" Click="ClosePrCommentClick" Classes="quiet"/>
-      <Button Content="Post comment" Command="{Binding PostCommentCommand}" IsEnabled="{Binding CanPublish}" Classes="primary"/>
-     </WrapPanel>
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.ReviewPanel"
+             FontSize="{DynamicResource StackerBodyFontSize}">
+ <Grid RowDefinitions="Auto,Auto,Auto,*">
+  <Border Padding="12" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+   <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource StackerSpace8}">
+    <TextBlock Text="{Binding Title}" Classes="pane-title" VerticalAlignment="Center"
+               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}"/>
+    <Button Grid.Column="1" x:Name="ReviewClassDiagramButton" Content="Class diagram" Click="ClassDiagramClick"
+            Classes="quiet compact" IsVisible="{Binding $parent[Window].DataContext.HasCSharpGraph}"/>
+   </Grid>
+  </Border>
+  <Border Grid.Row="1" Classes="notice" Margin="12,8,12,0" Padding="12" IsVisible="{Binding HasReviewStatus}"
+          CornerRadius="{DynamicResource ControlCornerRadius}">
+   <StackPanel Spacing="6">
+    <ScrollViewer MaxHeight="84" HorizontalScrollBarVisibility="Disabled">
+     <SelectableTextBlock Text="{Binding ReviewStatus}" TextWrapping="Wrap"/>
+    </ScrollViewer>
+    <Button Content="GitHub log" Command="{Binding $parent[Window].DataContext.ShowGitHubLogCommand}"
+            IsVisible="{Binding HasPublicationProblem}" Classes="quiet compact" HorizontalAlignment="Left"/>
+   </StackPanel>
+  </Border>
+  <StackPanel Grid.Row="2" Margin="12,0" Spacing="{DynamicResource StackerSpace8}">
+   <Button Content="Retry loading review" Command="{Binding RetryInitializeCommand}" IsVisible="{Binding !IsInitialized}"
+           Classes="outline" HorizontalAlignment="Left" Margin="0,10,0,0"/>
+   <Border IsVisible="{Binding HasRecoveredText}" Classes="notice" Padding="12" Margin="0,8,0,0"
+           CornerRadius="{DynamicResource ControlCornerRadius}">
+    <StackPanel Spacing="8">
+     <TextBlock Text="Recovered draft" Classes="section-title"/>
+     <TextBlock Text="This text is saved locally. Open the intended comment editor, then restore it before posting."
+                Classes="muted" TextWrapping="Wrap"/>
+     <ScrollViewer MaxHeight="100" HorizontalScrollBarVisibility="Disabled">
+      <SelectableTextBlock Text="{Binding RecoveredText}" TextWrapping="Wrap"/>
+     </ScrollViewer>
+     <Button Content="Use in current editor" Command="{Binding RestoreRecoveredTextCommand}"
+             Classes="outline" HorizontalAlignment="Left"/>
     </StackPanel>
-   </Grid></TabItem>
-   <TabItem Header="File"><Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="10">
-    <ComboBox ItemsSource="{Binding ReviewFiles}" SelectedItem="{Binding SelectedReviewFile}" HorizontalAlignment="Stretch"/>
-    <ScrollViewer Grid.Row="1"><ItemsControl ItemsSource="{Binding FileThreads}"><ItemsControl.ItemTemplate><DataTemplate><local:ThreadView/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
-    <TextBox Grid.Row="2" Text="{Binding FileComposer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" MaxHeight="180" Watermark="Comment on this file…"/>
-    <Button Grid.Row="3" Content="Post comment" Command="{Binding PostFileCommentCommand}" IsEnabled="{Binding CanPostFile}" Classes="primary" HorizontalAlignment="Right"/>
-   </Grid></TabItem>
-   <TabItem Header="Threads"><Grid RowDefinitions="*,Auto,Auto" RowSpacing="8">
-    <ScrollViewer><ItemsControl ItemsSource="{Binding Threads}"><ItemsControl.ItemTemplate><DataTemplate><local:ThreadView/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
-    <StackPanel Grid.Row="1" IsVisible="{Binding SelectedThread}" Spacing="6"><TextBlock Text="{Binding SelectedThread.Label}" Classes="muted" TextWrapping="Wrap"/><TextBox Text="{Binding Composer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" MaxHeight="180" Watermark="Reply to this thread…"/></StackPanel>
-    <Button Grid.Row="2" Content="Reply" Command="{Binding ReplyCommand}" IsEnabled="{Binding CanPublish}" HorizontalAlignment="Right"/>
-   </Grid></TabItem>
-   <TabItem Header="Review"><Grid RowDefinitions="*,Auto" RowSpacing="10"><ScrollViewer><StackPanel Spacing="12">
-    <TextBlock Text="{Binding ReviewLabel}" FontSize="17" FontWeight="SemiBold"/>
-    <TextBlock Text="Line comments stay on this device until you submit." Classes="muted" TextWrapping="Wrap"/>
-    <ItemsControl ItemsSource="{Binding DraftComments}"><ItemsControl.ItemTemplate><DataTemplate><Border Classes="notice" Padding="10" Margin="0,4"><StackPanel Spacing="6"><TextBlock Text="{Binding Anchor.LocationLabel}" FontWeight="SemiBold" TextWrapping="Wrap"/><local:ReviewBodyView Body="{Binding Body}"/><StackPanel Orientation="Horizontal" Spacing="6"><Button Content="Edit" Click="EditDraftClick" Classes="quiet"/><Button Content="Remove" Click="RemoveDraftClick" Classes="quiet"/><Button Content="Reattach…" Click="ReanchorClick" Classes="quiet"/></StackPanel></StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-    <StackPanel IsVisible="{Binding HasSelection}" Spacing="6"><TextBlock Text="{Binding SelectionLabel}" Classes="muted" TextWrapping="Wrap"/><TextBox Text="{Binding Composer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="75" Watermark="Line comment…"/><Button Content="Suggest code change" Command="{Binding SuggestCodeChangeCommand}" IsEnabled="{Binding CanSuggestCodeChange}" HorizontalAlignment="Left"/><local:ReviewBodyView Body="{Binding Composer}" OriginalCode="{Binding SelectedCode}" IsVisible="{Binding HasSuggestionPreview}"/><Button Content="Add to review" Command="{Binding AddToDraftCommand}"/></StackPanel>
-    <StackPanel IsVisible="{Binding HasAnchorProposal}" Spacing="8"><SelectableTextBlock Text="{Binding AnchorPreview}" FontFamily="Menlo,Consolas,monospace" TextWrapping="Wrap"/><Button Content="Confirm new anchor" Command="{Binding ConfirmReanchorCommand}"/></StackPanel><TextBox Text="{Binding Summary}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" Watermark="Review summary…"/>
-   </StackPanel></ScrollViewer>
-    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-     <ComboBox ItemsSource="{Binding DecisionLabels}" SelectedItem="{Binding DecisionLabel}" HorizontalAlignment="Stretch" AutomationProperties.Name="Review decision"/>
-     <Button Grid.Column="1" Content="Submit review" Command="{Binding SubmitReviewCommand}" IsEnabled="{Binding CanPublish}" Classes="primary"/>
+   </Border>
+   <Button Content="Recheck draft against current PR" Command="{Binding UseCurrentVersionCommand}"
+           IsVisible="{Binding HasStaleDraft}" Classes="outline" HorizontalAlignment="Left" Margin="0,10,0,0"/>
+   <StackPanel IsVisible="{Binding HasPendingPublication}" IsEnabled="{Binding !IsBusy}" Spacing="6" Margin="0,10,0,0">
+    <Button Content="Check publication status" Command="{Binding ReloadCommand}" Classes="outline"/>
+    <Button Content="I checked GitHub: allow retry" Command="{Binding UnlockRetryCommand}" Classes="quiet"/>
+   </StackPanel>
+  </StackPanel>
+  <TabControl Grid.Row="3" SelectedIndex="{Binding PanelTab}" IsEnabled="{Binding CanEditDraft}" Margin="12,8,12,12"
+              AutomationProperties.Name="Pull request review tasks">
+   <TabItem Header="Discussion">
+    <Grid RowDefinitions="*,Auto">
+     <ScrollViewer Margin="0,12,0,12" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="{DynamicResource StackerSpace16}">
+       <ItemsControl ItemsSource="{Binding Comments}">
+        <ItemsControl.ItemTemplate>
+         <DataTemplate>
+          <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="0,0,0,12" Margin="0,0,0,12">
+           <StackPanel Spacing="8">
+            <StackPanel Spacing="2">
+             <TextBlock Text="{Binding Author}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Author}"/>
+             <TextBlock Text="{Binding CreatedAt, StringFormat={}{0:g}}" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}"/>
+            </StackPanel>
+            <local:ReviewBodyView Body="{Binding DisplayBody}"/>
+           </StackPanel>
+          </Border>
+         </DataTemplate>
+        </ItemsControl.ItemTemplate>
+       </ItemsControl>
+       <StackPanel IsVisible="{Binding !Comments.Count}" Spacing="6" Margin="0,8,0,16">
+        <TextBlock Text="Start the discussion" Classes="section-title"/>
+        <TextBlock Text="No pull request comments yet. Use Comment on PR to ask a question or share feedback."
+                   Classes="muted" TextWrapping="Wrap"/>
+       </StackPanel>
+       <TextBlock Text="Review decisions" Classes="section-title" IsVisible="{Binding !!Reviews.Count}"/>
+       <ItemsControl ItemsSource="{Binding Reviews}">
+        <ItemsControl.ItemTemplate>
+         <DataTemplate>
+          <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="0,0,0,12" Margin="0,0,0,12">
+           <StackPanel Spacing="6">
+            <TextBlock Text="{Binding Author}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Author}"/>
+            <TextBlock Text="{Binding State}" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}"/>
+            <local:ReviewBodyView Body="{Binding DisplayBody}"/>
+           </StackPanel>
+          </Border>
+         </DataTemplate>
+        </ItemsControl.ItemTemplate>
+       </ItemsControl>
+      </StackPanel>
+     </ScrollViewer>
+     <Border Grid.Row="1" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+      <Grid>
+       <Button x:Name="StartPrCommentButton" Content="Comment on PR…" Click="StartPrCommentClick" Classes="outline"
+               IsVisible="{Binding !IsPrComposerOpen}" HorizontalAlignment="Left"/>
+       <StackPanel Spacing="8" IsVisible="{Binding IsPrComposerOpen}">
+        <TextBlock Text="Comment on the pull request" Classes="section-title"/>
+        <TextBox x:Name="PrCommentBox" Text="{Binding Composer}" AcceptsReturn="True" TextWrapping="Wrap"
+                 MinHeight="88" MaxHeight="160" AutomationProperties.Name="Pull request comment" Watermark="Write your feedback…"/>
+        <TextBlock Text="Post comment publishes immediately to the pull request." Classes="muted"
+                   FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
+        <WrapPanel HorizontalAlignment="Right" ItemSpacing="6" LineSpacing="6">
+         <Button Content="Close editor" Click="ClosePrCommentClick" Classes="quiet"/>
+         <Button Content="Post comment" Command="{Binding PostCommentCommand}" IsEnabled="{Binding CanPostComment}" Classes="primary"/>
+        </WrapPanel>
+       </StackPanel>
+      </Grid>
+     </Border>
     </Grid>
-   </Grid></TabItem>
+   </TabItem>
+   <TabItem Header="File comments">
+    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12" Margin="0,12,0,0">
+     <StackPanel Spacing="6">
+      <TextBlock Text="Comments about an entire file" Classes="section-title"/>
+      <ComboBox ItemsSource="{Binding ReviewFiles}" SelectedItem="{Binding SelectedReviewFile}" HorizontalAlignment="Stretch"
+                PlaceholderText="Select a file" AutomationProperties.Name="Comment file" MinWidth="0"/>
+     </StackPanel>
+     <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel>
+       <TextBlock Text="{Binding FileThreadsLabel}" Classes="muted" TextWrapping="Wrap" Margin="0,0,0,8"/>
+       <TextBlock Text="No file comments to show. Comments attached to individual code lines are in All threads."
+                  IsVisible="{Binding !FileThreads.Count}" Classes="muted" TextWrapping="Wrap" Margin="0,0,0,12"/>
+       <ItemsControl ItemsSource="{Binding FileThreads}">
+        <ItemsControl.ItemTemplate><DataTemplate><local:ThreadView/></DataTemplate></ItemsControl.ItemTemplate>
+       </ItemsControl>
+      </StackPanel>
+     </ScrollViewer>
+     <Border Grid.Row="2" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+      <StackPanel Spacing="8">
+       <TextBlock Text="Comment on the selected file" Classes="section-title"/>
+       <TextBox Text="{Binding FileComposer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="88" MaxHeight="160"
+                Watermark="Comment on this file…" AutomationProperties.Name="File comment" IsEnabled="{Binding !!SelectedReviewFile}"/>
+       <TextBlock Text="Post comment publishes immediately to the selected file." Classes="muted"
+                  FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
+       <Button Content="Post comment" Command="{Binding PostFileCommentCommand}" IsEnabled="{Binding CanPostFileComment}"
+               Classes="primary" HorizontalAlignment="Right"/>
+      </StackPanel>
+     </Border>
+    </Grid>
+   </TabItem>
+   <TabItem Header="All threads">
+    <Grid RowDefinitions="*,Auto" RowSpacing="12" Margin="0,12,0,0">
+     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+      <StackPanel>
+       <StackPanel IsVisible="{Binding !Threads.Count}" Spacing="6" Margin="0,8,0,16">
+        <TextBlock Text="No review threads" Classes="section-title"/>
+        <TextBlock Text="File and code conversations appear here. Use File comments or the + beside a diff line to start one."
+                   Classes="muted" TextWrapping="Wrap"/>
+       </StackPanel>
+       <ItemsControl ItemsSource="{Binding Threads}">
+        <ItemsControl.ItemTemplate><DataTemplate><local:ThreadView/></DataTemplate></ItemsControl.ItemTemplate>
+       </ItemsControl>
+      </StackPanel>
+     </ScrollViewer>
+     <Border Grid.Row="1" IsVisible="{Binding SelectedThread}" BorderBrush="{DynamicResource DividerBrush}"
+             BorderThickness="0,1,0,0" Padding="0,12,0,0">
+      <StackPanel Spacing="8">
+       <TextBlock Text="Reply to thread" Classes="section-title"/>
+       <TextBlock Text="{Binding SelectedThread.Label}" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
+       <TextBox Text="{Binding Composer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="88" MaxHeight="160"
+                Watermark="Write a reply…" AutomationProperties.Name="Thread reply"/>
+       <TextBlock Text="Reply publishes immediately to this thread." Classes="muted"
+                  FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
+       <Button Content="Reply" Command="{Binding ReplyCommand}" IsEnabled="{Binding CanReply}"
+               Classes="primary" HorizontalAlignment="Right"/>
+      </StackPanel>
+     </Border>
+    </Grid>
+   </TabItem>
+   <TabItem Header="Submit">
+    <Grid RowDefinitions="*,Auto" RowSpacing="12" Margin="0,12,0,0">
+     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="{DynamicResource StackerSpace16}">
+       <StackPanel Spacing="6">
+        <TextBlock Text="{Binding ReviewLabel}" FontSize="{DynamicResource StackerTitleFontSize}" FontWeight="SemiBold"/>
+        <TextBlock Text="Local draft · published only when you submit." Classes="muted" TextWrapping="Wrap"/>
+       </StackPanel>
+       <ItemsControl ItemsSource="{Binding DraftComments}">
+        <ItemsControl.ItemTemplate>
+         <DataTemplate>
+          <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,12" Margin="0,0,0,4">
+           <StackPanel Spacing="8">
+            <TextBlock Text="{Binding Anchor.LocationLabel}" FontWeight="SemiBold" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
+            <local:ReviewBodyView Body="{Binding Body}"/>
+            <WrapPanel ItemSpacing="4" LineSpacing="4">
+             <Button Content="Edit" Click="EditDraftClick" Classes="quiet compact"/>
+             <Button Content="Remove" Click="RemoveDraftClick" Classes="quiet compact"/>
+             <Button Content="Reattach…" Click="ReanchorClick" Classes="quiet compact"/>
+            </WrapPanel>
+           </StackPanel>
+          </Border>
+         </DataTemplate>
+        </ItemsControl.ItemTemplate>
+       </ItemsControl>
+       <TextBlock Text="No line comments saved. Add comments from the diff, or write a review summary below."
+                  IsVisible="{Binding !DraftComments.Count}" Classes="muted" TextWrapping="Wrap"/>
+       <StackPanel IsVisible="{Binding HasSelection}" Spacing="{DynamicResource StackerSpace8}">
+        <TextBlock Text="Line comment" Classes="section-title"/>
+        <TextBlock Text="{Binding SelectionLabel}" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
+        <TextBox Text="{Binding Composer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="88"
+                 Watermark="Write feedback for these lines…" AutomationProperties.Name="Line comment"/>
+        <Button Content="Suggest code change" Command="{Binding SuggestCodeChangeCommand}" IsEnabled="{Binding CanSuggestCodeChange}"
+                Classes="quiet compact" HorizontalAlignment="Left"/>
+        <local:ReviewBodyView Body="{Binding Composer}" OriginalCode="{Binding SelectedCode}" IsVisible="{Binding HasSuggestionPreview}"/>
+        <TextBlock Text="Add to review saves this comment locally for submission with the review." Classes="muted"
+                   FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
+        <Button Content="Add to review" Command="{Binding AddToDraftCommand}" Classes="outline" HorizontalAlignment="Right"/>
+       </StackPanel>
+       <StackPanel IsVisible="{Binding HasAnchorProposal}" Spacing="8">
+        <SelectableTextBlock Text="{Binding AnchorPreview}" FontFamily="Menlo,Consolas,monospace" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
+        <Button Content="Confirm new anchor" Command="{Binding ConfirmReanchorCommand}" Classes="outline" HorizontalAlignment="Left"/>
+       </StackPanel>
+       <StackPanel Spacing="6">
+        <TextBlock Text="Review summary" Classes="section-title"/>
+        <TextBox Text="{Binding Summary}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100"
+                 Watermark="Summarize your review…" AutomationProperties.Name="Review summary"/>
+        <TextBlock Text="A summary is required when requesting changes." Classes="muted"
+                   FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
+       </StackPanel>
+      </StackPanel>
+     </ScrollViewer>
+     <Border Grid.Row="1" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+      <StackPanel Spacing="8">
+       <TextBlock Text="Review decision" Classes="section-title"/>
+       <ComboBox ItemsSource="{Binding DecisionLabels}" SelectedItem="{Binding DecisionLabel}"
+                 HorizontalAlignment="Stretch" AutomationProperties.Name="Review decision" MinWidth="0"/>
+       <Button Content="Submit review" Command="{Binding SubmitReviewCommand}" IsEnabled="{Binding CanSubmitReview}"
+               Classes="primary" HorizontalAlignment="Right"
+               ToolTip.Tip="Publish this decision, summary and saved line comments to GitHub"/>
+      </StackPanel>
+     </Border>
+    </Grid>
+   </TabItem>
   </TabControl>
  </Grid>
 </UserControl>

@@ -172,17 +172,6 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
     {
         get;
     }
-    public bool CanPublish => PublicationBlockReason is null;
-    internal string? PublicationBlockReason => IsDemo ? "Demo is offline. Publishing is disabled."
-        : !_draftLoaded ? "Load the local review draft before publishing."
-        : IsBusy ? "A review action is in progress."
-        : HasPendingPublication ? "Check the previous publication on GitHub before sending again."
-        : null;
-    public string ReviewStatus => IsBusy ? Message
-        : PublicationProblem ?? (string.IsNullOrWhiteSpace(Message) ? PublicationBlockReason ?? "" : Message);
-    public bool HasReviewStatus => ReviewStatus.Length > 0;
-    public bool HasPublicationProblem => PublicationProblem is not null;
-    public bool CanPostFile => CanPublish && SelectedReviewFile is not null && _reviewableFiles.Contains(SelectedReviewFile);
     public string FileThreadsLabel => SelectedReviewFile is null ? "Select a file to read its comments." : $"{SelectedReviewFile} · {FileThreads.Count} file threads";
     public string Title => PullRequest.Label + (IsDemo ? " · Demo / offline" : "");
     public string SelectionLabel => _selection is null ? "Select code lines in the diff to attach a comment." : $"{_selection.Path} · {_selection.Side} · lines {_selection.StartLine ?? _selection.Line}–{_selection.Line}";
@@ -224,11 +213,18 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
         IsDemo = isDemo;
         _sections.Add(section);
         section.Review = this;
-        DraftComments.CollectionChanged += (_, _) => { OnPropertyChanged(nameof(ReviewLabel)); foreach (var view in _sections) view.ApplyThreads(); };
+        DraftComments.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(ReviewLabel));
+            OnPropertyChanged(nameof(CanSubmitReview));
+            foreach (var view in _sections)
+                view.ApplyThreads();
+        };
     }
     internal string Key => Context.Identity + "/" + PullRequest.Number;
     partial void OnSummaryChanged(string value)
     {
+        OnPropertyChanged(nameof(CanSubmitReview));
         if (!_loading)
         {
             _draft.Summary = value;
@@ -238,6 +234,8 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
     partial void OnComposerChanged(string value)
     {
         OnPropertyChanged(nameof(HasSuggestionPreview));
+        OnPropertyChanged(nameof(CanPostComment));
+        OnPropertyChanged(nameof(CanReply));
         if (!_loading && !_switchingComposer)
         {
             _draft.ContextComposers[_composerKey.Encoded] = value;
@@ -249,26 +247,13 @@ public partial class ReviewViewModel : ObservableObject, IDisposable
     partial void OnDecisionChanged(string value)
     {
         OnPropertyChanged(nameof(DecisionLabel));
+        OnPropertyChanged(nameof(CanSubmitReview));
         if (!_loading)
         {
             _draft.Decision = value;
             QueueSave();
         }
     }
-    internal void NotifyPublicationState()
-    {
-        OnPropertyChanged(nameof(CanPublish));
-        OnPropertyChanged(nameof(CanPostFile));
-        OnPropertyChanged(nameof(HasPendingPublication));
-        OnPropertyChanged(nameof(HasStaleDraft));
-        OnPropertyChanged(nameof(IsInitialized));
-        OnPropertyChanged(nameof(CanEditDraft));
-        OnPropertyChanged(nameof(CanSuggestCodeChange));
-        OnPropertyChanged(nameof(SelectedCode));
-        OnPropertyChanged(nameof(ReviewStatus));
-        OnPropertyChanged(nameof(HasReviewStatus));
-    }
-    partial void OnIsBusyChanged(bool value) => NotifyPublicationState();
     /// <summary>Restores the account/PR-specific draft, then loads server discussions and current reviewable files.</summary>
     public Task InitializeAsync(IEnumerable<RenderedDiffLine>? selection = null, CancellationToken ct = default) => _reviewDraftController.InitializeAsync(selection, ct);
     public Task FlushAsync() => _reviewDraftController.FlushAsync();

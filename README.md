@@ -1,4 +1,4 @@
-# Stacker v0.6
+# Stacker v0.10.0
 
 A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Release packages cover **macOS Apple Silicon, macOS Intel, and Windows x64**.
 
@@ -14,26 +14,26 @@ dotnet run --project src/Stacker.Desktop -- --demo
 dotnet run --project src/Stacker.Desktop -- /path/to/repository
 ```
 
-Build a package for your computer with `make publish`, or choose a target with `make publish RID=win-x64`. The direct Python command `python3 scripts/package.py osx-arm64` writes `artifacts/Stacker-0.9.0-osx-arm64.tar.gz`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe` with its adjacent files. The packages include .NET. Install Git and the optional GitHub CLI separately. The macOS app bundles ship without Developer ID signing or notarization.
+Build a package for your computer with `make publish`, or choose a target with `make publish RID=win-x64`. The direct Python command `python3 scripts/package.py osx-arm64` writes `artifacts/Stacker-0.10.0-osx-arm64.tar.gz`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe` with its adjacent files. The packages include .NET. Install Git and the optional GitHub CLI separately. The macOS app bundles ship without Developer ID signing or notarization.
 
-Download the packages from [the v0.9.0 release](https://github.com/greedsmole/stacker/releases/tag/v0.9.0). See the [release notes](docs/releases/v0.9.0.md) for changes and package details.
+Download the packages from [the v0.10.0 release](https://github.com/greedsmole/stacker/releases/tag/v0.10.0). See the [release notes](docs/releases/v0.10.0.md) for changes and package details.
 
 ## Navigation and comparisons
 
-Stacks are separate expandable groups. Layers are numbered, not represented by indentation characters. Click the chevron to collapse a group; click its title to restore its last view. Overview always opens the combined changes.
+Stacks are separate expandable groups. Layers are numbered, not represented by indentation characters. Click the chevron to collapse a group; click its title to restore its last view. Entire stack always opens the combined changes.
 
 For `main → A → B → C`:
 
 | Action | View | Comparison |
 | --- | --- | --- |
-| Click Overview | Entire stack | merge-base(main, C) → C |
+| Click Entire stack | Entire stack | merge-base(main, C) → C |
 | Click layer 2 | This layer | merge-base(A, B) → B |
 | Click Through this layer | Through layer 2 | merge-base(main, B) → B |
 | Check layers 1 and 3 | Selected layers | main → A and merge-base(B, C) → C, separately |
 
 At the last layer, Through this layer equals Entire stack. Selected layers keep their own parents. Checkboxes and Cmd/Ctrl-click toggle layers within one stack. Returning to a stack automatically restores its selection, mode, file, filter and scroll position. These are also saved across restarts, together with group expansion. The last available repository reopens on launch.
 
-The repository switcher contains recent folders, Open folder and Open demo. In **Stacks & PRs**, switch between **Pull requests** and **Local stacks**. Select a local stack to see its actions in the header. Stacker opens Discussion alongside a selected PR when the diff has room. In a smaller window, **Discussion** and **Review** open a separate view with **Back to diff**.
+The repository switcher contains recent folders, Open folder and Open demo. **PRs & stacks** opens the navigator, where **Pull requests** and **Local stacks** select the source. The navigator starts closed, and the default Files pane is 220 px wide so code gets the main workspace. Stack maintenance and the class diagram are available under **Stack actions** or **PR tools** in the comparison header. **Discussion** and **Review** open only when selected; resizing never opens them. They dock when there is room, or show **Back to diff** in a smaller window.
 
 **Standalone pull requests:** PRs outside discovered stacks appear under **Pull requests** as direct review entries. Click one to open its server base/head changes, code threads, discussion and review controls. No stack definition is needed.
 
@@ -41,17 +41,17 @@ The repository switcher contains recent folders, Open folder and Open demo. In *
 
 The **Files** pane shows filenames above their parent paths. Switch between **List** and **Folders** to browse the same comparison, or filter by path while leaving the current diff open. In comparisons with several layers, files are grouped by layer. **Browse files…** in History uses the same controls. The outlined Git status letters show added (`A`), modified (`M`), deleted (`D`), renamed (`R`), copied (`C`) and type-changed (`T`) files.
 
-**More → Command log** shows Git and GitHub CLI calls in the current session with duration, exit status and available error details. Use **GitHub only** to see `gh` calls. Review text goes through stdin and credentials are redacted from diagnostic output. **Saved operations** opens the workspace journal of write attempts, including GitHub publications.
+**More → Command log** shows Git and GitHub CLI calls in the current session with duration, exit status and available error details. Use **GitHub only** to see `gh` calls. Review text goes through stdin and credentials are redacted from diagnostic output. **More → Operations and recovery** opens the workspace journal of write attempts, including GitHub publications.
 
 **Refresh and background updates:** one Refresh checks local refs and GitHub. GitHub PR metadata and the selected PR's discussion are also read every 60 seconds while the window is active. Losing focus pauses the timer; regaining focus only restarts the delay. Background reads never download Git objects. Comments update in place; changed code or stack structure waits behind **New changes available → Update changes**. Temporary failures back off to 2/4/8 minutes, authentication failures suspend the loop, and previous data remains visible. Settings can disable background refresh.
 
-The diff displays code, line numbers and compact hunk ranges. Git headers (`diff --git`, `index`, `---/+++`) are omitted; rename/mode/binary/submodule information is shown as file metadata. Missing final newlines remain visible. Text selection copies source text, and Cmd/Ctrl+C on selected diff rows omits markers and line numbers. **Copy patch** above the diff copies the original patch.
+The diff displays code, line numbers and compact hunk ranges. Git headers (`diff --git`, `index`, `---/+++`) are omitted; rename/mode/binary/submodule information is shown as file metadata. Missing final newlines remain visible. Text selection copies source text, and Cmd/Ctrl+C on selected diff rows omits markers and line numbers. **File actions → Copy patch** copies the original patch. Inline conversations and saved draft bodies start collapsed; expand their disclosure to read them.
 
-Click an unchanged-lines row to reveal up to 20 lines beside a change. Between hunks, the up arrow reveals lines above the next hunk. Click **Show full file** in the diff header to reveal every unchanged line. The button then reads **Collapse unchanged lines**.
+Click an unchanged-lines row to reveal up to 20 lines beside a change. Between hunks, the up arrow reveals lines above the next hunk. Choose **File actions → Show full file** to reveal every unchanged line. The menu item then reads **Collapse unchanged lines**.
 
-Use **Wrap code** above a diff to fit long lines to the pane; the preference is saved. For a multi-line comment, Shift-click adjacent code rows and choose **Comment on selected lines**. The editor shows the line range before you add it to a review or post it. Mixed added/removed sides are rejected with an explanation.
+Use **File actions → Wrap code** to fit long lines to the pane; the preference is saved. For a multi-line comment, Shift-click adjacent code rows and click the contextual **+** beside the selection. The editor shows the line range before you add it to a review or post it. Mixed added/removed sides are rejected with an explanation.
 
-Use **Stacks & PRs** and **Files** to show or hide either sidebar. **Focus** temporarily hides both sidebars and the review inspector. Use **Exit focus** to restore the layout. **Settings → Diff line height** controls code spacing, and **Reduce motion** turns off workspace transitions. In a single-layer or PR diff, **Mark reviewed** or the checkbox beside a file records a personal checkpoint in **History**. The Files pane shows progress and offers **Unreviewed** when checkpoints are available.
+Use **PRs & stacks** and **Files** to show or hide either sidebar. **Focus** temporarily hides both sidebars and the review inspector. Use **Exit focus** to restore the layout. **Settings → Diff line height** controls code spacing, and **Reduce motion** turns off workspace transitions. In a single-layer or PR diff, **Mark reviewed** or the checkbox beside a file records a personal checkpoint in **History**. The Files pane shows progress and offers **Unreviewed** when checkpoints are available. Escape closes an open review panel and returns focus to its opening control.
 
 ## Reproducible demo
 
@@ -65,11 +65,11 @@ Choose **Open demo**. Every invocation creates a new repository in Stacker's app
 
 The demo includes `demo-manifest.json` assertions, `.stackpr.yml`, offline PR metadata and sample discussion/current/outdated threads. The UI labels it **Demo / offline**. Publication is disabled, even though local draft editing works.
 
-Suggested walkthrough: Authorization → Overview → layer 2 → Through this layer → check layers 1 and 3 → Payments → Authorization. The previous selection returns automatically. Select Session API, click Review to open its PR snapshot, then use the + beside a line to add a pending review comment. Explore Discussion and Comment on file; publishing remains disabled. New demo repositories isolate their drafts from older demos.
+Suggested walkthrough: Authorization → Entire stack → layer 2 → Through this layer → check layers 1 and 3 → Payments → Authorization. The previous selection returns automatically. Select Session API, click Review to open its PR snapshot, then use the + beside a line to add a pending review comment. Explore Discussion and File actions → Comment on file; publishing remains disabled. New demo repositories isolate their drafts from older demos.
 
 ## GitHub connection and discovery
 
-Stacker uses the **fetch URL of origin**, not gh's default repository or some other logged-in host. HTTPS, SSH URLs and SCP-style remotes are supported. It verifies both the active account on that host and access to that repository. For an SSH alias, configure `host/owner/repo` in **GitHub → Configure**. Set executable paths for Git/gh in Settings if a Finder launch cannot find Homebrew tools.
+Stacker uses the **fetch URL of origin**, not gh's default repository or some other logged-in host. HTTPS, SSH URLs and SCP-style remotes are supported. It verifies both the active account on that host and access to that repository. For an SSH alias, configure `host/owner/repo` in **More → GitHub connection…**. Set executable paths for Git/gh in Settings if a Finder launch cannot find Homebrew tools.
 
 Authenticate in a terminal with `gh auth login --hostname HOST`; switch accounts with `gh auth switch --hostname HOST`. Stacker does not change your global gh account or run `gh auth setup-git`. Tokens remain owned by gh.
 
@@ -77,7 +77,7 @@ If an invalid `GH_TOKEN` / `GITHUB_TOKEN` (or Enterprise equivalent) overrides a
 
 Open PRs (including drafts) are fetched with pagination. A stack edge exists only when the child's base repository/branch matches another PR's head repository/branch. Names and commit history are not used as guesses. Fork repository identity matters. Ambiguous parents and cycles produce warnings.
 
-**Stack boundaries** are exact branch names configured per repository. Defaults include the repository's default branch and existing main/master/develop/test branches. A PR into a boundary can start a stack; a link cannot pass through that boundary. Single PRs appear under Other pull requests. Branching paths show a shared-foundation label.
+**Stack boundaries** are exact branch names configured per repository. Defaults include the repository's default branch and existing main/master/develop/test branches. A PR into a boundary can start a stack; a link cannot pass through that boundary. Single PRs appear under **Standalone**. Branching paths show a shared-foundation label.
 
 Discovery does not rewrite `.stackpr.yml`. Save as local stack is an explicit action and requires matching local refs. Local stack definitions keep v1 YAML compatibility.
 
@@ -89,19 +89,19 @@ Existing objects are reused offline. Missing PR base/head commits are fetched in
 
 Downloads use namespaced `refs/stacker/pr/...` references and verify the exact PR snapshot after fetching. Historical commits are retained under `refs/stacker/history/...` so ordinary Git maintenance preserves observed versions. User branches, HEAD, staged/unstaged files, index, Git configuration and `FETCH_HEAD` are preserved during viewing. A changing server snapshot or failed download retains the previous view and reports the original Git error. Background metadata refresh does not fetch objects.
 
-**GitHub settings → Clear PR retention references** releases only Stacker’s PR references. **Remove history pins** releases history references after active readers close. Git manages object storage and collection; these actions do not delete the repository or run forced garbage collection. Settings show the selected repository’s Git directory and object size. Memory caches remain bounded.
+**More → GitHub connection… → Clear PR retention references** releases only Stacker’s PR references. **Remove history pins** releases history references after active readers close. Git manages object storage and collection; these actions do not delete the repository or run forced garbage collection. Settings show the selected repository’s Git directory and object size. Memory caches remain bounded.
 
-Earlier application-owned object directories are imported into each opened repository once and retained as migration sources. Drafts, graph/checkpoint metadata, navigation and diagnostics remain in Stacker’s application-data profile. Explicit **Restack**, **Push**, **Publish**, **Add layer**, **Commit**, **Stash and restack**, **Switch** and conflict actions continue to operate on the selected local repository.
+Earlier application-owned object directories are imported into each opened repository once and retained as migration sources. Drafts, graph/checkpoint metadata, navigation and diagnostics remain in Stacker’s application-data profile. Explicit **Restack**, **Push**, **Publish**, **Add layer**, **Commit**, **Stash and restack**, **Switch branch** and conflict actions continue to operate on the selected local repository.
 
 ## Review workflow
 
-Select a GitHub PR layer: its changes and discussion load automatically. The header offers **Discussion** and **Review (N)** in the main window. On a local linked layer, Review opens the confirmed PR snapshot. Aggregate comparisons require choosing a PR layer before making inline comments.
+Select a GitHub PR layer to load its changes and discussion data. Open **Discussion** or **Review (N)** from the header when needed. The review panel separates **Discussion**, **File comments**, **All threads**, and **Submit**. On a local linked layer, Review opens the confirmed PR snapshot. Aggregate comparisons require choosing a PR layer before making inline comments.
 
 - **Line / range:** click the + beside a line, or Shift-click line numbers to extend a range on one side. An inline composer offers **Add to review** (local draft) and **Post now** (immediate publication).
-- **File:** **Comment on file** opens a composer for the selected file, including binary files. Publish explicitly with Post comment.
+- **File:** **File actions → Comment on file** opens a composer for the selected file, including binary files. Publish explicitly with Post comment.
 - **PR:** **Discussion** displays general comments and review decisions. Choose **Comment on PR…** to start writing.
-- **Threads:** current threads appear with the code; replies and resolve/reopen actions are contextual. Resolved threads collapse. Outdated threads remain in the inspector and are never attached to an arbitrary current line.
-- **Submit a review** by using **Add to review** on each line, then **Review (N) → Submit review** to send the comments together. Each draft shows the file and line range. Request changes requires an explanation.
+- **Threads:** current threads appear as collapsed disclosures beside the code; expand one to read, reply, or resolve/reopen it. Outdated threads remain in the inspector and are never attached to an arbitrary current line.
+- **Submit a review** by using **Add to review** on each line, then **Review (N) → Submit → Submit review** to send the comments together. Each draft shows the file and line range. Request changes requires an explanation. Posting controls stay disabled until their required text and destination are ready.
 
 After **Post now** succeeds, the editor is ready for the next comment while the discussion refreshes. Publication errors appear in the line editor and review panel, with a **GitHub log** shortcut. A rejected publication keeps the draft available for retry.
 
@@ -119,7 +119,7 @@ Not included: editing/deleting published comments, emoji reactions, GitLab, merg
 
 ## Starting and extending a stack
 
-**Add layer…** in the selected local stack's header creates the next branch: give it a name and a start point (the current checkout, the stack's base, or any layer). Stacker creates and checks the branch out, then appends it to the stack definition — your commits, and committing the updated `.stackpr.yml`, stay with you. A layer that has no commits yet is still valid: it follows its parent, so a restack carries it along.
+**Stack actions → Add layer…** creates the next branch in the selected local stack: give it a name and a start point (the current checkout, the stack's base, or any layer). Stacker creates and checks the branch out, then appends it to the stack definition — your commits, and committing the updated `.stackpr.yml`, stay with you. A layer that has no commits yet is still valid: it follows its parent, so a restack carries it along.
 
 Starting a layer is refused when the working tree is dirty, when a rebase, merge or cherry-pick is in progress, when the name already exists, or when the name is not a valid Git branch name. If the branch you start from does not carry `.stackpr.yml`, Stacker writes the definition onto the new branch.
 
@@ -129,18 +129,18 @@ Stacker runs the local Git a stacked workflow needs, and never hides what it is 
 
 **Conflicts are yours to resolve.** When a layer does not apply cleanly the restack stops there: the rebase stays in progress, the layers already rewritten stay rewritten, and the conflicting files are listed in the sync window and in a banner in the main window. Then:
 
-- **Resolve in editor** opens the conflicted files in the editor you chose — the command in **Settings → Editor command**, otherwise `git config core.editor`, otherwise `GIT_EDITOR`/`VISUAL`/`EDITOR`, otherwise the platform default. Add a wait flag (`code --wait`) if your editor returns immediately.
+- **Resolve in editor** opens the conflicted files in the editor you chose — the command in **Settings → Editor for conflicts and commit messages**, otherwise `git config core.editor`, otherwise `GIT_EDITOR`/`VISUAL`/`EDITOR`, otherwise the platform default. Add a wait flag (`code --wait`) if your editor returns immediately.
 - **Stage resolved files** stages exactly the files that were in conflict.
 - **Continue** resumes the rebase with your editor for the commit message; **Skip commit** drops the conflicting commit instead. When the layer is finished, Stacker continues the remaining layers from the recorded plan. If an external branch movement makes that plan unsafe, it stops for inspection.
 - **Abort and restore** aborts the rebase and puts every branch the interrupted run moved back where it was, including the branch you started on.
 
 The banner survives closing the app, and it also notices a rebase, merge, cherry-pick or revert that was started in a terminal.
 
-**Everyday local commands.** **Commit…** in the stack header stages the working tree (optionally including new files) and commits it with your message — your hooks and signing configuration run exactly as in a terminal. **Stash and restack** takes your uncommitted *tracked* changes out of the way, restacks, and keeps a saved stash entry. Choose it in the sync window and press **Restore selected stash**; multiple saved entries survive later restacks and restarts. A conflicting restore simply shows up as conflicts to resolve. Untracked files are not stashed automatically; Git can still refuse a checkout or rebase that would overwrite them. The sync window can also check out another branch (**Switch branch**), and **the working tree** line always shows what the repository currently holds.
+**Everyday local commands.** **Stack actions → Commit…** stages the working tree (optionally including new files) and commits it with your message — your hooks and signing configuration run exactly as in a terminal. **Stash and restack** takes your uncommitted *tracked* changes out of the way, restacks, and keeps a saved stash entry. Choose it in the sync window and press **Restore selected stash**; multiple saved entries survive later restacks and restarts. A conflicting restore simply shows up as conflicts to resolve. Untracked files are not stashed automatically; Git can still refuse a checkout or rebase that would overwrite them. The sync window can also check out another branch (**Switch branch**), and **the working tree** line always shows what the repository currently holds.
 
 ## Restacking and publishing
 
-Local stacks can be rewritten in place. **Preview restack…** appears in the comparison header whenever a local stack is selected. It opens a preview first: every layer, its parent, the commits it will replay, and any blocker. Nothing is written until you press **Restack (local)**, and the preview re-reads the repository so it cannot describe a stale snapshot.
+Local stacks can be rewritten in place. Choose **Stack actions → Preview restack…** whenever a local stack is selected. It opens a preview first: every layer, its parent, the commits it will replay, and any blocker. Nothing is written until you press **Restack (local)**, and the preview re-reads the repository so it cannot describe a stale snapshot.
 
 - **What moves:** each layer is replayed onto its parent with `git rebase --onto`, starting at the lowest diverged layer and cascading upward. Only the branches of that stack move; other refs, the index and unrelated files are left alone.
 - **Before anything runs:** the tracked working tree must be clean (untracked files are ignored, and *Stash and restack* clears the rest), no rebase, merge or cherry-pick may be in progress, no stack branch may be checked out in another worktree, and a layer with merge commits is refused until you tick **Preserve merge commits** (`--rebase-merges`). Every rewritten branch is backed up under `refs/stacker/backup/<timestamp-and-operation-id>/<branch>` first; the ten most recent runs are kept.
@@ -195,13 +195,13 @@ See VERIFICATION.md for the actual local verification record and THIRD_PARTY_NOT
 
 ## Review history and stack analysis
 
-Choose **History** beside the comparison toolbar after selecting a stack or PR. History opens the current diff in the main window and pins the selected path in the opened repository’s Git object database. The file picker identifies the section when the comparison contains multiple patches. Back/Forward restores the selected version, mode, section and file. Historical patches use the same diff viewer as current code, with commenting disabled. Open a layer to preserve its version automatically; metadata refresh records versions without downloading objects. History begins when Stacker observes a version—it cannot reconstruct a force-pushed version that was never downloaded.
+Choose **History** in the application toolbar after selecting a stack or PR. History opens the current diff in the main window and pins the selected path in the opened repository’s Git object database. The file picker identifies the section when the comparison contains multiple patches. Back/Forward restores the selected version, mode, section and file. Historical patches use the same diff viewer as current code, with commenting disabled. Open a layer to preserve its version automatically; metadata refresh records versions without downloading objects. History begins when Stacker observes a version—it cannot reconstruct a force-pushed version that was never downloaded.
 
-Select a layer and **Load layer**, then select a file. **Mark reviewed** records an explicit, personal checkpoint; merely reading a file does not mark it. **Since my review** and **Compare versions** show what changed. When the base moved, Stacker replays the old patch onto the new merge-base and compares that expected tree with the current head. Conflicting replay, missing objects or unsupported Git capabilities produce an unavailable result, never a false “unchanged” result. This is textual analysis, not proof of semantic equivalence.
+Select a layer and **Load layer**, then select a file. **Mark file reviewed** records an explicit, personal checkpoint; merely reading a file does not mark it. **Since my review** and **Compare** show what changed. When the base moved, Stacker replays the old patch onto the new merge-base and compares that expected tree with the current head. Conflicting replay, missing objects or unsupported Git capabilities produce an unavailable result, never a false “unchanged” result. This is textual analysis, not proof of semantic equivalence.
 
-In **Tools**, **Needs attention** lists unreviewed files, changed code and changed base context across the captured path. **Check stack** distinguishes stale parents, shared files and actual trial-merge conflicts. The checks use fixed versions and never run project code or change the user's branches, index or files. **File through stack** shows successive patches, renames and original PR threads. **Find line origin** attributes a final-file line to its latest textual addition or rewrite. An ancestry gap stops attribution.
+In **History tools**, **Needs attention** lists unreviewed files, changed code and changed base context across the captured path. **Check stack** distinguishes stale parents, shared files and actual trial-merge conflicts. The checks use fixed versions and never run project code or change the user's branches, index or files. **File through stack** shows successive patches, renames and original PR threads. **Find line origin** attributes a final-file line to its latest textual addition or rewrite. An ancestry gap stops attribution.
 
-The **Graph and maintenance** section in **Tools** shows earlier dependency snapshots. Explicit parent links override discovered links for that child; cycles are refused. A local history identity can be explicitly rebound before adding the renamed ref to a stack definition. Existing independent histories are not silently merged. Closed/merged PR nodes remain in history; failed state reads are shown as unknown.
+The **Graph and maintenance** section in **History tools** shows earlier dependency snapshots. Explicit parent links override discovered links for that child; cycles are refused. A local history identity can be explicitly rebound before adding the renamed ref to a stack definition. Existing independent histories are not silently merged. Closed/merged PR nodes remain in history; failed state reads are shown as unknown.
 
 In the Review panel, **Reattach…** on an old draft comment proposes a unique exact text/context match. Inspect the old and new locations, then **Confirm new anchor**. Published comments are never moved. Ambiguous matches require manual selection.
 
@@ -213,8 +213,8 @@ The offline demo seeds a previously reviewed Session API version. Open Authoriza
 
 History belongs to a repository identity shared by its worktrees; navigation belongs to the individual worktree.
 Matching local branches and PRs share review checkpoints after the active GitHub account is verified. Other
-accounts retain separate remote histories and drafts. To reconnect a moved repository, use **Settings and help
-→ Locate moved repository…**, select its previous location, and choose the new folder.
+accounts retain separate remote histories and drafts. To reconnect a moved repository, use
+**More → Locate moved repository…**, select its previous location, and choose the new folder.
 
 **Export workspace…** saves a ZIP containing SQLite history/drafts, navigation, settings and journals, plus a Git bundle of the active repository’s pinned history. Other repositories’ code and credentials are excluded. **Restore workspace copy…** verifies the
 checksums and database into a separate empty folder. Bundled history is imported when that profile reconnects to its repository. Older backups containing private history repositories remain readable. **Open restored workspace** opens that profile; the original

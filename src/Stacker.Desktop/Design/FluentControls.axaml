@@ -1,0 +1,81 @@
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop">
+
+  <Style Selector="Window"><Setter Property="FontFamily" Value="Inter"/><Setter Property="FontSize" Value="{StaticResource StackerBodyFontSize}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/><Setter Property="Background" Value="{DynamicResource CanvasBrush}"/></Style>
+  <Style Selector="Button, ToggleButton"><Setter Property="CornerRadius" Value="{StaticResource ControlCornerRadius}"/><Setter Property="Padding" Value="10,5"/><Setter Property="MinHeight" Value="30"/><Setter Property="FontSize" Value="{StaticResource StackerBodyFontSize}"/><Setter Property="FontWeight" Value="Normal"/><Setter Property="Background" Value="{DynamicResource HoverBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/></Style>
+  <Style Selector="Button.quiet, ToggleButton.quiet"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/></Style>
+  <Style Selector="Button.compact, ToggleButton.compact"><Setter Property="MinHeight" Value="28"/><Setter Property="Padding" Value="7,4"/></Style>
+  <Style Selector="Button.outline">
+   <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+   <Setter Property="BorderThickness" Value="1"/>
+   <Setter Property="Background" Value="Transparent"/>
+  </Style>
+  <Style Selector="Button.quiet:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.quiet:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.outline:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource HoverBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/></Style>
+  <Style Selector="Button.quiet:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.quiet:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.outline:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource PressedBrush}"/></Style>
+  <Style Selector="ToggleButton.quiet:checked"><Setter Property="Foreground" Value="{DynamicResource SelectionTextBrush}"/><Setter Property="Background" Value="{DynamicResource SelectionBrush}"/></Style>
+  <Style Selector="ToggleButton.quiet:checked /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Foreground" Value="{DynamicResource SelectionTextBrush}"/><Setter Property="Background" Value="{DynamicResource SelectionBrush}"/><Setter Property="BorderBrush" Value="Transparent"/></Style>
+  <Style Selector="TextBlock.muted, SelectableTextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/></Style>
+  <Style Selector="TextBlock.label"><Setter Property="FontSize" Value="{StaticResource StackerCaptionFontSize}"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/></Style>
+  <Style Selector="TextBlock.pane-title"><Setter Property="FontSize" Value="{StaticResource StackerBodyFontSize}"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
+  <Style Selector="TextBlock.view-title"><Setter Property="FontSize" Value="{StaticResource StackerTitleFontSize}"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="LetterSpacing" Value="-0.4"/></Style>
+  <Style Selector="TextBox, ComboBox, NumericUpDown"><Setter Property="MinHeight" Value="32"/><Setter Property="CornerRadius" Value="4"/><Setter Property="Background" Value="{DynamicResource InputBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/></Style>
+  <Style Selector="Border.segmented"><Setter Property="Padding" Value="3"/><Setter Property="CornerRadius" Value="6"/><Setter Property="Background" Value="{DynamicResource InputBrush}"/></Style>
+  <Style Selector="ToggleButton.segment:checked /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource HoverBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/></Style>
+  <Style Selector="Button.primary"><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderThickness" Value="0"/></Style>
+  <Style Selector="Border.notice"><Setter Property="Background" Value="{DynamicResource NoticeBrush}"/><Setter Property="CornerRadius" Value="4"/></Style>
+  <Style Selector="Border.selected"><Setter Property="Background" Value="{DynamicResource SelectionBrush}"/></Style>
+  <Style Selector="Border.navigator-group, Border.navigator-layer">
+   <Setter Property="CornerRadius" Value="4"/>
+   <Setter Property="BorderBrush" Value="Transparent"/>
+   <Setter Property="BorderThickness" Value="2,0,0,0"/>
+  </Style>
+  <Style Selector="Border.navigator-group.group-selected, Border.navigator-layer.checked-layer"><Setter Property="Background" Value="{DynamicResource SelectionBrush}"/></Style>
+  <Style Selector="Border.navigator-layer.current-layer"><Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/></Style>
+  <Style Selector="PathIcon.stack-chevron.expanded"><Setter Property="RenderTransform" Value="rotate(90deg)"/></Style>
+  <Style Selector="GridSplitter.workspace-splitter">
+   <Setter Property="Width" Value="4"/>
+   <Setter Property="Background" Value="{DynamicResource DividerBrush}"/>
+   <Setter Property="Template">
+    <ControlTemplate>
+     <Border Background="Transparent">
+      <Border Width="1" Background="{TemplateBinding Background}" HorizontalAlignment="Center"/>
+     </Border>
+    </ControlTemplate>
+   </Setter>
+  </Style>
+  <Style Selector="GridSplitter.workspace-splitter:pointerover"><Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/></Style>
+  <Style Selector="ListBoxItem"><Setter Property="Padding" Value="8,7"/><Setter Property="CornerRadius" Value="2"/></Style>
+  <Style Selector="ListBox.file-list ListBoxItem">
+   <Setter Property="MinHeight" Value="26"/>
+   <Setter Property="Padding" Value="6,2"/>
+   <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+   <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}"/>
+  </Style>
+  <Style Selector="ListBox.file-list ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource SelectionBrush}"/><Setter Property="Foreground" Value="{DynamicResource SelectionTextBrush}"/></Style>
+  <Style Selector="TreeView.file-tree TreeViewItem">
+   <Setter Property="MinHeight" Value="26"/>
+   <Setter Property="Padding" Value="2,1,6,1"/>
+   <Setter Property="CornerRadius" Value="2"/>
+   <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+   <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}"/>
+  </Style>
+  <Style Selector="TreeView.file-tree TreeViewItem /template/ Panel#PART_ExpandCollapseChevronContainer"><Setter Property="Margin" Value="3,0,5,0"/></Style>
+  <Style Selector="TreeView.file-tree TreeViewItem:selected /template/ Border#PART_LayoutRoot"><Setter Property="Background" Value="{DynamicResource SelectionBrush}"/></Style>
+  <Style Selector="TreeView.file-tree TreeViewItem:selected /template/ ContentPresenter#PART_HeaderPresenter"><Setter Property="Foreground" Value="{DynamicResource SelectionTextBrush}"/></Style>
+  <Style Selector="local|FileChangeBadge"><Setter Property="BorderBrush" Value="{DynamicResource FileModifiedBrush}"/></Style>
+  <Style Selector="local|FileChangeBadge.added"><Setter Property="BorderBrush" Value="{DynamicResource FileAddedBrush}"/></Style>
+  <Style Selector="local|FileChangeBadge.deleted"><Setter Property="BorderBrush" Value="{DynamicResource FileDeletedBrush}"/></Style>
+  <Style Selector="local|FileChangeBadge.relocated"><Setter Property="BorderBrush" Value="{DynamicResource FileRelocatedBrush}"/></Style>
+  <Style Selector="local|FileChangeBadge.type-changed"><Setter Property="BorderBrush" Value="{DynamicResource WarningBrush}"/></Style>
+  <Style Selector="TabItem"><Setter Property="FontSize" Value="{StaticResource StackerCaptionFontSize}"/><Setter Property="Padding" Value="8,8"/></Style>
+  <Style Selector="TextBlock.section-title"><Setter Property="FontSize" Value="{StaticResource StackerCaptionFontSize}"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/><Setter Property="Foreground" Value="White"/></Style>
+  <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource PrimaryPressedBrush}"/><Setter Property="Foreground" Value="White"/></Style>
+
+ <Style Selector="Button, ToggleButton">
+  <Setter Property="Transitions" Value="{x:Null}"/>
+  <Setter Property="RenderTransform" Value="none"/>
+ </Style>
+ <Style Selector="Button:pressed, ToggleButton:pressed"><Setter Property="RenderTransform" Value="none"/></Style>
+ <Style Selector="MenuItem"><Setter Property="FontSize" Value="{StaticResource StackerBodyFontSize}"/></Style>
+ <Style Selector="TextBlock.field-help"><Setter Property="FontSize" Value="{StaticResource StackerCaptionFontSize}"/><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/><Setter Property="TextWrapping" Value="Wrap"/></Style>
+</Styles>

@@ -12,7 +12,11 @@ namespace Stacker.Desktop;
 
 public partial class DiffSectionView : UserControl
 {
-    private const double MinimumInlineFileHeaderWidth = 700;
+    public static readonly DirectProperty<DiffSectionView, double> InlineReviewWidthProperty =
+        AvaloniaProperty.RegisterDirect<DiffSectionView, double>(nameof(InlineReviewWidth), view => view.InlineReviewWidth);
+
+    private double _inlineReviewWidth = 650;
+    public double InlineReviewWidth => _inlineReviewWidth;
     private ScrollViewer? _scroll;
     private bool _restoring;
     private DiffSectionViewModel? _section;
@@ -27,12 +31,25 @@ public partial class DiffSectionView : UserControl
         DataContextChanged += (_, _) => { if (IsLoaded) AttachSection(DataContext as DiffSectionViewModel); };
         Unloaded += (_, _) => AttachSection(null);
     }
-    private void FileHeaderSizeChanged(object? sender, SizeChangedEventArgs e)
+    private void FileHeaderSizeChanged(object? sender, SizeChangedEventArgs e) =>
+        SetAndRaise(InlineReviewWidthProperty, ref _inlineReviewWidth, Math.Clamp(e.NewSize.Width - 64, 260, 650));
+    private void FileActionsOpening(object? sender, EventArgs e)
     {
-        var inline = e.NewSize.Width >= MinimumInlineFileHeaderWidth;
-        Grid.SetRow(FileHeaderActions, inline ? 0 : 1);
-        Grid.SetColumn(FileHeaderActions, inline ? 1 : 0);
-        Grid.SetColumnSpan(FileHeaderActions, inline ? 1 : 2);
+        var files = ChangesWindow?.FindControl<FileNavigatorView>("SharedFiles");
+        FileNavigationSeparator.IsVisible = PreviousFileMenuItem.IsVisible = NextFileMenuItem.IsVisible = files?.HasMultipleFiles == true;
+        PreviousFileMenuItem.IsEnabled = files?.CanGoPrevious == true;
+        NextFileMenuItem.IsEnabled = files?.CanGoNext == true;
+    }
+    private MainWindow? ChangesWindow => TopLevel.GetTopLevel(this) is MainWindow { DataContext: MainViewModel main } window
+        && DataContext is DiffSectionViewModel section && main.Sections.Contains(section) && !main.IsHistoryOpen ? window : null;
+    private void PreviousFileMenuClick(object? sender, RoutedEventArgs e) =>
+        ChangesWindow?.NavigateFile(-1);
+    private void NextFileMenuClick(object? sender, RoutedEventArgs e) =>
+        ChangesWindow?.NavigateFile(1);
+    private void DraftsDisclosureChanged(object? sender, EventArgs e)
+    {
+        if (sender is ToggleButton disclosure)
+            disclosure.IsChecked = false;
     }
     private void AttachSection(DiffSectionViewModel? section)
     {

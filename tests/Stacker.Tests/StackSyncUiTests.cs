@@ -316,6 +316,18 @@ public sealed partial class StackSyncUiTests
             restack.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await WaitUntilAsync(() => window.IsEnabled && !restack.IsEnabled && undo.IsVisible);
             Assert.All(window.FindControl<ListBox>("StepList")!.Items.Cast<RestackStep>(), step => Assert.False(step.NeedsRebase));
+            if (Environment.GetEnvironmentVariable("STACKER_UI_CAPTURE_DIR") is { } directory)
+            {
+                window.Width = window.MinWidth;
+                window.Height = window.MinHeight;
+                await WaitUntilAsync(() => window.ClientSize == new Avalonia.Size(window.MinWidth, window.MinHeight));
+                undo.BringIntoView();
+                window.UpdateLayout();
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
+                using var frame = Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window);
+                frame?.Save(Path.Combine(directory, "sync-undo-ready.png"));
+            }
             undo.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await WaitUntilAsync(() => window.IsEnabled && restack.IsEnabled && !undo.IsVisible);
             Assert.All(window.FindControl<ListBox>("StepList")!.Items.Cast<RestackStep>(), step => Assert.True(step.NeedsRebase));

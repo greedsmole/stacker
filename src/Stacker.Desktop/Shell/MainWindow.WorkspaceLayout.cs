@@ -17,16 +17,14 @@ public partial class MainWindow
     private const double ReviewWidth = 360;
     private bool _focusMode;
     private bool _reviewCompact;
-    private bool _reviewClosing;
     private bool _animateReviewOpen;
     private bool _layingOutWorkspace;
     private double _fittedStacksWidth;
     private double _fittedFilesWidth;
     private ReviewViewModel? _previousReview;
-    private ReviewViewModel? _dismissedReview;
     private Control? _pressedMotionButton;
+    private Control? _reviewTrigger;
     private CancellationTokenSource? _reviewMotion;
-    private int _reviewIntent;
 
     private void InitializeWorkspaceLayout()
     {
@@ -49,6 +47,7 @@ public partial class MainWindow
         });
         AddHandler(KeyDownEvent, (_, _) => _pressedMotionButton = null, RoutingStrategies.Tunnel);
         AddHandler(PointerPressedEvent, MotionButtonPressed, RoutingStrategies.Tunnel);
+        AddHandler(KeyDownEvent, ReviewEscape, RoutingStrategies.Bubble);
         ApplyWorkspaceLayout();
         SetStackTab(Vm.IsLocalSelected);
     }
@@ -59,6 +58,7 @@ public partial class MainWindow
         {
             case nameof(MainViewModel.IsLocalSelected) when Vm.SelectedStack is not null:
                 SetStackTab(Vm.IsLocalSelected);
+                ApplyWorkspaceLayout();
                 break;
             case nameof(MainViewModel.ActiveReview):
             case nameof(MainViewModel.HasPrDiscussion):
@@ -100,14 +100,12 @@ public partial class MainWindow
             var review = Vm.ActiveReview;
             if (!ReferenceEquals(review, _previousReview))
             {
-                _dismissedReview = null;
                 _previousReview = review;
                 StopReviewMotion();
             }
             var enoughRoom = width - stacksWidth - filesWidth - separators - ReviewWidth >= DiffReadingWidth;
             var canShowReview = changes && !_focusMode && Vm.CanPresentActiveReview;
-            var showReview = canShowReview && (Vm.IsReviewOpen || _reviewClosing ||
-                (enoughRoom && Vm.HasReviewablePrDiff && !ReferenceEquals(review, _dismissedReview)));
+            var showReview = canShowReview && Vm.IsReviewOpen;
             var compact = showReview && !enoughRoom;
             var entering = showReview && !ReviewHost.IsVisible;
             if (!showReview || (ReviewHost.IsVisible && compact != _reviewCompact))
@@ -125,10 +123,13 @@ public partial class MainWindow
             Grid.SetColumn(ReviewHost, compact ? 2 : 3);
             ReviewHost.Width = compact ? double.NaN : ReviewWidth;
             ReviewHost.IsVisible = showReview;
+            ReviewButton.Classes.Set("primary", !showReview);
+            ReviewButton.Classes.Set("outline", showReview);
             DiffWorkspace.IsVisible = !compact && !Vm.IsHistoryOpen;
             CloseReviewButton.Content = compact ? "Back to diff" : "Close review";
 
             ChangesTab.IsChecked = changes;
+            ComparisonActionsButton.Content = Vm.IsLocalSelected ? "Stack actions" : "PR tools";
             PaneControls.IsVisible = Vm.IsChangesOpen && !Vm.IsOperationsOpen;
             StacksToggle.IsChecked = showStacks;
             FilesToggle.IsChecked = showFiles;
@@ -142,7 +143,7 @@ public partial class MainWindow
             ToolTip.SetTip(FilesToggle, showFiles ? "Hide changed files" : "Show changed files");
 
             if (entering && animateEntrance && !Vm.Settings.ReduceMotion)
-                AsyncHandler.Run(() => AnimateReviewAsync(entering: true), message => AsyncHandler.Report(this, message));
+                AsyncHandler.Run(AnimateReviewEntranceAsync, message => AsyncHandler.Report(this, message));
         }
         finally { _layingOutWorkspace = false; }
     }
@@ -220,6 +221,7 @@ public partial class MainWindow
 
     private async Task OpenReviewFromHeaderAsync(Func<Task> open, Control? trigger, bool animate)
     {
+        _reviewTrigger = trigger;
         StopReviewMotion();
         _focusMode = false;
         _animateReviewOpen = animate;
@@ -237,39 +239,46 @@ public partial class MainWindow
 
     private void CloseReviewClick(object? sender, RoutedEventArgs e)
     {
-        var animate = TakePointerPress(sender) && !Vm.Settings.ReduceMotion;
-        AsyncHandler.Run(async () =>
-        {
-            var intent = ++_reviewIntent;
-            _dismissedReview = Vm.ActiveReview;
-            if (animate && ReviewHost.IsVisible && !_reviewClosing)
-            {
-                _reviewClosing = true;
-                ReviewHost.IsHitTestVisible = false;
-                Vm.CloseReviewCommand.Execute(null);
-                await AnimateReviewAsync(entering: false);
-                if (intent != _reviewIntent)
-                    return;
-            }
-            StopReviewMotion();
-            Vm.CloseReviewCommand.Execute(null);
-            ApplyWorkspaceLayout();
-            if (DiscussionButton.IsEffectivelyVisible)
-                DiscussionButton.Focus();
-            else
-                FindButton.Focus();
-        }, message => AsyncHandler.Report(this, message));
+        _pressedMotionButton = null;
+        StopReviewMotion();
+        Vm.CloseReviewCommand.Execute(null);
+        ApplyWorkspaceLayout();
+        if (_reviewTrigger is { IsEffectivelyVisible: true } trigger)
+            trigger.Focus();
+        else if (ReviewButton.IsEffectivelyVisible)
+            ReviewButton.Focus();
+        else
+            FindButton.Focus();
+        _reviewTrigger = null;
     }
 
-    private async Task AnimateReviewAsync(bool entering)
+    private void ReviewEscape(object? sender, KeyEventArgs e)
+    {
+        if (!e.Handled && e.Key == Key.Escape && e.KeyModifiers == KeyModifiers.None && ReviewHost.IsVisible)
+        {
+            e.Handled = true;
+            CloseReviewClick(sender, e);
+        }
+    }
+
+    private void BrowsePullRequestsClick(object? sender, RoutedEventArgs e)
+    {
+        _focusMode = false;
+        Vm.Settings.StacksHidden = false;
+        SetStackTab(local: false);
+        ApplyWorkspaceLayout();
+        PullRequestsTab.Focus();
+    }
+
+    private async Task AnimateReviewEntranceAsync()
     {
         _reviewMotion?.Cancel();
         using var motion = new CancellationTokenSource();
         _reviewMotion = motion;
         try
         {
-            await WorkspaceMotion.RevealAsync(ReviewContent, TimeSpan.FromMilliseconds(entering ? 200 : 140),
-                x: 10, entering: entering, cancellationToken: motion.Token);
+            await WorkspaceMotion.RevealAsync(ReviewContent, TimeSpan.FromMilliseconds(200),
+                x: 10, cancellationToken: motion.Token);
         }
         catch (OperationCanceledException) when (motion.IsCancellationRequested) { }
         finally
@@ -281,9 +290,6 @@ public partial class MainWindow
 
     private void StopReviewMotion()
     {
-        _reviewIntent++;
         _reviewMotion?.Cancel();
-        _reviewClosing = false;
-        ReviewHost.IsHitTestVisible = true;
     }
 }

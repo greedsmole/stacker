@@ -140,6 +140,41 @@ public sealed partial class StoreTests
         Assert.Equal("renamed", Assert.Single((await store.LoadAsync(f.Root)).Stacks).Name);
     }
 
+    [Theory]
+    [InlineData(true, 248, 220)]
+    [InlineData(true, 330, 330)]
+    [InlineData(false, 248, 220)]
+    public async Task Older_settings_adopt_the_compact_workspace_once_and_preserve_later_choices(bool hasSchema, double previousFilesWidth, double expectedFilesWidth)
+    {
+        var directory = Temp();
+        var fields = new Dictionary<string, object>
+        {
+            [nameof(AppSettings.StacksHidden)] = false,
+            [nameof(AppSettings.FilesWidth)] = previousFilesWidth,
+            [nameof(AppSettings.NavigationWidth)] = 344,
+            [nameof(AppSettings.Theme)] = "Light",
+            [nameof(AppSettings.LastRepository)] = "/sample/repository"
+        };
+        if (hasSchema)
+            fields[nameof(AppSettings.SchemaVersion)] = 3;
+        await File.WriteAllTextAsync(Path.Combine(directory, "settings.json"), System.Text.Json.JsonSerializer.Serialize(fields));
+        var store = new JsonSettingsStore(directory);
+        var migrated = await store.LoadAsync();
+        Assert.True(migrated.StacksHidden);
+        Assert.Equal(expectedFilesWidth, migrated.FilesWidth);
+        Assert.Equal(344, migrated.NavigationWidth);
+        Assert.Equal("Light", migrated.Theme);
+        Assert.Equal("/sample/repository", migrated.LastRepository);
+        Assert.Equal(AppSettings.CurrentSchema, migrated.SchemaVersion);
+
+        migrated.StacksHidden = false;
+        migrated.FilesWidth = 310;
+        await store.SaveAsync(migrated);
+        var reopened = await store.LoadAsync();
+        Assert.False(reopened.StacksHidden);
+        Assert.Equal(310, reopened.FilesWidth);
+    }
+
     // Scenario: Settings survive a damaged file, and an unknown theme falls back instead of poisoning the UI.
     [Fact]
     public async Task Settings_survive_a_damaged_file_and_an_unknown_theme()

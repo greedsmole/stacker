@@ -1,10 +1,45 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.ThreadView" x:Name="ThreadRoot">
- <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,5" Padding="0,5">
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.ThreadView" x:Name="ThreadRoot">
+ <UserControl.Styles>
+  <Style Selector="ToggleButton:checked PathIcon.thread-chevron">
+   <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+  </Style>
+ </UserControl.Styles>
+ <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,1">
   <StackPanel>
-   <ToggleButton x:Name="Disclosure" IsChecked="{Binding !IsResolved, Mode=OneTime}" Classes="quiet" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"><TextBlock Text="{Binding Label}" FontSize="11" TextWrapping="Wrap"/></ToggleButton>
-  <StackPanel Spacing="8" Margin="8" IsVisible="{Binding #Disclosure.IsChecked}">
-   <ItemsControl ItemsSource="{Binding Comments}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="0,5" Spacing="4"><TextBlock Text="{Binding Author}" FontWeight="SemiBold"/><TextBlock Text="{Binding CreatedAt, StringFormat={}{0:g}}" Classes="muted" FontSize="11"/><local:ReviewBodyView Body="{Binding DisplayBody}" OriginalCode="{Binding #ThreadRoot.OriginalCode}"/></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-   <StackPanel Orientation="Horizontal" Spacing="6"><Button Content="Reply" Click="ReplyClick" Classes="quiet"/><Button Content="Resolve / reopen" IsVisible="{Binding CanResolve}" Click="ResolveClick" Classes="quiet"/><Button Content="Go to code" Click="GoToClick" Classes="quiet" IsVisible="{Binding !IsOutdated}"/></StackPanel>
+   <ToggleButton x:Name="Disclosure" IsChecked="False" Classes="quiet" MinHeight="26"
+                 HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="4,3"
+                 AutomationProperties.Name="{Binding Label}">
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource StackerSpace8}">
+     <PathIcon Classes="thread-chevron" Width="10" Height="10" Data="M 3,1 L 7,5 L 3,9"
+               VerticalAlignment="Top" Margin="0,3,0,0" RenderTransformOrigin="50%,50%"/>
+     <TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="{DynamicResource StackerCaptionFontSize}" FontWeight="SemiBold"
+                TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Label}"/>
+    </Grid>
+   </ToggleButton>
+   <StackPanel Spacing="10" Margin="22,4,0,6" IsVisible="{Binding #Disclosure.IsChecked}">
+    <ItemsControl ItemsSource="{Binding Comments}">
+     <ItemsControl.ItemTemplate>
+      <DataTemplate>
+       <StackPanel Margin="0,4,0,12" Spacing="8">
+        <StackPanel Spacing="2">
+         <TextBlock Text="{Binding Author}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Author}"/>
+         <TextBlock Text="{Binding CreatedAt, StringFormat={}{0:g}}" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}"/>
+        </StackPanel>
+        <local:ReviewBodyView Body="{Binding DisplayBody}" OriginalCode="{Binding #ThreadRoot.OriginalCode}"/>
+       </StackPanel>
+      </DataTemplate>
+     </ItemsControl.ItemTemplate>
+    </ItemsControl>
+    <WrapPanel ItemSpacing="4" LineSpacing="4">
+     <Button Content="Reply" Click="ReplyClick" Classes="quiet compact"/>
+     <StackPanel Orientation="Horizontal" IsVisible="{Binding CanResolve}">
+      <Button Content="Resolve thread" IsVisible="{Binding !IsResolved}" Click="ResolveClick" Classes="quiet compact"/>
+      <Button Content="Reopen thread" IsVisible="{Binding IsResolved}" Click="ResolveClick" Classes="quiet compact"/>
+     </StackPanel>
+     <Button Content="Go to code" Click="GoToClick" Classes="quiet compact" IsVisible="{Binding !IsOutdated}"/>
+    </WrapPanel>
+   </StackPanel>
   </StackPanel>
- </StackPanel></Border>
+ </Border>
 </UserControl>

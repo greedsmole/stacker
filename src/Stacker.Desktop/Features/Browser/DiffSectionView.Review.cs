@@ -44,9 +44,9 @@ public partial class DiffSectionView
     private void WrapCodeClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
-    if (sender is not ToggleButton toggle || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main)
+    if (sender is not MenuItem item || TopLevel.GetTopLevel(this)?.DataContext is not MainViewModel main)
         return;
-    await main.SetWrapCodeAsync(toggle.IsChecked == true);
+    await main.SetWrapCodeAsync(item.IsChecked);
 }, message => AsyncHandler.Report(this, message));
     private void CommentSelectedClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>

@@ -1,16 +1,36 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="Stacker.Desktop.AddLayerWindow" Title="Add layer" Width="600" Height="420" MinWidth="500" MinHeight="360" WindowStartupLocation="CenterOwner">
-  <Grid Margin="24" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto" RowSpacing="12">
-    <StackPanel Spacing="6">
-      <TextBlock Text="Add layer" Classes="view-title"/>
-      <TextBlock x:Name="StackLabel" Classes="muted" TextWrapping="Wrap"/>
-      <TextBlock Text="Create and check out a branch above the selected starting point. Stacker also adds it to your stack definition; commit that file when you are ready." Classes="muted" FontSize="12" TextWrapping="Wrap"/>
-    </StackPanel>
-    <Grid Grid.Row="1" ColumnDefinitions="110,*"><TextBlock Text="Branch name" VerticalAlignment="Center"/><TextBox Grid.Column="1" x:Name="NameInput" AutomationProperties.Name="Branch name" Watermark="e.g. feature/session-api"/></Grid>
-    <Grid Grid.Row="2" ColumnDefinitions="110,*"><TextBlock Text="Start from" VerticalAlignment="Center"/><ComboBox Grid.Column="1" x:Name="StartInput" AutomationProperties.Name="Start from branch" HorizontalAlignment="Stretch"/></Grid>
-    <ScrollViewer Grid.Row="4" MaxHeight="72"><SelectableTextBlock x:Name="ErrorLabel" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/></ScrollViewer>
-    <Grid Grid.Row="5" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-      <Button Content="Cancel" IsCancel="True" Click="CancelClick" HorizontalAlignment="Left"/>
-      <Button Grid.Column="2" x:Name="CreateButton" Content="Create layer" Classes="primary" Click="CreateClick"/>
-    </Grid>
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Stacker.Desktop.AddLayerWindow" Title="Add layer"
+        Width="580" Height="460" MinWidth="500" MinHeight="360" WindowStartupLocation="CenterOwner">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="24,16">
+      <StackPanel Spacing="{DynamicResource StackerSpace4}">
+        <TextBlock Text="Add layer" Classes="view-title"/>
+        <TextBlock x:Name="StackLabel" Classes="muted" TextWrapping="Wrap"/>
+      </StackPanel>
+    </Border>
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="24" Spacing="{DynamicResource StackerSpace16}">
+        <StackPanel Spacing="{DynamicResource StackerSpace4}">
+          <TextBlock Text="New branch name" Classes="section-title"/>
+          <TextBox x:Name="NameInput" AutomationProperties.Name="Branch name" Watermark="feature/session-api"/>
+          <TextBlock Text="Use a new Git branch name" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}"/>
+        </StackPanel>
+        <StackPanel Spacing="{DynamicResource StackerSpace4}">
+          <TextBlock Text="Starting branch" Classes="section-title"/>
+          <ComboBox x:Name="StartInput" AutomationProperties.Name="Start from branch" HorizontalAlignment="Stretch"/>
+          <TextBlock Text="The new branch is created at this point and checked out immediately" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
+        </StackPanel>
+        <TextBlock Text="The layer is added to your stack definition. Commit the stack file when you are ready." Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
+      </StackPanel>
+    </ScrollViewer>
+    <Border Grid.Row="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="24,16">
+      <Grid RowDefinitions="Auto,Auto" RowSpacing="{DynamicResource StackerSpace8}">
+        <ScrollViewer MaxHeight="64" HorizontalScrollBarVisibility="Disabled"><SelectableTextBlock x:Name="ErrorLabel" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/></ScrollViewer>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="{DynamicResource StackerSpace8}">
+          <Button Content="Cancel" IsCancel="True" Click="CancelClick" Classes="quiet"/>
+          <Button x:Name="CreateButton" Content="Create layer" Classes="primary" Click="CreateClick"/>
+        </StackPanel>
+      </Grid>
+    </Border>
   </Grid>
 </Window>

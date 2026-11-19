@@ -2,7 +2,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using Avalonia.Media.Transformation;
 using Stacker.Core;
 namespace Stacker.Desktop;
 
@@ -14,26 +13,22 @@ public partial class MainWindow
             app.Resources["DiffLineHeight"] = (double)Vm.Settings.DiffLineHeight;
     }
 
-    private void ApplyMotionSettings()
-    {
-        if (Application.Current is { } app)
-            app.Resources["ButtonPressTransform"] = TransformOperations.Parse(Vm.Settings.ReduceMotion ? "scale(1)" : "scale(0.98)");
-    }
-
     private void SettingsClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
     try
     {
         await Vm.RefreshStorageStatusAsync();
-        var git = new TextBox { Text = Vm.Settings.GitPath, Watermark = "Auto-detect Git" };
-        var gh = new TextBox { Text = Vm.Settings.GhPath, Watermark = "Auto-detect gh" };
-        var editor = new TextBox { Text = Vm.Settings.EditorCommand, Watermark = "Empty uses git core.editor, then $EDITOR" };
+        var git = new TextBox { Text = Vm.Settings.GitPath, Watermark = "Path to Git" };
+        var gh = new TextBox { Text = Vm.Settings.GhPath, Watermark = "Path to gh" };
+        var editor = new TextBox { Text = Vm.Settings.EditorCommand, Watermark = "code --wait" };
         Avalonia.Automation.AutomationProperties.SetName(git, "Git executable");
         Avalonia.Automation.AutomationProperties.SetName(gh, "GitHub CLI executable");
         Avalonia.Automation.AutomationProperties.SetName(editor, "Editor for conflicts and commit messages");
-        var savedCredentials = new CheckBox { Content = "Use saved gh credentials for GitHub API", IsChecked = Vm.Settings.UseSavedGhCredentials };
-        var background = new CheckBox { Content = "Update GitHub in the background while active", IsChecked = Vm.Settings.BackgroundRefresh };
+        var savedCredentials = new CheckBox { Content = new TextBlock { Text = "Use saved gh credentials for GitHub API", TextWrapping = Avalonia.Media.TextWrapping.Wrap }, IsChecked = Vm.Settings.UseSavedGhCredentials };
+        var background = new CheckBox { Content = new TextBlock { Text = "Update GitHub in the background while active", TextWrapping = Avalonia.Media.TextWrapping.Wrap }, IsChecked = Vm.Settings.BackgroundRefresh };
+        Avalonia.Automation.AutomationProperties.SetName(savedCredentials, "Use saved gh credentials for GitHub API");
+        Avalonia.Automation.AutomationProperties.SetName(background, "Update GitHub in the background while active");
         var theme = new ToggleSwitch { Content = "Use light appearance", IsChecked = Vm.Settings.Theme == "Light" };
         var reduceMotion = new CheckBox { Content = "Reduce motion", IsChecked = Vm.Settings.ReduceMotion };
         var lineHeight = new NumericUpDown
@@ -47,8 +42,9 @@ public partial class MainWindow
             HorizontalAlignment = HorizontalAlignment.Left
         };
         Avalonia.Automation.AutomationProperties.SetName(lineHeight, "Diff line height");
-        var storage = new TextBlock { Text = Vm.StorageStatus, TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontSize = 12 };
-        var save = new Button { Content = "Save settings", Classes = { "primary" } };
+        var storage = new TextBlock { Text = Vm.StorageStatus, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Classes = { "muted" } };
+        storage.Bind(TextBlock.FontSizeProperty, storage.GetResourceObservable("StackerCaptionFontSize"));
+        var save = new Button { Content = "Save settings", IsDefault = true, Classes = { "primary" } };
         var cancel = new Button { Content = "Cancel", IsCancel = true };
         var window = new Window
         {
@@ -58,16 +54,16 @@ public partial class MainWindow
             MinWidth = 480,
             MinHeight = 420,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = DialogLayout.Create("Settings", "Appearance, tools and background updates.", new Control[] {
-                    new TextBlock { Text = "Appearance", Classes = { "pane-title" } }, theme, reduceMotion,
-                    new TextBlock { Text = "Diff line height" }, lineHeight,
-                    new TextBlock { Text = "Git and GitHub", Classes = { "pane-title" }, Margin = new Thickness(0, 8, 0, 0) },
-                    new TextBlock { Text = "Git executable", FontWeight = Avalonia.Media.FontWeight.SemiBold }, git, new TextBlock { Text = "GitHub CLI executable" }, gh,
-                    new TextBlock { Text = "Editor for conflicts and commit messages" }, editor,
-                    new TextBlock { Text = "Add a wait flag (for example \"code --wait\") if your editor returns immediately.", FontSize = 11, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
-                    savedCredentials, background,
-                    new TextBlock { Text = "Workspace data", Classes = { "pane-title" }, Margin = new Thickness(0, 8, 0, 0) },
-                    storage
+            Content = DialogLayout.Create("Settings", "Changes take effect when you save.", new Control[] {
+                    DialogLayout.Section("Appearance", theme, reduceMotion,
+                        DialogLayout.Field("Diff line height", lineHeight, $"{AppSettings.MinDiffLineHeight}–{AppSettings.MaxDiffLineHeight} pixels per code line")),
+                    DialogLayout.Section("Tools",
+                        DialogLayout.Field("Git executable", git, "Leave empty to detect Git automatically"),
+                        DialogLayout.Field("GitHub CLI executable", gh, "Leave empty to detect the GitHub CLI automatically"),
+                        DialogLayout.Field("Editor for conflicts and commit messages", editor,
+                            "Leave empty to use Git’s configured editor, then $EDITOR. Add a wait flag, such as code --wait, if needed")),
+                    DialogLayout.Section("GitHub updates", savedCredentials, background),
+                    DialogLayout.Section("Workspace data", storage)
                 }, cancel, save)
         };
         cancel.Click += (_, _) => window.Close();
@@ -91,7 +87,6 @@ public partial class MainWindow
                 AppSettings.MinDiffLineHeight, AppSettings.MaxDiffLineHeight);
             await Vm.SaveSettingsAsync();
             ApplyDiffLineHeight();
-            ApplyMotionSettings();
             if (themeChanged)
             {
                 ApplyTheme();

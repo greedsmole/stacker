@@ -11,6 +11,7 @@ public partial class ReviewViewModel
 {
     partial void OnFileComposerChanged(string value)
     {
+        OnPropertyChanged(nameof(CanPostFileComment));
         if (!_loading && !_switchingFile && SelectedReviewFile is { } path)
         {
             _draft.FileComposers[path] = value;
@@ -29,6 +30,7 @@ public partial class ReviewViewModel
         Sync(FileThreads, Threads.Where(t => t.IsFileLevel && t.Path == SelectedReviewFile).ToArray(), t => t.Id);
         OnPropertyChanged(nameof(FileThreadsLabel));
         OnPropertyChanged(nameof(CanPostFile));
+        OnPropertyChanged(nameof(CanPostFileComment));
     }
 
     /// <summary>Creates a line or contiguous multi-line selection tied to this exact PR diff snapshot.</summary>

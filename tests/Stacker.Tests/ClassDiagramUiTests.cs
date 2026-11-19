@@ -35,7 +35,7 @@ public sealed partial class ClassDiagramUiTests
             await vm.OpenRepositoryAsync(fixture.Root);
             await vm.SelectLayerAsync(Assert.Single(vm.LocalGroups).Layers[1], false);
             var comparison = Assert.Single(vm.Sections).Result;
-            Find<Button>(window, "OpenClassDiagramButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Find<MenuItem>(window, "OpenClassDiagramButton").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             var diagram = Assert.Single(window.OwnedWindows);
             var revisions = Find<ComboBox>(diagram, "Revisions");
             var modes = Find<ComboBox>(diagram, "Modes");
@@ -99,7 +99,7 @@ public sealed partial class ClassDiagramUiTests
             Assert.False(diagram.IsVisible);
 
             await vm.SelectOverviewAsync(Assert.Single(vm.LocalGroups));
-            Find<Button>(window, "OpenClassDiagramButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Find<MenuItem>(window, "OpenClassDiagramButton").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             var overview = Assert.Single(window.OwnedWindows);
             var overviewModes = Find<ComboBox>(overview, "Modes");
             Assert.Equal("Displayed changes", overviewModes.SelectedItem!.ToString());

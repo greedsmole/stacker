@@ -33,7 +33,6 @@ AsyncHandler.Run(async () =>
     Width = Vm.Settings.WindowWidth;
     Height = Vm.Settings.WindowHeight;
     ApplyTheme();
-    ApplyMotionSettings();
     ApplyDiffLineHeight();
     InitializeWorkspaceLayout();
     InitializeFileNavigation();
@@ -67,7 +66,7 @@ AsyncHandler.Run(async () =>
     private void ResizeSections()
     {
         foreach (var section in Vm.Sections)
-            section.PanelHeight = Vm.Sections.Count == 1 ? Math.Max(300, SectionScroll.Bounds.Height - 12) : 440;
+            section.PanelHeight = Vm.Sections.Count == 1 ? Math.Max(300, SectionScroll.Bounds.Height) : 440;
     }
     private void ApplyTheme()
     {

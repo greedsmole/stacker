@@ -21,7 +21,7 @@ public sealed partial class DesktopTests
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Added_and_removed_rows_keep_their_neon_accents_at_both_line_heights(bool light)
+    public async Task Added_and_removed_rows_keep_semantic_accents_at_both_line_heights(bool light)
     {
         await using var fixture = new GitFixture();
         await fixture.Init();
@@ -44,7 +44,11 @@ public sealed partial class DesktopTests
                 app.Resources["DiffLineHeight"] = height;
                 window.UpdateLayout();
                 var rows = view.GetVisualDescendants().OfType<Grid>().Where(row => row.Name == "CodeRow").ToArray();
-                foreach (var (kind, color) in new[] { (DiffLineKind.Added, "#50FF00"), (DiffLineKind.Removed, "#FF173C") })
+                foreach (var (kind, color) in new[]
+                {
+                    (DiffLineKind.Added, light ? "#398357" : "#5A9C73"),
+                    (DiffLineKind.Removed, light ? "#BD536B" : "#C87486")
+                })
                 {
                     var row = Assert.Single(rows, row => row.DataContext is RenderedDiffLine line && line.Kind == kind);
                     var accent = Assert.Single(row.Children.OfType<Border>(), border => border.Classes.Contains("diff-accent"));

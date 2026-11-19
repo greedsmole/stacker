@@ -135,7 +135,10 @@ public sealed partial class ReviewToolsTests
         var list = window.GetVisualDescendants().OfType<ListBox>().First(item => ReferenceEquals(item.ItemsSource, section.Lines));
         list.SelectedItems!.Add(lines[0]);
         list.SelectedItems.Add(lines[1]);
-        var button = window.GetVisualDescendants().OfType<Button>().First(item => item.Content?.ToString() == "Comment on selected lines");
+        window.UpdateLayout();
+        var diff = window.GetVisualDescendants().OfType<DiffSectionView>().Single(view => ReferenceEquals(view.DataContext, section));
+        var button = diff.FindControl<Button>("SelectedRangeButton")!;
+        Assert.True(button.IsVisible);
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         await Task.Yield();
         window.UpdateLayout();

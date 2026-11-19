@@ -14,6 +14,32 @@ namespace Stacker.Tests;
 public sealed partial class WindowInteractionTests
 {
     [AvaloniaFact]
+    public async Task Empty_repository_offers_pull_request_browsing_without_a_stack_definition()
+    {
+        await using var fixture = new GitFixture();
+        await fixture.Init();
+        using var vm = CreateVm(fixture);
+        var window = new PickerWindow { DataContext = vm };
+        window.Show();
+        try
+        {
+            await vm.OpenRepositoryAsync(fixture.Root);
+            await WaitUntilAsync(() => vm.Repository is not null && !vm.IsBusy);
+            window.UpdateLayout();
+            var browse = window.FindControl<Button>("BrowsePullRequestsButton")!;
+            Assert.True(browse.IsEffectivelyVisible);
+            Assert.False(window.FindControl<Grid>("StacksPane")!.IsVisible);
+            browse.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.UpdateLayout();
+            Assert.True(window.FindControl<Grid>("StacksPane")!.IsVisible);
+            Assert.True(window.FindControl<Grid>("PullRequestsPane")!.IsVisible);
+            Assert.True(window.FindControl<ToggleButton>("PullRequestsTab")!.IsChecked);
+            Assert.False(window.FindControl<Grid>("LocalStacksPane")!.IsVisible);
+        }
+        finally { window.Close(); await WaitUntilAsync(() => !window.IsVisible); }
+    }
+
+    [AvaloniaFact]
     public async Task Stack_panel_can_be_hidden_and_restored_at_its_previous_width()
     {
         await using var fixture = new GitFixture();
@@ -26,6 +52,9 @@ public sealed partial class WindowInteractionTests
             var workspace = window.FindControl<Grid>("Workspace")!;
             var pane = window.FindControl<Grid>("StacksPane")!;
             var toggle = window.FindControl<ToggleButton>("StacksToggle")!;
+            Assert.False(pane.IsVisible);
+            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.UpdateLayout();
             workspace.ColumnDefinitions[0].Width = new(344);
             window.UpdateLayout();
 

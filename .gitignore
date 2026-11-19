@@ -8,3 +8,7 @@ TestResults/
 
 # Local NuGet HTTP cache used for offline restores
 .cache/
+
+# Python verification tooling
+__pycache__/
+*.py[cod]

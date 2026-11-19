@@ -4,9 +4,9 @@
  <UserControl.Resources>
   <DataTemplate x:Key="FileRowTemplate">
    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" ToolTip.Tip="{Binding DisplayPath}">
-    <StackPanel Spacing="2">
+    <StackPanel Spacing="3" Margin="0,3">
      <TextBlock Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
-     <TextBlock Text="{Binding Directory}" IsVisible="{Binding HasDirectory}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis"/>
+     <TextBlock Text="{Binding Directory}" IsVisible="{Binding HasDirectory}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis"/>
     </StackPanel>
     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
      <CheckBox DataContext="{Binding ReviewRow}" IsVisible="{Binding HasReviewStatus, FallbackValue=False}"
@@ -19,14 +19,14 @@
   </DataTemplate>
  </UserControl.Resources>
  <Grid RowDefinitions="Auto,*,Auto">
-  <Border Padding="12,12,12,10" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
-   <StackPanel Spacing="8">
-    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+  <Border Padding="12,14,12,12" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+   <StackPanel Spacing="10">
+    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
      <TextBlock x:Name="FilesHeading" Text="Files" Classes="pane-title" VerticalAlignment="Center"/>
-     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
-      <ToggleButton x:Name="ListMode" Content="List" IsChecked="True" Classes="quiet compact" Click="ListModeClick"/>
-      <ToggleButton x:Name="FoldersMode" Content="Folders" Classes="quiet compact" Click="FoldersModeClick"/>
-     </StackPanel>
+     <Border Grid.Column="1" Classes="segmented"><StackPanel Orientation="Horizontal" Spacing="2">
+      <ToggleButton x:Name="ListMode" Content="List" IsChecked="True" Classes="quiet compact segment" Click="ListModeClick"/>
+      <ToggleButton x:Name="FoldersMode" Content="Folders" Classes="quiet compact segment" Click="FoldersModeClick"/>
+     </StackPanel></Border>
     </Grid>
     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
      <TextBox x:Name="FilterBox" Watermark="Filter paths…" MinWidth="0" TextChanged="FilterChanged"
@@ -40,7 +40,7 @@
     </Grid>
    </StackPanel>
   </Border>
-  <Grid Grid.Row="1" Margin="6">
+  <Grid Grid.Row="1" Margin="6,8">
    <ListBox x:Name="FileList" Classes="file-list" ItemTemplate="{StaticResource FileRowTemplate}"
             SelectionChanged="FlatSelectionChanged" AutomationProperties.Name="Changed files"
             Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>

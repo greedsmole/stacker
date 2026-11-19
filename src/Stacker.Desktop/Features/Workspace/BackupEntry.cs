@@ -59,7 +59,7 @@ public partial class MainWindow
             return await CloseFailureHandler(problems);
         var dialog = new Window { Title = "Unsaved work", Width = 620, Height = 420, MinWidth = 500, MinHeight = 340, WindowStartupLocation = WindowStartupLocation.CenterOwner };
         var actions = new List<Control>();
-        foreach (var (label, choice) in new[] { ("Retry", UnsavedCloseChoice.Retry), ("Save a text copy and close", UnsavedCloseChoice.SaveCopy), ("Continue editing", UnsavedCloseChoice.ContinueEditing), ("Close without saving", UnsavedCloseChoice.Discard) })
+        foreach (var (label, choice) in new[] { ("Close without saving", UnsavedCloseChoice.Discard), ("Continue editing", UnsavedCloseChoice.ContinueEditing), ("Retry saving", UnsavedCloseChoice.Retry) })
         {
             var button = new Button { Content = label, IsCancel = choice == UnsavedCloseChoice.ContinueEditing };
             if (choice == UnsavedCloseChoice.Retry)
@@ -67,7 +67,14 @@ public partial class MainWindow
             button.Click += (_, _) => dialog.Close(choice);
             actions.Add(button);
         }
-        dialog.Content = DialogLayout.Create("Some changes could not be saved", "Retry saving, keep editing, or save a text copy before closing.", new Control[] { new SelectableTextBlock { Text = string.Join("\n", problems), TextWrapping = Avalonia.Media.TextWrapping.Wrap } }, actions.ToArray());
+        var saveCopy = new Button { Content = "Save a text copy and close…", Classes = { "outline" }, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        saveCopy.Click += (_, _) => dialog.Close(UnsavedCloseChoice.SaveCopy);
+        dialog.Content = DialogLayout.Create("Some changes could not be saved", "Retry saving or continue editing to keep the window open.", new Control[]
+        {
+            new SelectableTextBlock { Text = string.Join("\n", problems), TextWrapping = Avalonia.Media.TextWrapping.Wrap },
+            new TextBlock { Text = "Save the unsent review text to a separate file before closing.", Classes = { "field-help" } },
+            saveCopy
+        }, actions.ToArray());
         return await dialog.ShowDialog<UnsavedCloseChoice>(this);
     }
     private async Task HandleCloseAsync()
