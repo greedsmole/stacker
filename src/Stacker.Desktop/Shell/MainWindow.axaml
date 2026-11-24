@@ -88,42 +88,44 @@
  </Window.Resources>
  <Grid RowDefinitions="44,2,Auto,Auto,*,22">
   <Border Padding="12,3" Background="{DynamicResource ChromeBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
-   <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
-    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-     <Image Source="avares://Stacker/Assets/Stacker.png" Width="21" Height="21" VerticalAlignment="Center" RenderOptions.BitmapInterpolationMode="HighQuality"/>
-     <TextBlock Text="Stacker" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
-    </StackPanel>
-    <Border Grid.Column="1" Width="1" Height="20" Background="{DynamicResource DividerBrush}" Margin="4,0"/>
-    <Button x:Name="RepositoryButton" Grid.Column="2" Classes="quiet compact" HorizontalContentAlignment="Stretch"
-            MaxWidth="284" ToolTip.Tip="{Binding RepositoryPath}" AutomationProperties.Name="Switch repository">
-     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-      <TextBlock Text="{Binding RepositoryTitle}" TextTrimming="CharacterEllipsis"/>
-      <PathIcon Grid.Column="1" Data="{StaticResource IconChevronDown}" Width="9" Height="6" Foreground="{DynamicResource TextSecondaryBrush}"/>
-     </Grid>
-     <Button.Flyout>
-      <Flyout Placement="BottomEdgeAlignedLeft">
-       <StackPanel Spacing="10" Width="320">
-        <TextBlock Text="Switch repository" Classes="pane-title"/>
-        <ComboBox x:Name="RecentBox" ItemsSource="{Binding RecentRepositories}" PlaceholderText="Recent repositories"
-                  HorizontalAlignment="Stretch" SelectionChanged="RecentChanged"/>
-        <TextBox Text="{Binding RepositoryPath}" Watermark="Repository path" KeyDown="PathKeyDown" AutomationProperties.Name="Repository path"/>
-        <StackPanel Orientation="Horizontal" Spacing="8">
-         <Button x:Name="OpenFolderButton" Content="Open folder…" Click="OpenFolderClick" Classes="outline"/>
-         <Button Content="Open demo" Click="OpenDemoClick" Classes="quiet"/>
-        </StackPanel>
-       </StackPanel>
-      </Flyout>
-     </Button.Flyout>
-    </Button>
-    <Border Grid.Column="3" Classes="segmented" VerticalAlignment="Center" HorizontalAlignment="Left">
-     <StackPanel Orientation="Horizontal" Spacing="2">
-      <ToggleButton x:Name="ChangesTab" Content="Changes" Click="ChangesTabClick" Classes="quiet compact segment" IsChecked="True"/>
-      <ToggleButton x:Name="WorkingTreeTab" Content="Working tree" Click="WorkingTreeClick" Classes="quiet compact segment"
-                    IsChecked="{Binding IsWorkingTreeOpen, Mode=OneWay}" IsEnabled="{Binding CanOpenWorkingTree}"/>
-      <ToggleButton x:Name="HistoryTab" Content="History" IsChecked="{Binding IsHistoryOpen, Mode=OneWay}" Click="HistoryTabClick" Classes="quiet compact segment"/>
+   <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+    <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8" HorizontalAlignment="Left">
+     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+      <Image Source="avares://Stacker/Assets/Stacker.png" Width="21" Height="21" VerticalAlignment="Center" RenderOptions.BitmapInterpolationMode="HighQuality"/>
+      <TextBlock Text="Stacker" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
      </StackPanel>
-    </Border>
-    <StackPanel x:Name="PaneControls" Grid.Column="4" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+     <Border Grid.Column="1" Width="1" Height="20" Background="{DynamicResource DividerBrush}" Margin="4,0"/>
+     <Button x:Name="RepositoryButton" Grid.Column="2" Classes="quiet compact" HorizontalContentAlignment="Stretch"
+             MaxWidth="284" ToolTip.Tip="{Binding RepositoryPath}" AutomationProperties.Name="Switch repository">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+       <TextBlock Text="{Binding RepositoryTitle}" TextTrimming="CharacterEllipsis"/>
+       <PathIcon Grid.Column="1" Data="{StaticResource IconChevronDown}" Width="9" Height="6" Foreground="{DynamicResource TextSecondaryBrush}"/>
+      </Grid>
+      <Button.Flyout>
+       <Flyout Placement="BottomEdgeAlignedLeft">
+        <StackPanel Spacing="10" Width="320">
+         <TextBlock Text="Switch repository" Classes="pane-title"/>
+         <ComboBox x:Name="RecentBox" ItemsSource="{Binding RecentRepositories}" PlaceholderText="Recent repositories"
+                   HorizontalAlignment="Stretch" SelectionChanged="RecentChanged"/>
+         <TextBox Text="{Binding RepositoryPath}" Watermark="Repository path" KeyDown="PathKeyDown" AutomationProperties.Name="Repository path"/>
+         <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button x:Name="OpenFolderButton" Content="Open folder…" Click="OpenFolderClick" Classes="outline"/>
+          <Button Content="Open demo" Click="OpenDemoClick" Classes="quiet"/>
+         </StackPanel>
+        </StackPanel>
+       </Flyout>
+      </Button.Flyout>
+     </Button>
+     <Border Grid.Column="3" Classes="segmented" VerticalAlignment="Center" HorizontalAlignment="Left">
+      <StackPanel Orientation="Horizontal" Spacing="2">
+       <ToggleButton x:Name="ChangesTab" Content="Changes" Click="ChangesTabClick" Classes="quiet compact segment" IsChecked="True"/>
+       <ToggleButton x:Name="WorkingTreeTab" Content="Working tree" Click="WorkingTreeClick" Classes="quiet compact segment"
+                     IsChecked="{Binding IsWorkingTreeOpen, Mode=OneWay}" IsEnabled="{Binding CanOpenWorkingTree}"/>
+       <ToggleButton x:Name="HistoryTab" Content="History" IsChecked="{Binding IsHistoryOpen, Mode=OneWay}" Click="HistoryTabClick" Classes="quiet compact segment"/>
+      </StackPanel>
+     </Border>
+    </Grid>
+    <StackPanel x:Name="PaneControls" Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
      <ToggleButton x:Name="StacksToggle" Click="ToggleStacksClick" Classes="quiet compact" AutomationProperties.Name="Browse pull requests and local stacks">
       <StackPanel Orientation="Horizontal" Spacing="6">
        <PathIcon Data="{StaticResource IconBranch}" Width="13" Height="13"/>
@@ -138,8 +140,8 @@
      </ToggleButton>
      <ToggleButton x:Name="FocusToggle" Content="Focus" Click="ToggleFocusClick" Classes="quiet compact" ToolTip.Tip="Hide navigation and review for code reading" AutomationProperties.Name="Focus mode"/>
     </StackPanel>
-    <Border Grid.Column="5" Width="1" Height="20" IsVisible="{Binding #PaneControls.IsVisible}" Background="{DynamicResource DividerBrush}"/>
-    <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+    <Border Grid.Column="2" Width="1" Height="20" IsVisible="{Binding #PaneControls.IsVisible}" Background="{DynamicResource DividerBrush}"/>
+    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
      <Button x:Name="FindButton" Click="FindClick" Classes="quiet" AutomationProperties.Name="Find"
              ToolTip.Tip="Find files (Cmd/Ctrl+P) or changed lines (Cmd/Ctrl+Shift+F)">
       <StackPanel Orientation="Horizontal" Spacing="6">

@@ -3,6 +3,7 @@ namespace Stacker.Desktop.ViewModels;
 
 internal interface IWorkingTreePresentation
 {
+    bool CanChooseStackBackend { get; }
     global::System.Threading.Tasks.Task<global::Stacker.Core.RestackPlan?> BuildRestackPlanAsync(global::System.Boolean @preserveMerges = false);
     global::System.Boolean CanRestoreRecovery
     {

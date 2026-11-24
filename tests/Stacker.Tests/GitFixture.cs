@@ -5,7 +5,7 @@ using Stacker.Infrastructure;
 using Stacker.Infrastructure.Framework;
 namespace Stacker.Tests;
 
-public sealed partial class GitFixture : IAsyncDisposable
+public sealed class GitFixture : IAsyncDisposable
 {
     public string Root { get; } = Path.Combine(Path.GetTempPath(), "Stacker tests ü " + Guid.NewGuid().ToString("N"));
     public RepositoryIdentity Identity => new(new(StableIdentity.For(Path.Combine(Root, ".git"))[..32]), new(StableIdentity.For(Root)[..32]), Root, Path.Combine(Root, ".git"));

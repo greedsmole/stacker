@@ -916,10 +916,14 @@ public sealed class UiReviewTests
             var originalSelection = vm.Sections.Single().SelectedFile;
 
             await fixture.Write("C.txt", "Change in the worktree\n");
-            ClickAt(window, window.FindControl<ToggleButton>("WorkingTreeTab")!);
+            var tab = window.FindControl<ToggleButton>("WorkingTreeTab")!;
+            await Until(() => tab.IsEffectivelyVisible && tab.IsEffectivelyEnabled);
+            ClickAt(window, tab);
             var tree = window.FindControl<WorkingTreeView>("WorkingTreeWorkspace")!;
             var editor = vm.WorkingTreeEditor!;
-            await Until(() => vm.IsWorkingTreeOpen && !editor.IsLoading && editor.Lines.Any(line => line.IsAdded));
+            await Until(() => vm.IsWorkingTreeOpen && !editor.IsLoading && editor.Lines.Any(line => line.IsAdded),
+                () => $"Working tree open {vm.IsWorkingTreeOpen}, loading {editor.IsLoading}, files {editor.UnstagedLabel}, "
+                    + $"patch {editor.PatchMessage}, status {editor.Message}, error {vm.Error}.");
             Assert.Contains(editor.Lines, line => line.Text == "Change in the worktree");
             Capture(window, theme, "worktree-unstaged");
             var stage = tree.FindControl<Button>("ChangeIndexButton")!;
@@ -1112,7 +1116,7 @@ public sealed class UiReviewTests
         if (window.IsVisible)
             window.KeyRelease(key, RawInputModifiers.None, PhysicalKey.None, "");
     }
-    private static async Task Until(Func<bool> predicate)
+    private static async Task Until(Func<bool> predicate, Func<string>? diagnostic = null)
     {
         for (var i = 0; i < 300; i++)
         {
@@ -1120,7 +1124,7 @@ public sealed class UiReviewTests
                 return;
             await Task.Delay(20);
         }
-        Assert.True(predicate(), "UI state did not become available within six seconds.");
+        Assert.True(predicate(), diagnostic?.Invoke() ?? "UI state did not become available within six seconds.");
     }
     private static async Task CaptureDialog(MainWindow owner, string handler, string theme, string name)
     {

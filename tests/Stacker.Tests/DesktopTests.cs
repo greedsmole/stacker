@@ -21,7 +21,7 @@ public sealed partial class DesktopTests
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Added_and_removed_rows_keep_semantic_accents_at_both_line_heights(bool light)
+    public async Task Added_and_removed_rows_keep_semantic_gutters_at_both_line_heights(bool light)
     {
         await using var fixture = new GitFixture();
         await fixture.Init();
@@ -44,21 +44,29 @@ public sealed partial class DesktopTests
                 app.Resources["DiffLineHeight"] = height;
                 window.UpdateLayout();
                 var rows = view.GetVisualDescendants().OfType<Grid>().Where(row => row.Name == "CodeRow").ToArray();
-                foreach (var (kind, color) in new[]
+                foreach (var (kind, rowKey, gutterKey) in new[]
                 {
-                    (DiffLineKind.Added, light ? "#398357" : "#5A9C73"),
-                    (DiffLineKind.Removed, light ? "#BD536B" : "#C87486")
+                    (DiffLineKind.Added, "DiffAddedBrush", "DiffAddedGutterBrush"),
+                    (DiffLineKind.Removed, "DiffRemovedBrush", "DiffRemovedGutterBrush")
                 })
                 {
                     var row = Assert.Single(rows, row => row.DataContext is RenderedDiffLine line && line.Kind == kind);
-                    var accent = Assert.Single(row.Children.OfType<Border>(), border => border.Classes.Contains("diff-accent"));
-                    Assert.Equal(Color.Parse(color), Assert.IsAssignableFrom<ISolidColorBrush>(accent.Background).Color);
-                    Assert.NotNull(row.Background);
+                    var gutter = Assert.Single(row.Children.OfType<Border>(), border => border.Classes.Contains("diff-gutter"));
+                    var rowColor = BrushColor(row.Background);
+                    var gutterColor = BrushColor(gutter.Background);
+                    Assert.True(window.TryFindResource(rowKey, window.ActualThemeVariant, out var expectedRow));
+                    Assert.True(window.TryFindResource(gutterKey, window.ActualThemeVariant, out var expectedGutter));
+                    Assert.Equal(BrushColor(expectedRow), rowColor);
+                    Assert.Equal(BrushColor(expectedGutter), gutterColor);
+                    Assert.NotEqual(rowColor, gutterColor);
                     Assert.Equal(height, row.Bounds.Height);
+                    Assert.Equal(height, gutter.Bounds.Height);
                 }
             }
         }
         finally { window.Close(); app.Resources["DiffLineHeight"] = priorHeight; }
+
+        static Color BrushColor(object? brush) => Assert.IsAssignableFrom<ISolidColorBrush>(brush).Color;
     }
 
     [AvaloniaFact]

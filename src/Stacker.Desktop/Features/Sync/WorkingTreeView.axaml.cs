@@ -29,9 +29,9 @@ public partial class WorkingTreeView : UserControl
         StagedButton.IsChecked = true;
     }
 
-    private async void RefreshClick(object? sender, RoutedEventArgs e)
+    private void RefreshClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is WorkingTreeViewModel model)
-            await model.RefreshAsync();
+            AsyncHandler.Run(() => model.RefreshAsync(), message => AsyncHandler.Report(this, message));
     }
 }

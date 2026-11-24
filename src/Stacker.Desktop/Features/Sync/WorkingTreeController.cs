@@ -18,7 +18,7 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
         owner.Notify(nameof(owner.RecoverySummary));
         owner.Notify(nameof(owner.RecoveryAction));
         owner.Notify(nameof(owner.CanRestoreRecovery));
-        owner.Notify(nameof(MainViewModel.CanChooseStackBackend));
+        owner.Notify(nameof(owner.CanChooseStackBackend));
     }
 
     /// <summary>Reads the working tree, active journal and saved stashes as refreshed UI state.</summary>
