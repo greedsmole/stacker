@@ -135,6 +135,10 @@ public sealed partial class LocalGitTests
         await writer.SwitchAsync(f.Root, "refs/heads/B");
         Assert.Equal("B", await f.Git("branch", "--show-current"));
         Assert.Contains("does not exist", (await Assert.ThrowsAsync<StackerException>(() => writer.SwitchAsync(f.Root, "refs/heads/missing"))).Message);
+        await f.Git("branch", "layers/B");
+        await f.Git("branch", "layers/refs/heads/B");
+        await writer.SwitchAsync(f.Root, "refs/heads/layers/refs/heads/B");
+        Assert.Equal("layers/refs/heads/B", await f.Git("branch", "--show-current"));
     }
 
     // Scenario: A git binary that is not named "git" is still recorded in the diagnostics log.

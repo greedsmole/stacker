@@ -16,7 +16,7 @@ internal static class DialogLayout
         heading.Children.Add(new TextBlock { Text = title, Classes = { "view-title" }, TextWrapping = TextWrapping.Wrap });
         if (description.Length > 0)
             heading.Children.Add(Caption(description));
-        var header = Surface(heading, new Thickness(24, 16), new Thickness(0, 0, 0, 1));
+        var header = Surface(heading, "dialog-heading");
         var body = Stack("StackerSpace24");
         body.Margin = new Thickness(24);
         var controls = fields.ToArray();
@@ -59,7 +59,7 @@ internal static class DialogLayout
                 button.Classes.Add("quiet");
             actionList.Children.Add(action);
         }
-        var footer = Surface(actionList, new Thickness(24, 16), new Thickness(0, 1, 0, 0));
+        var footer = Surface(actionList, "dialog-footer");
         var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
         Grid.SetRow(scroll, 1);
         Grid.SetRow(footer, 2);
@@ -107,11 +107,6 @@ internal static class DialogLayout
         return caption;
     }
 
-    private static Border Surface(Control content, Thickness padding, Thickness borderThickness)
-    {
-        var border = new Border { Child = content, Padding = padding, BorderThickness = borderThickness };
-        border.Bind(Border.BackgroundProperty, border.GetResourceObservable("PanelBrush"));
-        border.Bind(Border.BorderBrushProperty, border.GetResourceObservable("DividerBrush"));
-        return border;
-    }
+    private static Border Surface(Control content, string appearance) =>
+        new() { Child = content, Padding = new Thickness(24, 16), Classes = { appearance } };
 }

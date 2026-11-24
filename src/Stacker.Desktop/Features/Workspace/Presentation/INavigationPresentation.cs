@@ -3,6 +3,8 @@ namespace Stacker.Desktop.ViewModels;
 
 internal interface INavigationPresentation
 {
+    StackGroupViewModel? GhStackGroup { get; }
+    Task LoadRepositoryAuthoringAsync(global::Stacker.Core.RepositorySnapshot repository, CancellationToken ct);
     global::Stacker.Desktop.ViewModels.ReviewViewModel? ActiveReview
     {
         get; set;
@@ -145,6 +147,10 @@ internal interface INavigationPresentation
         get;
     }
     void SetWindowActive(global::System.Boolean @active);
+    global::Stacker.Core.WorkingTreeState? WorkingTree
+    {
+        get; set;
+    }
     global::System.Collections.ObjectModel.ObservableCollection<global::Stacker.Core.StackDefinition> Stacks
     {
         get;

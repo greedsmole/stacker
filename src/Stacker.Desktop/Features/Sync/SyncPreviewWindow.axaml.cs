@@ -19,7 +19,7 @@ public partial class SyncPreviewWindow : Window
     {
         _plan = plan;
         _sync = sync;
-        HeadingText.Text = "Restack preview · " + plan.StackName;
+        HeadingText.Text = "Sync " + plan.StackName;
         BlockerList.ItemsSource = plan.Blockers;
         BlockerList.IsVisible = plan.Blockers.Count > 0;
         StepList.ItemsSource = plan.Steps;

@@ -11,6 +11,12 @@ public sealed partial class MainViewModel
     [ObservableProperty] internal bool _hasPendingChanges;
     [ObservableProperty] internal bool _isReviewOpen;
     [ObservableProperty] internal ReviewViewModel? _activeReview;
+    internal StackGroupViewModel? ActiveStackGroup => _runtime._activeGroup is { IsStack: true } group ? group : null;
+    public string? StackPositionLabel => ActiveStackGroup is not { } group ? null
+        : SelectedPositions is [var position] ? $"{group.Name} · {position + 1}/{group.Layers.Count}" : group.Summary;
+    public string? CheckoutLayer => IsLocalSelected && SelectedPositions is [var position]
+        && _runtime._activeGroup?.Layers.ElementAtOrDefault(position) is { LocalBranchName: { } branch, Snapshot.HeadSha: not null }
+        && !string.Equals(branch, CheckedOutBranch, StringComparison.Ordinal) ? branch : null;
     public string ComparisonDetail => Sections.Count == 1 ? Sections[0].Comparison : "Each layer is compared with its own parent";
     public string ReviewLabel => CanPresentActiveReview ? ActiveReview!.ReviewLabel : "Review";
     internal bool CanPresentActiveReview => ActiveReview is { } review &&

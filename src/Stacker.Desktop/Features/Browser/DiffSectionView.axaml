@@ -3,10 +3,15 @@
   <Style Selector="Grid.diff-code.added"><Setter Property="Background" Value="{DynamicResource DiffAddedBrush}"/></Style>
   <Style Selector="Grid.diff-code.removed"><Setter Property="Background" Value="{DynamicResource DiffRemovedBrush}"/></Style>
   <Style Selector="Grid.diff-code.hunk"><Setter Property="Background" Value="{DynamicResource DiffHunkBrush}"/></Style>
-  <Style Selector="Grid.diff-code.added > Border.diff-accent"><Setter Property="Background" Value="{DynamicResource DiffAddedAccentBrush}"/></Style>
-  <Style Selector="Grid.diff-code.removed > Border.diff-accent"><Setter Property="Background" Value="{DynamicResource DiffRemovedAccentBrush}"/></Style>
+  <Style Selector="Border.diff-gutter"><Setter Property="Background" Value="{DynamicResource DiffGutterBrush}"/></Style>
+  <Style Selector="Grid.diff-code.added > Border.diff-gutter"><Setter Property="Background" Value="{DynamicResource DiffAddedGutterBrush}"/></Style>
+  <Style Selector="Grid.diff-code.removed > Border.diff-gutter"><Setter Property="Background" Value="{DynamicResource DiffRemovedGutterBrush}"/></Style>
+  <Style Selector="Grid.diff-code.hunk > Border.diff-gutter"><Setter Property="Background" Value="{DynamicResource DiffHunkBrush}"/></Style>
+  <Style Selector="Grid.diff-code.added > TextBlock.diff-marker"><Setter Property="Foreground" Value="{DynamicResource FileAddedBrush}"/></Style>
+  <Style Selector="Grid.diff-code.removed > TextBlock.diff-marker"><Setter Property="Foreground" Value="{DynamicResource FileDeletedBrush}"/></Style>
+  <Style Selector="ListBoxItem:selected Border.diff-selection"><Setter Property="Opacity" Value="0.66"/></Style>
   <Style Selector="Grid.diff-code TextBlock"><Setter Property="LineHeight" Value="{DynamicResource DiffLineHeight}"/><Setter Property="VerticalAlignment" Value="Top"/></Style>
-  <Style Selector="Border.file-header"><Setter Property="Padding" Value="10,3"/><Setter Property="Background" Value="{DynamicResource HeaderBrush}"/></Style>
+  <Style Selector="Border.file-header"><Setter Property="Padding" Value="12,3"/><Setter Property="Background" Value="{DynamicResource PanelBrush}"/></Style>
   <Style Selector="MenuItem#FullFileButton:disabled">
    <Setter Property="ToolTip.Tip" Value="Full file source unavailable"/>
    <Setter Property="AutomationProperties.HelpText" Value="Full file source unavailable"/>
@@ -68,9 +73,15 @@
     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" IsVisible="{Binding !!SelectedFile}" VerticalAlignment="Center">
       <local:FileChangeBadge Change="{Binding SelectedFile}"/>
-      <TextBlock Grid.Column="1" Text="{Binding SelectedFile.DisplayPath}" FontWeight="SemiBold"
+      <TextBlock Grid.Column="1" Text="{Binding SelectedFile.DisplayPath}" FontFamily="{StaticResource CodeFontFamily}" FontSize="12" FontWeight="Medium"
                  VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SelectedFile.DisplayPath}"/>
-      <TextBlock Grid.Column="2" Text="{Binding SelectedFile.Stats}" Classes="muted" FontSize="11" VerticalAlignment="Center"/>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" ToolTip.Tip="{Binding SelectedFile.Stats}">
+       <TextBlock Text="Binary" Classes="code-meta" FontSize="11" IsVisible="{Binding SelectedFile.IsBinary}"/>
+       <TextBlock Text="{Binding SelectedFile.Additions, StringFormat='+{0}'}" FontFamily="{StaticResource CodeFontFamily}" FontSize="11"
+                  Foreground="{DynamicResource FileAddedBrush}" IsVisible="{Binding !SelectedFile.IsBinary}"/>
+       <TextBlock Text="{Binding SelectedFile.Deletions, StringFormat='−{0}'}" FontFamily="{StaticResource CodeFontFamily}" FontSize="11"
+                  Foreground="{DynamicResource FileDeletedBrush}" IsVisible="{Binding !SelectedFile.IsBinary}"/>
+      </StackPanel>
      </Grid>
      <StackPanel x:Name="FileHeaderActions" Grid.Column="1" Orientation="Horizontal" Spacing="4">
       <Button Content="{Binding SelectedFileRow.ReviewButtonLabel}" Click="MarkFileReviewedClick"
@@ -113,24 +124,27 @@
      </ItemsControl>
     </ScrollViewer>
    <Grid Grid.Row="4" x:Name="DiffViewport" ClipToBounds="True">
-   <ListBox x:Name="DiffLines" SelectionMode="Multiple" KeyDown="DiffKeyDown" ItemsSource="{Binding Lines}" Background="Transparent" BorderThickness="0" Padding="0" FontFamily="Menlo,Consolas,monospace" FontSize="13" ScrollViewer.HorizontalScrollBarVisibility="{Binding CodeHorizontalScroll}" ScrollViewer.VerticalScrollBarVisibility="Auto">
+   <ListBox x:Name="DiffLines" SelectionMode="Multiple" KeyDown="DiffKeyDown" ItemsSource="{Binding Lines}" Background="{DynamicResource CanvasBrush}" BorderThickness="0" Padding="0" FontFamily="{StaticResource CodeFontFamily}" FontSize="13" ScrollViewer.HorizontalScrollBarVisibility="{Binding CodeHorizontalScroll}" ScrollViewer.VerticalScrollBarVisibility="Auto">
     <ListBox.Styles><Style Selector="ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="MinHeight" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style><Style Selector="Button.line-add"><Setter Property="Opacity" Value="0"/><Setter Property="Padding" Value="2,0"/><Setter Property="MinHeight" Value="0"/></Style><Style Selector="ListBoxItem:pointerover Button.line-add"><Setter Property="Opacity" Value="1"/></Style><Style Selector="Button.line-add:focus"><Setter Property="Opacity" Value="1"/></Style></ListBox.Styles>
     <ListBox.ItemTemplate><DataTemplate>
      <StackPanel>
       <Grid IsVisible="{Binding IsCollapsedContext}" ColumnDefinitions="Auto,*" Background="{DynamicResource DiffHunkBrush}">
-       <Button Content="↑" IsVisible="{Binding ShowExpandUp}" Classes="quiet context-expand" Click="ExpandContextUpClick"
-               AutomationProperties.Name="Show context above the next change" ToolTip.Tip="Show context above the next change"/>
+       <Button IsVisible="{Binding ShowExpandUp}" Classes="quiet context-expand" Click="ExpandContextUpClick"
+               AutomationProperties.Name="Show context above the next change" ToolTip.Tip="Show context above the next change">
+        <PathIcon Data="{StaticResource IconChevronUp}" Width="10" Height="7"/>
+       </Button>
        <Button Grid.Column="1" Content="{Binding ContextLabel}" Classes="quiet context-expand" Click="ExpandContextClick"
                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
       </Grid>
-      <Grid x:Name="CodeRow" IsVisible="{Binding !IsCollapsedContext}" ColumnDefinitions="Auto,44,44,18,*" MinHeight="{DynamicResource DiffLineHeight}" Classes="diff-code" Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Classes.hunk="{Binding IsHunk}">
+      <Grid x:Name="CodeRow" IsVisible="{Binding !IsCollapsedContext}" ColumnDefinitions="Auto,40,40,16,*" MinHeight="{DynamicResource DiffLineHeight}" Classes="diff-code" Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Classes.hunk="{Binding IsHunk}">
+       <Border Grid.ColumnSpan="4" Classes="diff-gutter" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,1,0" IsHitTestVisible="False"/>
+       <Border Grid.ColumnSpan="5" Classes="diff-selection" Background="{DynamicResource SelectionBrush}" Opacity="0" IsHitTestVisible="False"/>
        <Border Width="26" IsVisible="{Binding AllowComment}" IsHitTestVisible="False"/>
-       <Border Classes="diff-accent" HorizontalAlignment="Left" Width="3" IsHitTestVisible="False"/>
        <Button Content="+" Classes="line-add" Width="26" Height="{DynamicResource DiffLineHeight}" VerticalAlignment="Top" Click="AddLineClick" IsVisible="{Binding IsLineCommentVisible}" ToolTip.Tip="Comment on this line or selected range. Select rows with Shift-click, then press + inside the selection." AutomationProperties.Name="Comment on line or selected range"/>
        <TextBlock Grid.Column="1" Text="{Binding OldLineNumber}" IsHitTestVisible="{Binding CanCommentLeft}" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Right" Margin="0,0,8,0" PointerPressed="LineNumberPressed"/>
        <TextBlock Grid.Column="2" Text="{Binding NewLineNumber}" IsHitTestVisible="{Binding CanComment}" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Right" Margin="0,0,8,0" PointerPressed="LineNumberPressed"/>
-       <TextBlock Grid.Column="3" Text="{Binding Marker}"/>
-       <local:SyntaxText Grid.Column="4" Line="{Binding}" LineHeight="{DynamicResource DiffLineHeight}" TextWrapping="{Binding TextWrapping}" Margin="4,0,20,0" ContextRequested="CodeContextRequested" KeyDown="CodeKeyDown"/>
+       <TextBlock Grid.Column="3" Text="{Binding Marker}" Classes="diff-marker" FontWeight="SemiBold" IsHitTestVisible="False"/>
+       <local:SyntaxText Grid.Column="4" Line="{Binding}" LineHeight="{DynamicResource DiffLineHeight}" TextWrapping="{Binding TextWrapping}" Margin="9,0,20,0" ContextRequested="CodeContextRequested" KeyDown="CodeKeyDown"/>
       </Grid>
       <ItemsControl ItemsSource="{Binding InlineThreads}" IsVisible="{Binding !!InlineThreads.Count}" Margin="32,0,16,0" MaxWidth="{Binding #SectionRoot.InlineReviewWidth}" HorizontalAlignment="Left" FontFamily="Inter"><ItemsControl.ItemTemplate><DataTemplate><local:ThreadView/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
       <StackPanel IsVisible="{Binding !!Drafts.Count}" Margin="32,0,16,0" MaxWidth="{Binding #SectionRoot.InlineReviewWidth}"
@@ -138,7 +152,7 @@
        <ToggleButton x:Name="DraftsDisclosure" IsChecked="False" Classes="quiet" MinHeight="26" Padding="4,3"
                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" DataContextChanged="DraftsDisclosureChanged">
         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-         <PathIcon Classes="draft-chevron" Width="10" Height="10" Data="M 3,1 L 7,5 L 3,9" RenderTransformOrigin="50%,50%"/>
+         <PathIcon Classes="draft-chevron" Width="7" Height="10" Data="{StaticResource IconChevronRight}" RenderTransformOrigin="50%,50%"/>
          <TextBlock Grid.Column="1" Text="{Binding Drafts.Count, StringFormat='Pending review ({0})'}" Classes="label"/>
         </Grid>
        </ToggleButton>
@@ -155,7 +169,9 @@
         </ItemsControl.ItemTemplate>
        </ItemsControl>
       </StackPanel>
-      <Border IsVisible="{Binding HasEditor}" Margin="32,8,16,12" Padding="12" MaxWidth="{Binding #SectionRoot.InlineReviewWidth}" MinWidth="260" HorizontalAlignment="Left" Background="{DynamicResource PanelBrush}" TextElement.FontFamily="Inter">
+      <Border IsVisible="{Binding HasEditor}" Margin="32,8,16,12" Padding="12" MaxWidth="{Binding #SectionRoot.InlineReviewWidth}" MinWidth="260"
+              HorizontalAlignment="Left" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+              CornerRadius="{StaticResource OverlayCornerRadius}" TextElement.FontFamily="Inter">
        <StackPanel DataContext="{Binding Editor}" Spacing="8">
         <StackPanel Spacing="8" IsEnabled="{Binding CanEditDraft}">
          <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding SelectionLabel}" Classes="muted" TextWrapping="Wrap"/><Button Grid.Column="1" Content="Suggest code change" Command="{Binding SuggestCodeChangeCommand}" IsEnabled="{Binding CanSuggestCodeChange}" Classes="quiet" ToolTip.Tip="Prefill a replacement for the selected right-side code"/></Grid>

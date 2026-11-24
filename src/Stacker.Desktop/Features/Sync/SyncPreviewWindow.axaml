@@ -2,7 +2,7 @@
         x:Class="Stacker.Desktop.SyncPreviewWindow" Title="Sync stack"
         Width="900" Height="680" MinWidth="700" MinHeight="560" WindowStartupLocation="CenterOwner">
   <Grid RowDefinitions="Auto,*,Auto">
-    <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="24,16">
+    <Border Classes="dialog-heading" Padding="24,16">
       <StackPanel Spacing="{DynamicResource StackerSpace4}">
         <TextBlock x:Name="HeadingText" Classes="view-title" TextWrapping="Wrap"/>
         <TextBlock x:Name="SubheadingText" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
@@ -18,7 +18,7 @@
         <Border x:Name="ConflictPanel" Classes="notice" Padding="16" IsVisible="False">
           <StackPanel Spacing="{DynamicResource StackerSpace12}">
             <TextBlock x:Name="ConflictTitle" FontWeight="SemiBold" TextWrapping="Wrap"/>
-            <ListBox x:Name="ConflictList" MaxHeight="150" Background="Transparent" BorderThickness="0" FontFamily="Menlo,Consolas,monospace" FontSize="{DynamicResource StackerCaptionFontSize}"/>
+            <ListBox x:Name="ConflictList" MaxHeight="150" Background="Transparent" BorderThickness="0" FontFamily="{StaticResource CodeFontFamily}" FontSize="{DynamicResource StackerCaptionFontSize}"/>
             <WrapPanel ItemSpacing="{DynamicResource StackerSpace8}" LineSpacing="{DynamicResource StackerSpace8}">
               <Button x:Name="ResolveButton" Content="Resolve in editor" Click="ResolveClick" Classes="outline"/>
               <Button x:Name="StageButton" Content="Stage resolved files" Click="StageClick"/>
@@ -38,16 +38,19 @@
             </Border>
           </StackPanel>
         </Border>
-        <StackPanel Spacing="{DynamicResource StackerSpace8}">
-          <TextBlock Text="Restack plan" Classes="section-title"/>
+        <Grid ColumnDefinitions="3*,2*" ColumnSpacing="{DynamicResource StackerSpace24}">
+         <StackPanel Spacing="{DynamicResource StackerSpace8}">
+          <TextBlock Text="Restack plan" Classes="pane-title"/>
           <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" CornerRadius="{DynamicResource ControlCornerRadius}" ClipToBounds="True">
             <ListBox x:Name="StepList" Background="Transparent" BorderThickness="0">
               <ListBox.ItemTemplate><DataTemplate>
                 <Border Padding="4,4" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
-                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="{DynamicResource StackerSpace16}" RowSpacing="{DynamicResource StackerSpace4}">
-                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                    <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Detail}" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
+                  <Grid ColumnDefinitions="10,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="{DynamicResource StackerSpace12}" RowSpacing="{DynamicResource StackerSpace4}">
+                    <Ellipse Classes="branch-node" Classes.current="{Binding NeedsRebase}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <TextBlock Grid.Column="2" Text="{Binding Status}" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}"
+                               VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="112"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding Detail}" Classes="code-meta" TextWrapping="Wrap"/>
                   </Grid>
                 </Border>
               </DataTemplate></ListBox.ItemTemplate>
@@ -59,10 +62,11 @@
             <Button x:Name="UndoButton" Content="Undo last restack" Click="UndoClick" IsVisible="False" Classes="outline" HorizontalAlignment="Left"/>
             <TextBlock Text="Restore the branch tips saved before the last restack" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
           </StackPanel>
-        </StackPanel>
-        <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,16,0,0">
+         </StackPanel>
+         <Border Grid.Column="1" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1,0,0,0" Padding="16,0,0,0">
           <StackPanel Spacing="{DynamicResource StackerSpace8}">
-            <TextBlock Text="Pull requests" Classes="section-title"/>
+            <TextBlock Text="GitHub pull requests" Classes="pane-title"/>
+            <TextBlock Text="Check which layers would create, update, or retarget a pull request." Classes="muted" TextWrapping="Wrap"/>
             <WrapPanel ItemSpacing="{DynamicResource StackerSpace8}" LineSpacing="{DynamicResource StackerSpace8}">
               <Button x:Name="CheckPrsButton" Content="Check pull requests" Click="CheckPrsClick" Classes="outline"/>
               <Button x:Name="PublishButton" Content="Publish pull requests" IsVisible="False" Click="PublishClick"/>
@@ -78,10 +82,11 @@
               </DataTemplate></ListBox.ItemTemplate>
             </ListBox>
           </StackPanel>
-        </Border>
+         </Border>
+        </Grid>
         <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,16,0,0">
           <StackPanel Spacing="{DynamicResource StackerSpace8}">
-            <TextBlock Text="Working tree" Classes="section-title"/>
+            <TextBlock Text="Working tree" Classes="pane-title"/>
             <TextBlock x:Name="WorkingTreeLabel" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
             <Button x:Name="StashButton" Content="Stash and restack" Click="StashClick" IsVisible="False" HorizontalAlignment="Left"/>
             <TextBlock Text="Tracked edits are stashed first. New files stay in the working tree." IsVisible="{Binding #StashButton.IsVisible}" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
@@ -105,7 +110,7 @@
         </Border>
       </StackPanel>
     </ScrollViewer>
-    <Border Grid.Row="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="24,16">
+    <Border Grid.Row="2" Classes="dialog-footer" Padding="24,16">
       <Grid RowDefinitions="Auto,Auto" RowSpacing="{DynamicResource StackerSpace8}">
         <ScrollViewer MaxHeight="64" HorizontalScrollBarVisibility="Disabled"><SelectableTextBlock x:Name="MessageLabel" TextWrapping="Wrap"/></ScrollViewer>
         <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="{DynamicResource StackerSpace8}">

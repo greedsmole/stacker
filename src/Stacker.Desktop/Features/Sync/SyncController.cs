@@ -8,12 +8,17 @@ internal sealed partial class SyncController(ISyncPresentation owner, WorkspaceR
 
     public async Task<RestackPlan?> BuildRestackPlanAsync(bool preserveMerges = false)
     {
+        if (runtime.StackBackend != StackBackend.Stacker)
+        {
+            owner.Error = "Use the GitHub CLI stack controls for this repository.";
+            return null;
+        }
         if (runtime._branchWriter is null || runtime._repository is null)
         {
             owner.Error = "Open a repository first.";
             return null;
         }
-        if (runtime._activeGroup is not { IsRemote: false } group)
+        if (runtime._activeGroup is not { IsRemote: false, UsesGhStack: false } group)
         {
             owner.Error = "Select a local stack to restack. GitHub stacks use the server's own branches.";
             return null;
@@ -40,6 +45,8 @@ internal sealed partial class SyncController(ISyncPresentation owner, WorkspaceR
 
     public async Task<RestackOutcome?> RestackAsync(RestackPlan plan, IProgress<string>? progress = null)
     {
+        if (runtime.StackBackend != StackBackend.Stacker)
+            return new(RestackStatus.Refused, null, [], "Use the GitHub CLI stack controls for this repository.", null);
         if (runtime._branchWriter is null || owner.IsSyncing)
             return null;
         owner.IsSyncing = true;
@@ -61,6 +68,8 @@ internal sealed partial class SyncController(ISyncPresentation owner, WorkspaceR
 
     public async Task<(bool Ok, string Message)> PushAsync(RestackPlan plan, bool wholeStack)
     {
+        if (runtime.StackBackend != StackBackend.Stacker)
+            return (false, "Use the GitHub CLI stack controls for this repository.");
         if (runtime._branchWriter is null || owner.IsSyncing)
             return (false, "A stack operation is already running.");
         owner.IsSyncing = true;
@@ -79,6 +88,8 @@ internal sealed partial class SyncController(ISyncPresentation owner, WorkspaceR
 
     public async Task<(bool Ok, string Message)> UndoAsync()
     {
+        if (runtime.StackBackend != StackBackend.Stacker)
+            return (false, "Switch to the Stacker backend to undo a Stacker restack.");
         if (runtime._branchWriter is null || runtime._repository is null)
             return (false, "Open a repository first.");
         owner.IsSyncing = true;
@@ -96,6 +107,8 @@ internal sealed partial class SyncController(ISyncPresentation owner, WorkspaceR
 
     public async Task<(bool Ok, string Message)> AddLayerAsync(string stackId, string branchName, string startRef)
     {
+        if (runtime.StackBackend != StackBackend.Stacker)
+            return (false, "Use the GitHub CLI stack controls for this repository.");
         if (runtime._branchWriter is null || runtime._repository is null)
             return (false, "Open a repository first.");
         if (owner.IsSyncing)
@@ -123,6 +136,8 @@ internal sealed partial class SyncController(ISyncPresentation owner, WorkspaceR
 
     public async Task<(PullRequestPublicationPlan? Plan, string Message)> CheckPullRequestsAsync(string stackId)
     {
+        if (runtime.StackBackend != StackBackend.Stacker)
+            return (null, "Use the GitHub CLI to publish a managed stack.");
         if (owner.IsDemo)
             return (null, "The demo is offline. Publishing pull requests is disabled.");
         if (runtime._github is null || runtime._pullRequestWriter is null)
@@ -157,6 +172,8 @@ internal sealed partial class SyncController(ISyncPresentation owner, WorkspaceR
 
     public async Task<(bool Ok, string Message)> PublishPullRequestsAsync(PullRequestPublicationPlan plan)
     {
+        if (runtime.StackBackend != StackBackend.Stacker)
+            return (false, "Use the GitHub CLI to publish a managed stack.");
         if (owner.IsDemo)
             return (false, "The demo is offline. Publishing pull requests is disabled.");
         if (runtime._pullRequestWriter is null || runtime._github is null)

@@ -2,7 +2,7 @@
         x:Class="Stacker.Desktop.StackEditorWindow" Title="Edit stack"
         Width="650" Height="680" MinWidth="520" MinHeight="520" WindowStartupLocation="CenterOwner">
   <Grid RowDefinitions="Auto,*,Auto">
-    <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="24,16">
+    <Border Classes="dialog-heading" Padding="24,16">
       <StackPanel Spacing="{DynamicResource StackerSpace4}">
         <TextBlock Text="{Binding $parent[Window].Title}" Classes="view-title"/>
         <TextBlock Text="Arrange branches in dependency order, starting at the base." Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
@@ -57,7 +57,7 @@
         </Border>
       </StackPanel>
     </ScrollViewer>
-    <Border Grid.Row="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="24,16">
+    <Border Grid.Row="2" Classes="dialog-footer" Padding="24,16">
       <Grid RowDefinitions="Auto,Auto" RowSpacing="{DynamicResource StackerSpace8}">
         <ScrollViewer MaxHeight="64" HorizontalScrollBarVisibility="Disabled"><SelectableTextBlock x:Name="ErrorLabel" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/></ScrollViewer>
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="{DynamicResource StackerSpace8}">

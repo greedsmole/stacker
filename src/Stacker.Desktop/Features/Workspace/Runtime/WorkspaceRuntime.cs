@@ -4,6 +4,7 @@ namespace Stacker.Desktop.ViewModels;
 internal sealed partial class WorkspaceRuntime
 {
     internal IWorkspaceSession Session { get; } = new WorkspaceSession();
+    internal StackBackend StackBackend { get; set; }
     internal static string ComparisonKey(RepositorySnapshot repo, StackDefinition stack, DiffMode mode, int[] positions)
     {
         var relevant = stack.Branches.Prepend(stack.Base).ToHashSet();

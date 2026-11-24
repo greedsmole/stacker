@@ -3,24 +3,22 @@
              Background="{DynamicResource PanelBrush}">
  <UserControl.Resources>
   <DataTemplate x:Key="FileRowTemplate">
-   <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" ToolTip.Tip="{Binding DisplayPath}">
-    <StackPanel Spacing="3" Margin="0,3">
+   <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="7" ToolTip.Tip="{Binding DisplayPath}">
+    <local:FileChangeBadge Change="{Binding Change}"/>
+    <StackPanel Grid.Column="1" Spacing="2" Margin="0,3" VerticalAlignment="Center">
      <TextBlock Text="{Binding Name}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
-     <TextBlock Text="{Binding Directory}" IsVisible="{Binding HasDirectory}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis"/>
+     <TextBlock Text="{Binding Directory}" IsVisible="{Binding HasDirectory}" Classes="code-meta" FontSize="11" TextTrimming="CharacterEllipsis"/>
     </StackPanel>
-    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-     <CheckBox DataContext="{Binding ReviewRow}" IsVisible="{Binding HasReviewStatus, FallbackValue=False}"
-               IsEnabled="{Binding CanChangeReview, FallbackValue=False}" IsChecked="{Binding IsReviewed, Mode=OneWay}"
-               Click="FileReviewedClick" MinWidth="23" MinHeight="24" Padding="0" VerticalAlignment="Center"
-               ToolTip.Tip="{Binding ReviewAction}" AutomationProperties.Name="{Binding ReviewAction}"/>
-     <local:FileChangeBadge Change="{Binding Change}"/>
-    </StackPanel>
+    <CheckBox Grid.Column="2" DataContext="{Binding ReviewRow}" IsVisible="{Binding HasReviewStatus, FallbackValue=False}"
+              IsEnabled="{Binding CanChangeReview, FallbackValue=False}" IsChecked="{Binding IsReviewed, Mode=OneWay}"
+              Click="FileReviewedClick" MinWidth="24" MinHeight="26" Padding="0" VerticalAlignment="Center"
+              ToolTip.Tip="{Binding ReviewAction}" AutomationProperties.Name="{Binding ReviewAction}"/>
    </Grid>
   </DataTemplate>
  </UserControl.Resources>
  <Grid RowDefinitions="Auto,*,Auto">
-  <Border Padding="12,14,12,12" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
-   <StackPanel Spacing="10">
+  <Border Padding="10,11,10,10" Classes="pane-heading">
+   <StackPanel Spacing="8">
     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
      <TextBlock x:Name="FilesHeading" Text="Files" Classes="pane-title" VerticalAlignment="Center"/>
      <Border Grid.Column="1" Classes="segmented"><StackPanel Orientation="Horizontal" Spacing="2">
@@ -34,10 +32,11 @@
      <Button x:Name="ClearFilter" Grid.Column="1" Content="Clear" Classes="quiet compact" Click="ClearFilterClick"
              IsVisible="False" AutomationProperties.Name="Clear file filters"/>
     </Grid>
-    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="2">
-     <TextBlock x:Name="FileProgress" Classes="muted" FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"/>
+    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="3">
+     <TextBlock x:Name="FileProgress" Classes="muted" FontSize="{StaticResource StackerCaptionFontSize}" VerticalAlignment="Center" TextWrapping="Wrap"/>
      <ToggleButton x:Name="UnreviewedOnly" Grid.Column="1" Content="Unreviewed" Classes="quiet compact" Click="UnreviewedClick" IsVisible="False"/>
     </Grid>
+    <ProgressBar x:Name="ReviewedProgress" Height="3" IsVisible="False" AutomationProperties.Name="Files reviewed"/>
    </StackPanel>
   </Border>
   <Grid Grid.Row="1" Margin="6,8">
@@ -50,7 +49,13 @@
     <TreeView.ItemTemplate>
      <TreeDataTemplate ItemsSource="{Binding Children}">
       <Grid>
-       <TextBlock Text="{Binding Name}" Classes="section-title" IsVisible="{Binding IsFolder}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}"/>
+       <Grid IsVisible="{Binding IsFolder}" ColumnDefinitions="Auto,*" ColumnSpacing="6" ToolTip.Tip="{Binding Name}">
+        <PathIcon Data="{StaticResource IconFolder}" Width="13" Height="13" Foreground="{DynamicResource TextSecondaryBrush}"
+                  IsVisible="{Binding !IsComparisonSection}"/>
+        <PathIcon Data="{StaticResource IconBranch}" Width="13" Height="13" Foreground="{DynamicResource TextSecondaryBrush}"
+                  IsVisible="{Binding IsComparisonSection}"/>
+        <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+       </Grid>
        <ContentControl IsVisible="{Binding !IsFolder}" Content="{Binding Item}" ContentTemplate="{StaticResource FileRowTemplate}"/>
       </Grid>
      </TreeDataTemplate>

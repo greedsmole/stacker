@@ -2,9 +2,9 @@
              xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.HistoryPanel"
              Background="{DynamicResource CanvasBrush}" FontSize="{DynamicResource StackerBodyFontSize}">
  <Grid RowDefinitions="Auto,*,Auto">
-  <Border Padding="14,6" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
-   <Grid RowDefinitions="Auto,Auto" RowSpacing="6">
-    <Grid ColumnDefinitions="*,*" ColumnSpacing="{DynamicResource StackerSpace16}" IsEnabled="{Binding !IsBusy}">
+  <Border Padding="14,8" Classes="pane-heading">
+   <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
+    <Grid ColumnDefinitions="*,*" ColumnSpacing="{DynamicResource StackerSpace24}" IsEnabled="{Binding !IsBusy}">
      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
       <TextBlock Text="Layer" Classes="section-title" VerticalAlignment="Center"/>
       <ComboBox Grid.Column="1" ItemsSource="{Binding Nodes}" SelectedItem="{Binding SelectedNode}"
@@ -18,7 +18,8 @@
       <Button Grid.Column="2" Content="Compare" Command="{Binding CompareVersionsCommand}" Classes="outline compact"/>
      </Grid>
     </Grid>
-    <WrapPanel Grid.Row="1" ItemSpacing="6" LineSpacing="6">
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+     <WrapPanel ItemSpacing="6" LineSpacing="6">
      <Button x:Name="HistoryFilesButton" Content="Browse files…" Classes="outline compact" IsEnabled="{Binding !IsBusy}">
       <Button.Flyout>
        <Flyout Placement="BottomEdgeAlignedLeft" Opening="OpenHistoryFiles">
@@ -29,8 +30,6 @@
      <Button Content="View current changes" Command="{Binding ShowCurrentCommand}" Classes="quiet compact"/>
      <Button Content="Since my review" Command="{Binding SinceReviewedCommand}" Classes="quiet compact"
              ToolTip.Tip="Compare this file with the version you last marked reviewed"/>
-     <Button Content="Mark file reviewed" Command="{Binding MarkReviewedCommand}" Classes="primary compact"
-             ToolTip.Tip="Mark the selected file reviewed on the current layer version"/>
      <Button x:Name="HistoryToolsButton" Content="History tools" Classes="quiet compact">
       <Button.Flyout>
        <Flyout Placement="BottomEdgeAlignedRight">
@@ -80,7 +79,10 @@
        </Flyout>
       </Button.Flyout>
      </Button>
-    </WrapPanel>
+     </WrapPanel>
+     <Button Grid.Column="1" Content="Mark file reviewed" Command="{Binding MarkReviewedCommand}" Classes="primary compact"
+             ToolTip.Tip="Mark the selected file reviewed on the current layer version"/>
+    </Grid>
    </Grid>
   </Border>
   <Grid Grid.Row="1">
@@ -91,19 +93,19 @@
     </ContentControl.ContentTemplate>
    </ContentControl>
    <ScrollViewer IsVisible="{Binding !HasActiveDocumentSection}" HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Margin="24,28" Spacing="8" MaxWidth="560" HorizontalAlignment="Left">
-     <TextBlock Text="Review history" IsVisible="{Binding !HasPreview}" FontSize="{DynamicResource StackerTitleFontSize}" FontWeight="SemiBold"/>
+    <StackPanel Margin="28,32" Spacing="8" MaxWidth="560" HorizontalAlignment="Left">
+     <TextBlock Text="Choose a comparison" IsVisible="{Binding !HasPreview}" Classes="view-title"/>
      <TextBlock Text="{Binding EmptyDocumentMessage}" IsVisible="{Binding !HasPreview}" TextWrapping="Wrap" Classes="muted"/>
      <SelectableTextBlock Text="{Binding Preview}" IsVisible="{Binding HasPreview}" TextWrapping="Wrap"/>
     </StackPanel>
    </ScrollViewer>
   </Grid>
-  <Border Grid.Row="2" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0">
+  <Border Grid.Row="2" Classes="dialog-footer">
    <Grid RowDefinitions="Auto,Auto">
     <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="2"/>
     <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="14,2">
      <ScrollViewer VerticalAlignment="Center" HorizontalScrollBarVisibility="Disabled" MaxHeight="56">
-      <SelectableTextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="{DynamicResource StackerCaptionFontSize}" Classes="muted" Margin="0,2"/>
+      <SelectableTextBlock Text="{Binding Message}" TextWrapping="Wrap" Classes="code-meta" Margin="0,2"/>
      </ScrollViewer>
      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasActiveDocumentSection}">
       <TextBlock Text="{Binding SelectedFile.State}" ToolTip.Tip="{Binding SelectedFile.Label}" FontSize="{DynamicResource StackerCaptionFontSize}" Classes="muted" VerticalAlignment="Center"/>

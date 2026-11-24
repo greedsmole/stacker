@@ -14,12 +14,14 @@ public partial class CommitWindow : Window
     {
         _sync = sync;
         var state = sync.WorkingTree;
-        BranchLabel.Text = state?.Branch is { } branch ? "On " + branch : "HEAD is detached";
+        BranchLabel.Text = state?.Branch is { } branch ? "On " + branch : state is null ? "Current branch unavailable" : "Detached HEAD";
         ChangeList.ItemsSource = (state?.Entries ?? []).Select(entry => entry.Display).ToArray();
         CommitButton.IsEnabled = state is { Entries.Count: > 0 };
-        EmptyLabel.IsVisible = state is { Entries.Count: 0 };
-        StageAllToggle.IsEnabled = CommitButton.IsEnabled;
-        MessageInput.Focus();
+        EmptyLabel.IsVisible = !CommitButton.IsEnabled;
+        EmptyLabel.Text = state is null ? "Refresh the repository to load working-tree changes."
+            : "The working tree is clean.";
+        if (CommitButton.IsEnabled)
+            MessageInput.Focus();
     }
     private void CommitClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>

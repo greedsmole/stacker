@@ -1,34 +1,36 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="Stacker.Desktop.CommitWindow" Title="Commit"
+        x:Class="Stacker.Desktop.CommitWindow" Title="Working tree"
         Width="640" Height="600" MinWidth="520" MinHeight="420" WindowStartupLocation="CenterOwner">
   <Grid RowDefinitions="Auto,*,Auto">
-    <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="24,16">
+    <Border Classes="dialog-heading" Padding="24,16">
       <StackPanel Spacing="{DynamicResource StackerSpace4}">
-        <TextBlock Text="Commit changes" Classes="view-title"/>
-        <TextBlock x:Name="BranchLabel" Classes="muted" TextWrapping="Wrap"/>
+        <TextBlock Text="Working tree" Classes="view-title"/>
+        <TextBlock x:Name="BranchLabel" Classes="code-meta" TextWrapping="Wrap"/>
       </StackPanel>
     </Border>
     <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="24" Spacing="{DynamicResource StackerSpace24}">
         <StackPanel Spacing="{DynamicResource StackerSpace8}">
           <TextBlock Text="Changed files" Classes="section-title"/>
-          <TextBlock x:Name="EmptyLabel" Text="The working tree is clean. Make a change in your editor, then reopen Commit." TextWrapping="Wrap" Classes="muted" IsVisible="False"/>
-          <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" CornerRadius="{DynamicResource ControlCornerRadius}" ClipToBounds="True">
-            <ListBox x:Name="ChangeList" MaxHeight="160" Background="Transparent" BorderThickness="0" FontFamily="Menlo,Consolas,monospace" FontSize="{DynamicResource StackerCaptionFontSize}"/>
+          <TextBlock x:Name="EmptyLabel" TextWrapping="Wrap" Classes="muted"/>
+          <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" CornerRadius="{DynamicResource ControlCornerRadius}"
+                  ClipToBounds="True" IsVisible="{Binding #CommitButton.IsEnabled}">
+            <ListBox x:Name="ChangeList" MaxHeight="160" Background="Transparent" BorderThickness="0"
+                     FontFamily="{StaticResource CodeFontFamily}" FontSize="{DynamicResource StackerCaptionFontSize}" AutomationProperties.Name="Changed working-tree files"/>
           </Border>
-          <StackPanel Spacing="{DynamicResource StackerSpace4}">
+          <StackPanel Spacing="{DynamicResource StackerSpace4}" IsVisible="{Binding #CommitButton.IsEnabled}">
             <CheckBox x:Name="StageAllToggle" Content="Stage every change, including new files" IsChecked="True"/>
             <TextBlock Text="Clear this to commit only changes already staged in Git" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
           </StackPanel>
         </StackPanel>
-        <StackPanel Spacing="{DynamicResource StackerSpace8}">
+        <StackPanel Spacing="{DynamicResource StackerSpace8}" IsVisible="{Binding #CommitButton.IsEnabled}">
           <TextBlock Text="Commit message" Classes="section-title"/>
           <TextBox x:Name="MessageInput" AutomationProperties.Name="Commit message" AcceptsReturn="True" MinHeight="112" TextWrapping="Wrap" Watermark="Describe what changed and why"/>
           <TextBlock Text="Git hooks and signing use your repository configuration." Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
         </StackPanel>
       </StackPanel>
     </ScrollViewer>
-    <Border Grid.Row="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="24,16">
+    <Border Grid.Row="2" Classes="dialog-footer" Padding="24,16">
       <Grid RowDefinitions="Auto,Auto" RowSpacing="{DynamicResource StackerSpace8}">
         <ScrollViewer MaxHeight="64" HorizontalScrollBarVisibility="Disabled"><SelectableTextBlock x:Name="ErrorLabel" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"/></ScrollViewer>
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="{DynamicResource StackerSpace8}">

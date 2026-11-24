@@ -13,8 +13,13 @@ public sealed partial class MainViewModel
     /// <summary>The restack entry point is offered only for a local stack that can be rewritten.</summary>
     public bool? UndoAvailable => _runtime._activeGroup?.UndoAvailable ?? false;
     /// <summary>Whether a restack can start for the active local group.</summary>
-    public bool CanRestackActiveStack => _runtime._repository is not null && _runtime._activeGroup is { IsRemote: false } && !IsSyncing;
-    partial void OnIsSyncingChanged(bool value) => OnPropertyChanged(nameof(CanRestackActiveStack));
+    public bool CanRestackActiveStack => CanEditStackerSelection && !IsSyncing;
+    partial void OnIsSyncingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanRestackActiveStack));
+        WorkingTreeEditor?.UpdateCommands();
+        NotifyGhStackActions();
+    }
 
     /// <summary>Builds the preview for the active local stack without touching a single ref.</summary>
     public Task<RestackPlan?> BuildRestackPlanAsync(bool preserveMerges = false) => _syncController.BuildRestackPlanAsync(preserveMerges);

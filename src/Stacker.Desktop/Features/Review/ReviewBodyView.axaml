@@ -5,20 +5,20 @@
    <Border IsVisible="{Binding IsSuggestion}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
            CornerRadius="{DynamicResource ControlCornerRadius}" ClipToBounds="True">
     <StackPanel>
-     <Grid ColumnDefinitions="*,Auto" Background="{DynamicResource PanelBrush}" ColumnSpacing="6">
+     <Grid ColumnDefinitions="*,Auto" Background="{DynamicResource HeaderBrush}" ColumnSpacing="6">
       <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="{DynamicResource StackerCaptionFontSize}" Margin="10,9,0,9" VerticalAlignment="Center" TextWrapping="Wrap"/>
       <Button Grid.Column="1" Content="Copy code" Click="CopySuggestionClick" Classes="quiet compact" FontSize="{DynamicResource StackerCaptionFontSize}" Margin="2" VerticalAlignment="Top"/>
      </Grid>
      <Border Background="{DynamicResource SuggestionRemovedBrush}" Padding="10" IsVisible="{Binding #BodyRoot.HasOriginalCode}">
       <StackPanel Spacing="6">
        <TextBlock Text="Current code" Classes="label"/>
-       <SelectableTextBlock Text="{Binding #BodyRoot.OriginalCode}" FontFamily="Menlo,Consolas,monospace" FontSize="{DynamicResource StackerCaptionFontSize}" LineHeight="18" TextWrapping="Wrap"/>
+       <SelectableTextBlock Text="{Binding #BodyRoot.OriginalCode}" FontFamily="{StaticResource CodeFontFamily}" FontSize="{DynamicResource StackerCaptionFontSize}" LineHeight="18" TextWrapping="Wrap"/>
       </StackPanel>
      </Border>
      <Border Background="{DynamicResource SuggestionAddedBrush}" Padding="10">
       <StackPanel Spacing="6">
        <TextBlock Text="Replacement" Classes="label"/>
-       <SelectableTextBlock Text="{Binding Text}" FontFamily="Menlo,Consolas,monospace" FontSize="{DynamicResource StackerCaptionFontSize}" LineHeight="18" TextWrapping="Wrap"/>
+       <SelectableTextBlock Text="{Binding Text}" FontFamily="{StaticResource CodeFontFamily}" FontSize="{DynamicResource StackerCaptionFontSize}" LineHeight="18" TextWrapping="Wrap"/>
        <TextBlock Text="Delete the selected lines" IsVisible="{Binding IsDeletion}" Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}" TextWrapping="Wrap"/>
       </StackPanel>
      </Border>

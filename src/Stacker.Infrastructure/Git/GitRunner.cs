@@ -76,9 +76,10 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
         }
     }
 
-    public async Task<WorkingTreeState> StatusAsync(string root, CancellationToken ct)
+    public async Task<WorkingTreeState> StatusAsync(string root, CancellationToken ct, bool allUntracked = false)
     {
-        var porcelain = (await Run(root, ["status", "--porcelain=v1", "-z", "--untracked-files=normal"], ct, allowFailure: true)).StdOut;
+        var porcelain = (await Run(root, ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v1", "-z",
+            allUntracked ? "--untracked-files=all" : "--untracked-files=normal"], ct)).StdOut;
         var head = await Run(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], ct, allowFailure: true);
         var branch = head.ExitCode == 0 && head.StdOut.Trim().Length > 0 ? head.StdOut.Trim() : null;
         return new(branch, await OperationAsync(root, ct), WorkingTreeParser.Parse(porcelain));
@@ -200,14 +201,15 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
         _ => ["rebase", "--abort"]
     };
 
-    public async Task<ProcessResult> Run(string root, string[] args, CancellationToken ct, bool allowFailure = false, TimeSpan? timeout = null, string? editor = null)
+    public async Task<ProcessResult> Run(string root, string[] args, CancellationToken ct, bool allowFailure = false, TimeSpan? timeout = null,
+        string? editor = null, string? input = null)
     {
         var environment = editor is null
             ? WriteEnvironment
             : new Dictionary<string, string>(WriteEnvironment) { ["GIT_EDITOR"] = editor };
         var result = (await runner.RunAsync(new(executable.Resolve(),
             ["-c", "core.hooksPath=" + Framework.Neutral.HooksPath, "-c", "commit.gpgSign=false", "-c", "rebase.updateRefs=false", .. args],
-            root, timeout ?? WriteTimeout, MaxOutputBytes: 4 * 1024 * 1024, Environment: environment), ct)).OrThrow();
+            root, timeout ?? WriteTimeout, MaxOutputBytes: 4 * 1024 * 1024, Environment: environment, StandardInput: input), ct)).OrThrow();
         if (!allowFailure && result.ExitCode != 0)
             throw new StackerException($"Git exited with code {result.ExitCode}: {result.StdErr.Trim()}");
         return result;

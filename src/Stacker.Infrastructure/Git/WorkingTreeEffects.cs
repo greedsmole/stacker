@@ -92,7 +92,7 @@ internal sealed class WorkingTreeEffects(GitRunner git, IJournal journal)
         await git.Gate.WaitAsync(ct);
         try
         {
-            await git.Run(root, ["add", "--", .. paths], ct);
+            await git.Run(root, ["--literal-pathspecs", "add", "--", .. paths], ct);
             return paths;
         }
         finally { git.Gate.Release(); }
@@ -225,6 +225,8 @@ internal sealed class WorkingTreeEffects(GitRunner git, IJournal journal)
         try
         {
             var name = StackRefs.Short(branch);
+            if (name.StartsWith('-'))
+                throw new StackerException("A local branch name cannot begin with a dash.");
             var state = await git.StatusAsync(root, ct);
             if (state.HasTrackedChanges)
                 throw new StackerException("The working tree has uncommitted changes. Commit or stash them before switching.");

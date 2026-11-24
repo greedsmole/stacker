@@ -1,4 +1,4 @@
-# Stacker v0.10.0
+# Stacker v0.11.0
 
 A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Release packages cover **macOS Apple Silicon, macOS Intel, and Windows x64**.
 
@@ -14,13 +14,13 @@ dotnet run --project src/Stacker.Desktop -- --demo
 dotnet run --project src/Stacker.Desktop -- /path/to/repository
 ```
 
-Build a package for your computer with `make publish`, or choose a target with `make publish RID=win-x64`. The direct Python command `python3 scripts/package.py osx-arm64` writes `artifacts/Stacker-0.10.0-osx-arm64.tar.gz`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe` with its adjacent files. The packages include .NET. Install Git and the optional GitHub CLI separately. The macOS app bundles ship without Developer ID signing or notarization.
+Build a package for your computer with `make publish`, or choose a target with `make publish RID=win-x64`. The direct Python command `python3 scripts/package.py osx-arm64` writes `artifacts/Stacker-0.11.0-osx-arm64.tar.gz`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe` with its adjacent files. The packages include .NET. Install Git and the optional GitHub CLI separately. The macOS app bundles ship without Developer ID signing or notarization.
 
-Download the packages from [the v0.10.0 release](https://github.com/greedsmole/stacker/releases/tag/v0.10.0). See the [release notes](docs/releases/v0.10.0.md) for changes and package details.
+Download the packages from [the v0.11.0 release](https://github.com/greedsmole/stacker/releases/tag/v0.11.0). See the [release notes](docs/releases/v0.11.0.md) for changes and package details.
 
 ## Navigation and comparisons
 
-Stacks are separate expandable groups. Layers are numbered, not represented by indentation characters. Click the chevron to collapse a group; click its title to restore its last view. Entire stack always opens the combined changes.
+Each stack expands into a branch graph that starts at its base. Click a branch to inspect its changes. With a branch focused, use ↑ and ↓ to move and Enter to inspect. The filled node marks the inspected layer, and **HEAD** labels the checked-out local branch. Click a stack title to restore its last view or **Entire stack** to open the combined changes.
 
 For `main → A → B → C`:
 
@@ -33,7 +33,7 @@ For `main → A → B → C`:
 
 At the last layer, Through this layer equals Entire stack. Selected layers keep their own parents. Checkboxes and Cmd/Ctrl-click toggle layers within one stack. Returning to a stack automatically restores its selection, mode, file, filter and scroll position. These are also saved across restarts, together with group expansion. The last available repository reopens on launch.
 
-The repository switcher contains recent folders, Open folder and Open demo. **PRs & stacks** opens the navigator, where **Pull requests** and **Local stacks** select the source. The navigator starts closed, and the default Files pane is 220 px wide so code gets the main workspace. Stack maintenance and the class diagram are available under **Stack actions** or **PR tools** in the comparison header. **Discussion** and **Review** open only when selected; resizing never opens them. They dock when there is room, or show **Back to diff** in a smaller window.
+The repository switcher contains recent folders, **Open folder**, and **Open demo**. **Stacks** shows the graph for **Pull requests** or **Local stacks**. In a fresh profile the graph is open and **Files** opens on demand. The stack name in the comparison header restores the active graph and shows your layer position. **Discussion** and **Review** open on request. They dock when there is room or offer **Back to diff** in a smaller window.
 
 **Standalone pull requests:** PRs outside discovered stacks appear under **Pull requests** as direct review entries. Click one to open its server base/head changes, code threads, discussion and review controls. No stack definition is needed.
 
@@ -51,7 +51,7 @@ Click an unchanged-lines row to reveal up to 20 lines beside a change. Between h
 
 Use **File actions → Wrap code** to fit long lines to the pane; the preference is saved. For a multi-line comment, Shift-click adjacent code rows and click the contextual **+** beside the selection. The editor shows the line range before you add it to a review or post it. Mixed added/removed sides are rejected with an explanation.
 
-Use **PRs & stacks** and **Files** to show or hide either sidebar. **Focus** temporarily hides both sidebars and the review inspector. Use **Exit focus** to restore the layout. **Settings → Diff line height** controls code spacing, and **Reduce motion** turns off workspace transitions. In a single-layer or PR diff, **Mark reviewed** or the checkbox beside a file records a personal checkpoint in **History**. The Files pane shows progress and offers **Unreviewed** when checkpoints are available. Escape closes an open review panel and returns focus to its opening control.
+Use **Stacks** and **Files** to show or hide either sidebar. **Focus** temporarily hides both sidebars and the review inspector. Use **Exit focus** to restore the layout. **Settings → Diff line height** controls code spacing, and **Reduce motion** turns off workspace transitions. In a single-layer or PR diff, **Mark reviewed** or the checkbox beside a file records a personal checkpoint in **History**. The Files pane shows progress and offers **Unreviewed** when checkpoints are available. Escape closes an open review panel and returns focus to its opening control.
 
 ## Reproducible demo
 
@@ -115,7 +115,7 @@ Before publication Stacker rechecks the account, access, current PR base/head an
 
 Writes are never automatically retried. A hidden operation marker allows uncertain sends to be reconciled by subsequent discussion reads. Retry recovery controls only appear when needed; if the result is still uncertain, inspect GitHub before explicitly unlocking a retry. Draft changes made after an uncertain send are retained when it is confirmed.
 
-Not included: editing/deleting published comments, emoji reactions, GitLab, merging two branches, interactive rebase (`rebase -i`), reordering a stack and retargeting its pull requests, per-file staging with diff selection, editing pull-request titles and descriptions beyond the suggested commit subject, or CI dashboards. Local packaging also accepts Linux targets. A restack rewrites only the branches of the selected local stack.
+Not included: editing/deleting published comments, emoji reactions, GitLab, merging two branches, interactive rebase (`rebase -i`), reordering a stack and retargeting its pull requests, editing pull-request titles and descriptions beyond the suggested commit subject, or CI dashboards. Local packaging also accepts Linux targets. A restack rewrites only the branches of the selected local stack.
 
 ## Starting and extending a stack
 
@@ -126,6 +126,14 @@ Starting a layer is refused when the working tree is dirty, when a rebase, merge
 ## Working on the stack locally
 
 Stacker runs the local Git a stacked workflow needs, and never hides what it is doing.
+
+**Working tree** in the toolbar and **Inspect…** in the stack navigator open the checkout's edits. Choose **Unstaged** or **Staged** to see that side of a file's diff. A file edited on both sides appears in both lists. Select one or more files, then choose **Stage selected** or **Unstage selected**. Unstaging preserves the files on disk. Enter a message and choose **Commit staged** to commit the current index with your Git hooks and signing settings. **Changes** returns to the selected stack comparison.
+
+### GitHub CLI stacks
+
+Enable **GitHub CLI backend** under **Local stacks** for a repository whose branches you want to manage with GitHub's official `gh stack` extension. **Load current CLI stack** shows the active layers for the checked-out stack. **Create stack…** creates and checks out the first layer. **Add layer…** starts at the checked-out tip. **Rebase upper layers…** previews the affected local branches and lets you rebase them onto their stack parents.
+
+The GitHub CLI backend supports inspection with a JSON-capable extension. Management is enabled for 0.3.x and was verified with 0.3.0. **Operations and recovery** records the command and worktree. When a managed rebase stops, resolve the files, stage the resolution in **Working tree**, and choose **Continue rebase** or **Abort rebase…**. Choose the Stacker backend for stacks defined in `.stackpr.yml`. [GitHub CLI stack commands](https://docs.github.com/en/pull-requests/reference/stacked-prs-cli-commands)
 
 **Conflicts are yours to resolve.** When a layer does not apply cleanly the restack stops there: the rebase stays in progress, the layers already rewritten stay rewritten, and the conflicting files are listed in the sync window and in a banner in the main window. Then:
 
@@ -140,7 +148,7 @@ The banner survives closing the app, and it also notices a rebase, merge, cherry
 
 ## Restacking and publishing
 
-Local stacks can be rewritten in place. Choose **Stack actions → Preview restack…** whenever a local stack is selected. It opens a preview first: every layer, its parent, the commits it will replay, and any blocker. Nothing is written until you press **Restack (local)**, and the preview re-reads the repository so it cannot describe a stale snapshot.
+Choose **Sync stack…** from a local stack to preview each layer, its parent, the commits it will replay, and any blockers. **Restack (local)** applies the preview after verifying the repository again. Select a layer and choose **Stack actions → Check out selected branch** to switch to its local branch. **Inspect…** in the graph opens the working tree and commit form.
 
 - **What moves:** each layer is replayed onto its parent with `git rebase --onto`, starting at the lowest diverged layer and cascading upward. Only the branches of that stack move; other refs, the index and unrelated files are left alone.
 - **Before anything runs:** the tracked working tree must be clean (untracked files are ignored, and *Stash and restack* clears the rest), no rebase, merge or cherry-pick may be in progress, no stack branch may be checked out in another worktree, and a layer with merge commits is refused until you tick **Preserve merge commits** (`--rebase-merges`). Every rewritten branch is backed up under `refs/stacker/backup/<timestamp-and-operation-id>/<branch>` first; the ten most recent runs are kept.

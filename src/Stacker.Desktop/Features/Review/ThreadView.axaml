@@ -4,20 +4,25 @@
   <Style Selector="ToggleButton:checked PathIcon.thread-chevron">
    <Setter Property="RenderTransform" Value="rotate(90deg)"/>
   </Style>
+  <Style Selector="Border.thread.expanded">
+   <Setter Property="Background" Value="{DynamicResource PanelBrush}"/>
+   <Setter Property="BorderThickness" Value="1"/>
+  </Style>
  </UserControl.Styles>
- <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,1">
+ <Border Classes="thread" Classes.expanded="{Binding #Disclosure.IsChecked}" BorderBrush="{DynamicResource DividerBrush}"
+         CornerRadius="{StaticResource ControlCornerRadius}" Margin="0,2">
   <StackPanel>
    <ToggleButton x:Name="Disclosure" IsChecked="False" Classes="quiet" MinHeight="26"
                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="4,3"
                  AutomationProperties.Name="{Binding Label}">
     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource StackerSpace8}">
-     <PathIcon Classes="thread-chevron" Width="10" Height="10" Data="M 3,1 L 7,5 L 3,9"
-               VerticalAlignment="Top" Margin="0,3,0,0" RenderTransformOrigin="50%,50%"/>
+     <PathIcon Classes="thread-chevron" Width="7" Height="10" Data="{StaticResource IconChevronRight}"
+               VerticalAlignment="Center" RenderTransformOrigin="50%,50%"/>
      <TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="{DynamicResource StackerCaptionFontSize}" FontWeight="SemiBold"
                 TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Label}"/>
     </Grid>
    </ToggleButton>
-   <StackPanel Spacing="10" Margin="22,4,0,6" IsVisible="{Binding #Disclosure.IsChecked}">
+   <StackPanel Spacing="10" Margin="14,5,14,10" IsVisible="{Binding #Disclosure.IsChecked}">
     <ItemsControl ItemsSource="{Binding Comments}">
      <ItemsControl.ItemTemplate>
       <DataTemplate>

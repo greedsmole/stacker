@@ -13,6 +13,7 @@ public sealed partial class FileTreeNode(string name, string path, FileTreeNode?
     public object? Item { get; } = item;
     public DiffFileRow? ReviewRow => Item as DiffFileRow;
     public bool IsFolder => Change is null;
+    public bool IsComparisonSection { get; init; }
     public string AccessibleName => Change is { } file ? $"{file.DisplayPath} · {file.Kind}" : Name;
     public IReadOnlyList<FileTreeNode> Children => _children is { } children ? children : [];
     private FileTreeNode? Parent { get; } = parent;

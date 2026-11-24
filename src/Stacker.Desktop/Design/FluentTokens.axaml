@@ -7,45 +7,49 @@
  <x:Double x:Key="StackerBodyFontSize">13</x:Double>
  <x:Double x:Key="StackerCaptionFontSize">12</x:Double>
  <x:Double x:Key="StackerTitleFontSize">20</x:Double>
- <SolidColorBrush x:Key="OnAccentBrush">White</SolidColorBrush>
  <x:Double x:Key="ControlContentThemeFontSize">13</x:Double>
  <FontFamily x:Key="ContentControlThemeFontFamily">Inter</FontFamily>
- <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>
- <CornerRadius x:Key="OverlayCornerRadius">8</CornerRadius>
+ <FontFamily x:Key="CodeFontFamily">Menlo,Consolas,DejaVu Sans Mono,monospace</FontFamily>
+ <CornerRadius x:Key="ControlCornerRadius">5</CornerRadius>
+ <CornerRadius x:Key="OverlayCornerRadius">9</CornerRadius>
  <Thickness x:Key="ButtonPadding">10,4</Thickness>
  <Thickness x:Key="TextControlThemePadding">10,4</Thickness>
   <x:Double x:Key="DiffLineHeight">18</x:Double>
   <ResourceDictionary.ThemeDictionaries>
    <ResourceDictionary x:Key="Dark">
-    <SolidColorBrush x:Key="PrimaryBrush">#0F6CBD</SolidColorBrush>
-    <SolidColorBrush x:Key="PrimaryHoverBrush">#115EA3</SolidColorBrush>
-    <SolidColorBrush x:Key="PrimaryPressedBrush">#0C3B5E</SolidColorBrush>
-    <SolidColorBrush x:Key="SelectionBrush">#1F3D5C</SolidColorBrush>
-    <SolidColorBrush x:Key="SelectionTextBrush">#FFFFFF</SolidColorBrush>
-    <SolidColorBrush x:Key="CanvasBrush">#1F1F1F</SolidColorBrush>
-    <SolidColorBrush x:Key="PanelBrush">#242424</SolidColorBrush>
-    <SolidColorBrush x:Key="ChromeBrush">#141414</SolidColorBrush>
-    <SolidColorBrush x:Key="HeaderBrush">#292929</SolidColorBrush>
-    <SolidColorBrush x:Key="InputBrush">#1F1F1F</SolidColorBrush>
-    <SolidColorBrush x:Key="HoverBrush">#383838</SolidColorBrush>
-    <SolidColorBrush x:Key="PressedBrush">#424242</SolidColorBrush>
-    <SolidColorBrush x:Key="TextPrimaryBrush">#F5F5F5</SolidColorBrush>
-    <SolidColorBrush x:Key="TextSecondaryBrush">#C2C2C2</SolidColorBrush>
-    <SolidColorBrush x:Key="DividerBrush">#424242</SolidColorBrush>
-    <SolidColorBrush x:Key="DiagramEdgeBrush">#8C99A6</SolidColorBrush>
-    <SolidColorBrush x:Key="NoticeBrush">#292E35</SolidColorBrush>
-    <SolidColorBrush x:Key="WarningBrush">#E5B76B</SolidColorBrush>
-    <SolidColorBrush x:Key="FileAddedBrush">#8BD7A0</SolidColorBrush>
-    <SolidColorBrush x:Key="FileModifiedBrush">#91C7FF</SolidColorBrush>
-    <SolidColorBrush x:Key="FileDeletedBrush">#FF9FA6</SolidColorBrush>
-    <SolidColorBrush x:Key="FileRelocatedBrush">#D1B8FC</SolidColorBrush>
-    <SolidColorBrush x:Key="DiffAddedBrush">#1E2922</SolidColorBrush>
-    <SolidColorBrush x:Key="DiffRemovedBrush">#302024</SolidColorBrush>
-    <SolidColorBrush x:Key="DiffAddedAccentBrush">#5A9C73</SolidColorBrush>
-    <SolidColorBrush x:Key="DiffRemovedAccentBrush">#C87486</SolidColorBrush>
-    <SolidColorBrush x:Key="DiffHunkBrush">#232A35</SolidColorBrush>
-    <SolidColorBrush x:Key="SuggestionAddedBrush">#193D2B</SolidColorBrush>
-    <SolidColorBrush x:Key="SuggestionRemovedBrush">#402626</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryBrush">#A3D5ED</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryHoverBrush">#BDE6F9</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryPressedBrush">#83B8D1</SolidColorBrush>
+    <SolidColorBrush x:Key="OnAccentBrush">#10252F</SolidColorBrush>
+    <SolidColorBrush x:Key="SelectionBrush">#243643</SolidColorBrush>
+    <SolidColorBrush x:Key="SelectionTextBrush">#C6E9FA</SolidColorBrush>
+    <SolidColorBrush x:Key="CanvasBrush">#15171B</SolidColorBrush>
+    <SolidColorBrush x:Key="PanelBrush">#1D2026</SolidColorBrush>
+    <SolidColorBrush x:Key="ChromeBrush">#1A1C21</SolidColorBrush>
+    <SolidColorBrush x:Key="HeaderBrush">#20232A</SolidColorBrush>
+    <SolidColorBrush x:Key="RaisedBrush">#272B33</SolidColorBrush>
+    <SolidColorBrush x:Key="InputBrush">#171A1F</SolidColorBrush>
+    <SolidColorBrush x:Key="HoverBrush">#2C3039</SolidColorBrush>
+    <SolidColorBrush x:Key="PressedBrush">#373D49</SolidColorBrush>
+    <SolidColorBrush x:Key="TextPrimaryBrush">#EEF0F4</SolidColorBrush>
+    <SolidColorBrush x:Key="TextSecondaryBrush">#B4BAC6</SolidColorBrush>
+    <SolidColorBrush x:Key="DividerBrush">#32363F</SolidColorBrush>
+    <SolidColorBrush x:Key="ControlStrokeBrush">#646F7E</SolidColorBrush>
+    <SolidColorBrush x:Key="DiagramEdgeBrush">#8795A8</SolidColorBrush>
+    <SolidColorBrush x:Key="NoticeBrush">#222D37</SolidColorBrush>
+    <SolidColorBrush x:Key="WarningBrush">#EDC080</SolidColorBrush>
+    <SolidColorBrush x:Key="FileAddedBrush">#9BD5AD</SolidColorBrush>
+    <SolidColorBrush x:Key="FileModifiedBrush">#C0C6D4</SolidColorBrush>
+    <SolidColorBrush x:Key="FileDeletedBrush">#FFADB7</SolidColorBrush>
+    <SolidColorBrush x:Key="FileRelocatedBrush">#D5BEF0</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffAddedBrush">#1A2823</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffRemovedBrush">#302328</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffGutterBrush">#1A1D23</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffAddedGutterBrush">#21362B</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffRemovedGutterBrush">#402931</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffHunkBrush">#222831</SolidColorBrush>
+    <SolidColorBrush x:Key="SuggestionAddedBrush">#1F382B</SolidColorBrush>
+    <SolidColorBrush x:Key="SuggestionRemovedBrush">#3E292E</SolidColorBrush>
 
     <StaticResource x:Key="ButtonBackground" ResourceKey="InputBrush"/>
     <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="HoverBrush"/>
@@ -58,13 +62,18 @@
     <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="PrimaryHoverBrush"/>
     <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="PrimaryPressedBrush"/>
     <StaticResource x:Key="AccentButtonForeground" ResourceKey="OnAccentBrush"/>
+    <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="OnAccentBrush"/>
+    <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="OnAccentBrush"/>
+    <StaticResource x:Key="CheckBoxCheckGlyphForegroundChecked" ResourceKey="OnAccentBrush"/>
+    <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" ResourceKey="OnAccentBrush"/>
+    <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" ResourceKey="OnAccentBrush"/>
     <StaticResource x:Key="TextControlBackground" ResourceKey="InputBrush"/>
     <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="InputBrush"/>
     <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="InputBrush"/>
     <StaticResource x:Key="TextControlForeground" ResourceKey="TextPrimaryBrush"/>
     <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="TextPrimaryBrush"/>
     <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="TextPrimaryBrush"/>
-    <StaticResource x:Key="TextControlBorderBrush" ResourceKey="DividerBrush"/>
+    <StaticResource x:Key="TextControlBorderBrush" ResourceKey="ControlStrokeBrush"/>
     <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="TextSecondaryBrush"/>
     <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="PrimaryBrush"/>
     <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="TextSecondaryBrush"/>
@@ -74,48 +83,52 @@
     <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="HoverBrush"/>
     <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="PressedBrush"/>
     <StaticResource x:Key="ComboBoxForeground" ResourceKey="TextPrimaryBrush"/>
-    <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="DividerBrush"/>
-    <StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="PanelBrush"/>
+    <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="ControlStrokeBrush"/>
+    <StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="RaisedBrush"/>
     <StaticResource x:Key="MenuFlyoutPresenterBorderBrush" ResourceKey="DividerBrush"/>
     <StaticResource x:Key="MenuFlyoutItemForeground" ResourceKey="TextPrimaryBrush"/>
     <StaticResource x:Key="MenuFlyoutItemForegroundPointerOver" ResourceKey="TextPrimaryBrush"/>
     <StaticResource x:Key="MenuFlyoutItemForegroundPressed" ResourceKey="TextPrimaryBrush"/>
     <StaticResource x:Key="MenuFlyoutItemBackgroundPointerOver" ResourceKey="HoverBrush"/>
     <StaticResource x:Key="MenuFlyoutItemBackgroundPressed" ResourceKey="PressedBrush"/>
-    <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="PanelBrush"/>
+    <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="RaisedBrush"/>
     <StaticResource x:Key="FlyoutBorderThemeBrush" ResourceKey="DividerBrush"/>
     <x:Double x:Key="TextControlPlaceholderOpacity">1</x:Double>
    </ResourceDictionary>
    <ResourceDictionary x:Key="Light">
-    <SolidColorBrush x:Key="PrimaryBrush">#0F6CBD</SolidColorBrush>
-    <SolidColorBrush x:Key="PrimaryHoverBrush">#115EA3</SolidColorBrush>
-    <SolidColorBrush x:Key="PrimaryPressedBrush">#0C3B5E</SolidColorBrush>
-    <SolidColorBrush x:Key="SelectionBrush">#EBF3FC</SolidColorBrush>
-    <SolidColorBrush x:Key="SelectionTextBrush">#0F548C</SolidColorBrush>
-    <SolidColorBrush x:Key="CanvasBrush">#FFFFFF</SolidColorBrush>
-    <SolidColorBrush x:Key="PanelBrush">#FAFAFA</SolidColorBrush>
-    <SolidColorBrush x:Key="ChromeBrush">#F0F0F0</SolidColorBrush>
-    <SolidColorBrush x:Key="HeaderBrush">#F5F5F5</SolidColorBrush>
-    <SolidColorBrush x:Key="InputBrush">#FFFFFF</SolidColorBrush>
-    <SolidColorBrush x:Key="HoverBrush">#F0F0F0</SolidColorBrush>
-    <SolidColorBrush x:Key="PressedBrush">#E0E0E0</SolidColorBrush>
-    <SolidColorBrush x:Key="TextPrimaryBrush">#242424</SolidColorBrush>
-    <SolidColorBrush x:Key="TextSecondaryBrush">#616161</SolidColorBrush>
-    <SolidColorBrush x:Key="DividerBrush">#E0E0E0</SolidColorBrush>
-    <SolidColorBrush x:Key="DiagramEdgeBrush">#697887</SolidColorBrush>
-    <SolidColorBrush x:Key="NoticeBrush">#F0F6FC</SolidColorBrush>
-    <SolidColorBrush x:Key="WarningBrush">#875816</SolidColorBrush>
-    <SolidColorBrush x:Key="FileAddedBrush">#276642</SolidColorBrush>
-    <SolidColorBrush x:Key="FileModifiedBrush">#005A9E</SolidColorBrush>
-    <SolidColorBrush x:Key="FileDeletedBrush">#A6273A</SolidColorBrush>
-    <SolidColorBrush x:Key="FileRelocatedBrush">#673D9A</SolidColorBrush>
-    <SolidColorBrush x:Key="DiffAddedBrush">#E8F4EB</SolidColorBrush>
-    <SolidColorBrush x:Key="DiffRemovedBrush">#FDEEF0</SolidColorBrush>
-    <SolidColorBrush x:Key="DiffAddedAccentBrush">#398357</SolidColorBrush>
-    <SolidColorBrush x:Key="DiffRemovedAccentBrush">#BD536B</SolidColorBrush>
-    <SolidColorBrush x:Key="DiffHunkBrush">#EEF2F8</SolidColorBrush>
-    <SolidColorBrush x:Key="SuggestionAddedBrush">#E4F5E9</SolidColorBrush>
-    <SolidColorBrush x:Key="SuggestionRemovedBrush">#FCE7E7</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryBrush">#165B7D</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryHoverBrush">#124B68</SolidColorBrush>
+    <SolidColorBrush x:Key="PrimaryPressedBrush">#0F3C53</SolidColorBrush>
+    <SolidColorBrush x:Key="OnAccentBrush">#FFFFFF</SolidColorBrush>
+    <SolidColorBrush x:Key="SelectionBrush">#E0EEF6</SolidColorBrush>
+    <SolidColorBrush x:Key="SelectionTextBrush">#184762</SolidColorBrush>
+    <SolidColorBrush x:Key="CanvasBrush">#FDFDFC</SolidColorBrush>
+    <SolidColorBrush x:Key="PanelBrush">#F3F4F5</SolidColorBrush>
+    <SolidColorBrush x:Key="ChromeBrush">#ECEFF1</SolidColorBrush>
+    <SolidColorBrush x:Key="HeaderBrush">#F0F2F4</SolidColorBrush>
+    <SolidColorBrush x:Key="RaisedBrush">#FBFCFC</SolidColorBrush>
+    <SolidColorBrush x:Key="InputBrush">#FDFDFC</SolidColorBrush>
+    <SolidColorBrush x:Key="HoverBrush">#E4E8EB</SolidColorBrush>
+    <SolidColorBrush x:Key="PressedBrush">#D7DDE2</SolidColorBrush>
+    <SolidColorBrush x:Key="TextPrimaryBrush">#20252E</SolidColorBrush>
+    <SolidColorBrush x:Key="TextSecondaryBrush">#535D6A</SolidColorBrush>
+    <SolidColorBrush x:Key="DividerBrush">#D9DFE4</SolidColorBrush>
+    <SolidColorBrush x:Key="ControlStrokeBrush">#7C8591</SolidColorBrush>
+    <SolidColorBrush x:Key="DiagramEdgeBrush">#667687</SolidColorBrush>
+    <SolidColorBrush x:Key="NoticeBrush">#E8F1F6</SolidColorBrush>
+    <SolidColorBrush x:Key="WarningBrush">#805019</SolidColorBrush>
+    <SolidColorBrush x:Key="FileAddedBrush">#23613E</SolidColorBrush>
+    <SolidColorBrush x:Key="FileModifiedBrush">#515C6B</SolidColorBrush>
+    <SolidColorBrush x:Key="FileDeletedBrush">#96273D</SolidColorBrush>
+    <SolidColorBrush x:Key="FileRelocatedBrush">#6B468A</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffAddedBrush">#EDF6EF</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffRemovedBrush">#FBEFF1</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffGutterBrush">#F2F4F6</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffAddedGutterBrush">#E1F0E6</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffRemovedGutterBrush">#F5E3E8</SolidColorBrush>
+    <SolidColorBrush x:Key="DiffHunkBrush">#EEF2F6</SolidColorBrush>
+    <SolidColorBrush x:Key="SuggestionAddedBrush">#E4F2E8</SolidColorBrush>
+    <SolidColorBrush x:Key="SuggestionRemovedBrush">#F8E5E9</SolidColorBrush>
 
     <StaticResource x:Key="ButtonBackground" ResourceKey="InputBrush"/>
     <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="HoverBrush"/>
@@ -128,13 +141,18 @@
     <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="PrimaryHoverBrush"/>
     <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="PrimaryPressedBrush"/>
     <StaticResource x:Key="AccentButtonForeground" ResourceKey="OnAccentBrush"/>
+    <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="OnAccentBrush"/>
+    <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="OnAccentBrush"/>
+    <StaticResource x:Key="CheckBoxCheckGlyphForegroundChecked" ResourceKey="OnAccentBrush"/>
+    <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" ResourceKey="OnAccentBrush"/>
+    <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" ResourceKey="OnAccentBrush"/>
     <StaticResource x:Key="TextControlBackground" ResourceKey="InputBrush"/>
     <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="InputBrush"/>
     <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="InputBrush"/>
     <StaticResource x:Key="TextControlForeground" ResourceKey="TextPrimaryBrush"/>
     <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="TextPrimaryBrush"/>
     <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="TextPrimaryBrush"/>
-    <StaticResource x:Key="TextControlBorderBrush" ResourceKey="DividerBrush"/>
+    <StaticResource x:Key="TextControlBorderBrush" ResourceKey="ControlStrokeBrush"/>
     <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="TextSecondaryBrush"/>
     <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="PrimaryBrush"/>
     <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="TextSecondaryBrush"/>
@@ -144,15 +162,15 @@
     <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="HoverBrush"/>
     <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="PressedBrush"/>
     <StaticResource x:Key="ComboBoxForeground" ResourceKey="TextPrimaryBrush"/>
-    <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="DividerBrush"/>
-    <StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="PanelBrush"/>
+    <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="ControlStrokeBrush"/>
+    <StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="RaisedBrush"/>
     <StaticResource x:Key="MenuFlyoutPresenterBorderBrush" ResourceKey="DividerBrush"/>
     <StaticResource x:Key="MenuFlyoutItemForeground" ResourceKey="TextPrimaryBrush"/>
     <StaticResource x:Key="MenuFlyoutItemForegroundPointerOver" ResourceKey="TextPrimaryBrush"/>
     <StaticResource x:Key="MenuFlyoutItemForegroundPressed" ResourceKey="TextPrimaryBrush"/>
     <StaticResource x:Key="MenuFlyoutItemBackgroundPointerOver" ResourceKey="HoverBrush"/>
     <StaticResource x:Key="MenuFlyoutItemBackgroundPressed" ResourceKey="PressedBrush"/>
-    <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="PanelBrush"/>
+    <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="RaisedBrush"/>
     <StaticResource x:Key="FlyoutBorderThemeBrush" ResourceKey="DividerBrush"/>
     <x:Double x:Key="TextControlPlaceholderOpacity">1</x:Double>
    </ResourceDictionary>

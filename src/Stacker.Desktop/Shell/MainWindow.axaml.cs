@@ -78,6 +78,7 @@ AsyncHandler.Run(async () =>
 
     private void OpenChanges()
     {
+        Vm.CloseWorkingTree();
         Vm.CloseOperationsCommand.Execute(null);
         Vm.CloseHistoryCommand.Execute(null);
         Vm.IsGitLogOpen = false;
@@ -86,6 +87,7 @@ AsyncHandler.Run(async () =>
 
     private void HistoryTabClick(object? sender, RoutedEventArgs e)
     {
+        Vm.CloseWorkingTree();
         Vm.CloseOperationsCommand.Execute(null);
         Vm.IsGitLogOpen = false;
         HistoryTab.SetCurrentValue(ToggleButton.IsCheckedProperty, Vm.IsHistoryOpen);
@@ -95,9 +97,23 @@ AsyncHandler.Run(async () =>
 
     private void GitLogsTabClick(object? sender, RoutedEventArgs e)
     {
+        Vm.CloseWorkingTree();
         Vm.CloseOperationsCommand.Execute(null);
         Vm.IsGitLogOpen = true;
     }
+    private void WorkingTreeClick(object? sender, RoutedEventArgs e) =>
+        AsyncHandler.Run(async () =>
+        {
+            if (!Vm.IsWorkingTreeOpen)
+            {
+                Vm.CloseOperationsCommand.Execute(null);
+                Vm.CloseHistoryCommand.Execute(null);
+                Vm.IsGitLogOpen = false;
+                _focusMode = false;
+            }
+            WorkingTreeTab.IsChecked = true;
+            await Vm.OpenWorkingTreeAsync();
+        }, message => AsyncHandler.Report(this, message));
     private void FindClick(object? sender, RoutedEventArgs e) => OpenFind("Files");
     private void OpenFind(string scope)
     {
@@ -243,13 +259,21 @@ AsyncHandler.Run(async () =>
 {
     if (sender is Control { DataContext: StackGroupViewModel group })
     {
+        Vm.CloseWorkingTree();
         if (group.IsSinglePr)
             await Vm.SelectLayerAsync(group.Layers[0], false);
         else
             await Vm.SelectGroupAsync(group);
     }
 }, message => AsyncHandler.Report(this, message));
-    private void LayerClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { if (sender is Control { DataContext: LayerViewModel layer }) await Vm.SelectLayerAsync(layer, false); }, message => AsyncHandler.Report(this, message));
+    private void LayerClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () =>
+    {
+        if (sender is Control { DataContext: LayerViewModel layer })
+        {
+            Vm.CloseWorkingTree();
+            await Vm.SelectLayerAsync(layer, false);
+        }
+    }, message => AsyncHandler.Report(this, message));
     private void LayerPointerPressed(object? sender, PointerPressedEventArgs e)
 => AsyncHandler.Run(async () =>
 {

@@ -80,7 +80,10 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
         var values = (await Run(root, ["rev-list", "--left-right", "--count", $"{parent}...{head}"], ct)).StdOut.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         return (int.Parse(values[1], CultureInfo.InvariantCulture), int.Parse(values[0], CultureInfo.InvariantCulture));
     }
-    private static string[] DiffArgs(string @base, string head) => ["diff", "--no-color", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--submodule=short", "--no-relative", "--src-prefix=a/", "--dst-prefix=b/", "--find-renames=50%", "-l1000", @base, head];
+    private static readonly string[] PatchOptions =
+        ["--no-color", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--submodule=short", "--no-relative", "--src-prefix=a/", "--dst-prefix=b/"];
+
+    private static string[] DiffArgs(string @base, string head) => ["diff", .. PatchOptions, "--find-renames=50%", "-l1000", @base, head];
     // NUL-delimited name-status output keeps spaces, Unicode, and embedded newlines in paths unambiguous.
     public async Task<IReadOnlyList<FileChange>> FilesAsync(string root, string @base, string head, CancellationToken ct = default)
     {
@@ -132,13 +135,57 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
         var patch = (await Run(root, ["-c", "diff.suppressBlankEmpty=false", .. DiffArgs(@base, head), "--patch", "--unified=3", "--", .. paths], ct, 5 * 1024 * 1024)).StdOut;
         // A rename's old path may have been reused by another file. Path filtering can
         // therefore return multiple patches; retain only this exact file pair.
-        var expectedHeader = $"diff --git {QuotePath("a/" + file.OldPath)} {QuotePath("b/" + file.NewPath)}";
-        var sections = Regex.Split(patch, @"(?m)(?=^diff --git )");
-        patch = sections.FirstOrDefault(section => section.StartsWith(expectedHeader + "\n", StringComparison.Ordinal))
+        patch = SelectFilePatch(patch, file.OldPath, file.NewPath)
             ?? throw new StackerException("Git returned an unexpected patch header. Refresh the comparison.");
         if (patch.Count(c => c == '\n') > DiffView.DisplayLineLimit)
             throw new OutputLimitException();
         return PatchParser.Parse(file, patch);
+    }
+
+    internal async Task<FileDiff> WorkingTreePatchAsync(string root, WorkingTreeFile selected, CancellationToken ct)
+    {
+        string[] args = selected.IsUntracked
+            ? ["diff", "--no-index", .. PatchOptions, "--patch", "--unified=3", "--", "/dev/null", "./" + selected.Path]
+            : ["diff", .. PatchOptions, .. (selected.Side == WorkingTreeSide.Staged ? new[] { "--cached" } : []),
+                "--find-renames=50%", "-l1000", "--patch", "--unified=3", "--",
+                .. (selected.OldPath == selected.Path ? new[] { selected.Path } : [selected.OldPath, selected.Path])];
+        var patch = (await Run(root, ["-c", "diff.suppressBlankEmpty=false", .. args], ct, 5 * 1024 * 1024, allowOne: selected.IsUntracked)).StdOut;
+        if (!selected.IsUntracked && patch.Length > 0)
+            patch = SelectFilePatch(patch, selected.OldPath, selected.Path)
+                ?? throw new StackerException("This file changed on disk. Refresh the working tree and try again.");
+        if (patch.Count(c => c == '\n') > DiffView.DisplayLineLimit)
+            throw new OutputLimitException();
+
+        var kind = selected.Status switch
+        {
+            'A' or '?' => FileChangeKind.Added,
+            'D' => FileChangeKind.Deleted,
+            'R' => FileChangeKind.Renamed,
+            'C' => FileChangeKind.Copied,
+            'T' => FileChangeKind.TypeChanged,
+            _ => FileChangeKind.Modified
+        };
+        var headers = patch.Split('\n').TakeWhile(line => !line.StartsWith("@@", StringComparison.Ordinal)).ToArray();
+        var binary = headers.Any(line => line.StartsWith("Binary files ", StringComparison.Ordinal) || line == "GIT binary patch");
+        var submodule = headers.Any(line => line.EndsWith(" 160000", StringComparison.Ordinal));
+        var file = new FileChange(selected.OldPath, selected.Path, kind, binary ? null : 0, binary ? null : 0,
+            submodule ? "160000" : "100644", submodule ? "160000" : "100644");
+        var diff = PatchParser.Parse(file, patch);
+        return binary ? diff : diff with
+        {
+            File = file with
+            {
+                Additions = diff.Lines.Count(line => line.Kind == DiffLineKind.Added),
+                Deletions = diff.Lines.Count(line => line.Kind == DiffLineKind.Removed)
+            }
+        };
+    }
+
+    private static string? SelectFilePatch(string patch, string oldPath, string newPath)
+    {
+        var expected = $"diff --git {QuotePath("a/" + oldPath)} {QuotePath("b/" + newPath)}\n";
+        return Regex.Split(patch, @"(?m)(?=^diff --git )")
+            .FirstOrDefault(section => section.StartsWith(expected, StringComparison.Ordinal));
     }
     /// <summary>Reads immutable blob content for syntax highlighting; absent old/new blobs are normal for add/delete.</summary>
     public async Task<BlobContent?> ReadBlobAsync(string root, string commit, string path, CancellationToken ct = default)

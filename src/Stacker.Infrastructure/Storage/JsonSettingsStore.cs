@@ -44,12 +44,15 @@ public sealed class JsonSettingsStore(string? directory = null, IAtomicFile? fil
                 throw new StackerException(_blockedWrite);
             }
             using var document = JsonDocument.Parse(bytes.Value);
-            var hasSchema = document.RootElement.ValueKind == JsonValueKind.Object
-                && document.RootElement.TryGetProperty(nameof(AppSettings.SchemaVersion), out _);
-            if (!hasSchema || settings.SchemaVersion < 4)
+            var fields = document.RootElement;
+            if (fields.ValueKind == JsonValueKind.Object)
             {
-                settings.StacksHidden = true;
-                if (settings.FilesWidth == 248)
+                var legacy = !fields.TryGetProperty(nameof(AppSettings.SchemaVersion), out _) || settings.SchemaVersion < 4;
+                if (legacy || !fields.TryGetProperty(nameof(AppSettings.StacksHidden), out _))
+                    settings.StacksHidden = true;
+                if (!fields.TryGetProperty(nameof(AppSettings.FilesHidden), out _))
+                    settings.FilesHidden = false;
+                if (legacy && settings.FilesWidth == 248)
                     settings.FilesWidth = AppSettings.DefaultFilesWidth;
             }
             settings.RecentRepositories ??= [];

@@ -1,80 +1,152 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="using:Stacker.Desktop" xmlns:converters="using:Avalonia.Data.Converters" x:Class="Stacker.Desktop.MainWindow" Title="Stacker" Icon="avares://Stacker/Assets/Stacker.png" Width="1400" Height="880" MinWidth="1060" MinHeight="640" Background="{DynamicResource CanvasBrush}">
  <Window.Resources>
-  <StreamGeometry x:Key="ChevronRight">M 2,1 L 6,5 L 2,9 L 3,10 L 8,5 L 3,0 Z</StreamGeometry>
-  <StreamGeometry x:Key="ChevronDown">M 0,2 L 5,7 L 10,2 L 9,1 L 5,5 L 1,1 Z</StreamGeometry>
+  <local:CheckoutBranchMatch x:Key="CheckoutBranchMatch"/>
   <DataTemplate x:Key="StackGroupTemplate">
-   <StackPanel Margin="0,0,0,8">
+   <StackPanel Margin="0,0,0,6">
     <Border Classes.group-selected="{Binding IsSelected}" Classes="navigator-group">
-     <Grid ColumnDefinitions="28,*">
+     <Grid ColumnDefinitions="26,*">
       <Button IsVisible="{Binding IsStack}" Classes="quiet compact" Padding="0" Click="ToggleStackExpansionClick"
               HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" VerticalAlignment="Center"
               ToolTip.Tip="{Binding ExpandLabel}" AutomationProperties.Name="{Binding ExpandLabel}">
-       <PathIcon Width="8" Height="10" Data="{StaticResource ChevronRight}" Classes="stack-chevron"
+       <PathIcon Width="7" Height="10" Data="{StaticResource IconChevronRight}" Classes="stack-chevron"
                  Classes.expanded="{Binding IsExpanded}"/>
       </Button>
+      <PathIcon IsVisible="{Binding IsSinglePr}" Width="13" Height="13" Data="{StaticResource IconBranch}"
+                Foreground="{DynamicResource TextSecondaryBrush}"/>
       <Button Grid.Column="1" Click="StackClick" AutomationProperties.Name="{Binding Name}" ToolTip.Tip="{Binding Name}"
-              HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Classes="quiet" Padding="4,7,8,7">
-       <StackPanel Spacing="2">
+              HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Classes="quiet stack-title" Padding="2,8,8,8">
+       <StackPanel Spacing="3">
         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-        <TextBlock Text="{Binding Summary}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis"/>
+        <TextBlock Text="{Binding Summary}" Classes="muted" FontSize="{StaticResource StackerCaptionFontSize}" TextTrimming="CharacterEllipsis"/>
        </StackPanel>
       </Button>
      </Grid>
     </Border>
-    <StackPanel Name="StackLayers" IsVisible="{Binding ShowLayers}" ClipToBounds="True" Margin="12,3,0,0">
-     <Button Click="OverviewClick" Classes="quiet compact" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-             AutomationProperties.Name="Entire stack">
-      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="7">
-       <TextBlock Text="Entire stack" FontSize="12" FontWeight="Medium"/>
-       <TextBlock Grid.Column="1" Text="{Binding BaseLabel}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding BaseLabel}"/>
+    <StackPanel Name="StackLayers" IsVisible="{Binding ShowLayers}" Margin="6,2,0,0">
+     <Grid ColumnDefinitions="20,*" RowDefinitions="*,*" MinHeight="28" ToolTip.Tip="{Binding BaseLabel}">
+      <Border Grid.Row="1" Classes="branch-link" IsVisible="{Binding !!Layers.Count}"/>
+      <Ellipse Grid.RowSpan="2" Classes="branch-node" Width="7" Height="7" VerticalAlignment="Center"/>
+      <Grid Grid.Column="1" Grid.RowSpan="2" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Margin="5,0,29,0" VerticalAlignment="Center">
+       <TextBlock Text="Base" Classes="label"/>
+       <TextBlock Grid.Column="1" Text="{Binding BaseName}" Classes="code-meta" TextTrimming="CharacterEllipsis"/>
+       <TextBlock Grid.Column="2" Text="HEAD" Classes="code-meta" ToolTip.Tip="Checked-out branch">
+        <TextBlock.IsVisible>
+         <MultiBinding Converter="{StaticResource CheckoutBranchMatch}">
+          <Binding Path="LocalBaseBranchName"/>
+          <Binding Path="$parent[Window].DataContext.CheckedOutBranch"/>
+         </MultiBinding>
+        </TextBlock.IsVisible>
+       </TextBlock>
       </Grid>
-     </Button>
+     </Grid>
      <ItemsControl ItemsSource="{Binding Layers}">
       <ItemsControl.ItemTemplate>
        <DataTemplate>
-        <Border Classes.current-layer="{Binding IsSelected}" Classes.checked-layer="{Binding IsChecked}" Classes="navigator-layer" Margin="0,1">
-         <Grid ColumnDefinitions="26,20,*" Margin="2,0">
-          <CheckBox IsChecked="{Binding IsChecked, Mode=OneWay}" Click="LayerChecked" MinWidth="22"
-                    AutomationProperties.Name="{Binding CheckLabel}" ToolTip.Tip="Include this layer in a comparison"/>
-          <TextBlock Grid.Column="1" Text="{Binding Number}" FontSize="11" VerticalAlignment="Center" Classes="muted"/>
-          <Button Grid.Column="2" Click="LayerClick" AutomationProperties.Name="{Binding Title}" PointerPressed="LayerPointerPressed"
-                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Classes="quiet" Padding="2,6,6,6" ToolTip.Tip="{Binding Title}">
-           <StackPanel Spacing="2">
-            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
-            <TextBlock Text="{Binding Detail}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis"/>
-            <TextBlock Text="{Binding Warning}" IsVisible="{Binding HasWarning}" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" FontSize="11"/>
-           </StackPanel>
-          </Button>
+        <Grid ColumnDefinitions="20,*">
+         <Grid RowDefinitions="*,*" IsHitTestVisible="False">
+          <Border Classes="branch-link"/>
+          <Border Grid.Row="1" Classes="branch-link" IsVisible="{Binding !IsTip}"/>
+          <Ellipse Grid.RowSpan="2" Classes="branch-node" Classes.current="{Binding IsSelected}" VerticalAlignment="Center"/>
          </Grid>
-        </Border>
+         <Border Grid.Column="1" Classes="navigator-layer" Classes.current-layer="{Binding IsSelected}"
+                 Classes.checked-layer="{Binding IsChecked}" Margin="0,1">
+          <Grid ColumnDefinitions="*,26">
+           <Button Click="LayerClick" AutomationProperties.Name="{Binding Title}" PointerPressed="LayerPointerPressed" KeyDown="StackLayerKeyDown"
+                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Classes="quiet layer-title" Padding="5,6,3,6" ToolTip.Tip="{Binding Title}">
+            <StackPanel Spacing="2">
+             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+              <TextBlock Text="{Binding Title}" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
+              <TextBlock Grid.Column="1" Text="HEAD" Classes="code-meta" ToolTip.Tip="Checked-out branch">
+               <TextBlock.IsVisible>
+                <MultiBinding Converter="{StaticResource CheckoutBranchMatch}">
+                 <Binding Path="LocalBranchName"/>
+                 <Binding Path="$parent[Window].DataContext.CheckedOutBranch"/>
+                </MultiBinding>
+               </TextBlock.IsVisible>
+              </TextBlock>
+             </Grid>
+             <TextBlock Text="{Binding Detail}" IsVisible="{Binding !!Detail}" Classes="code-meta" FontSize="11"
+                        TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detail}"/>
+             <TextBlock Text="{Binding Warning}" IsVisible="{Binding HasWarning}" Foreground="{DynamicResource WarningBrush}"
+                        TextWrapping="Wrap" FontSize="{StaticResource StackerCaptionFontSize}"/>
+            </StackPanel>
+           </Button>
+           <CheckBox Grid.Column="1" IsChecked="{Binding IsChecked, Mode=OneWay}" Click="LayerChecked"
+                     MinWidth="24" MinHeight="28" Padding="0" VerticalAlignment="Center"
+                     AutomationProperties.Name="{Binding CheckLabel}" ToolTip.Tip="Include this layer in a comparison"/>
+          </Grid>
+         </Border>
+        </Grid>
        </DataTemplate>
       </ItemsControl.ItemTemplate>
      </ItemsControl>
+     <Button Click="OverviewClick" Content="Entire stack" Classes="quiet compact" Margin="20,2,0,0"
+             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
     </StackPanel>
    </StackPanel>
   </DataTemplate>
  </Window.Resources>
  <Grid RowDefinitions="44,2,Auto,Auto,*,22">
   <Border Padding="12,3" Background="{DynamicResource ChromeBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
-   <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
+   <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-     <Image Source="avares://Stacker/Assets/Stacker.png" Width="22" Height="22" VerticalAlignment="Center" RenderOptions.BitmapInterpolationMode="HighQuality"/>
+     <Image Source="avares://Stacker/Assets/Stacker.png" Width="21" Height="21" VerticalAlignment="Center" RenderOptions.BitmapInterpolationMode="HighQuality"/>
      <TextBlock Text="Stacker" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
     </StackPanel>
-    <Button x:Name="RepositoryButton" Grid.Column="1" Classes="quiet" HorizontalAlignment="Left" HorizontalContentAlignment="Stretch" MaxWidth="380" ToolTip.Tip="{Binding RepositoryTitle}" AutomationProperties.Name="Switch repository"><Grid ColumnDefinitions="*,Auto" ColumnSpacing="8"><TextBlock Text="{Binding RepositoryTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><PathIcon Grid.Column="1" Data="{StaticResource ChevronDown}" Width="9" Height="9" Classes="muted"/></Grid><Button.Flyout><Flyout><StackPanel Spacing="10" Width="320"><TextBlock Text="REPOSITORY" Classes="label"/><ComboBox x:Name="RecentBox" ItemsSource="{Binding RecentRepositories}" PlaceholderText="Recent repositories" HorizontalAlignment="Stretch" SelectionChanged="RecentChanged"/><Button x:Name="OpenFolderButton" Content="Open folder…" Click="OpenFolderClick"/><Button Content="Open demo" Click="OpenDemoClick"/><TextBox Text="{Binding RepositoryPath}" Watermark="Or enter a repository path" KeyDown="PathKeyDown"/></StackPanel></Flyout></Button.Flyout></Button>
-    <StackPanel x:Name="PaneControls" Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-     <ToggleButton x:Name="StacksToggle" Content="PRs &amp; stacks" Click="ToggleStacksClick" Classes="quiet compact segment" AutomationProperties.Name="Browse pull requests and local stacks"/>
-     <ToggleButton x:Name="FilesToggle" Content="Files" Click="ToggleFilesClick" IsChecked="True" Classes="quiet compact segment" AutomationProperties.Name="Changed files"/>
-     <ToggleButton x:Name="FocusToggle" Content="Focus" Click="ToggleFocusClick" Classes="quiet compact" ToolTip.Tip="Hide navigation and review for code reading" AutomationProperties.Name="Focus mode"/>
-    </StackPanel>
-    <Border Grid.Column="3" Classes="segmented" VerticalAlignment="Center">
+    <Border Grid.Column="1" Width="1" Height="20" Background="{DynamicResource DividerBrush}" Margin="4,0"/>
+    <Button x:Name="RepositoryButton" Grid.Column="2" Classes="quiet compact" HorizontalContentAlignment="Stretch"
+            MaxWidth="284" ToolTip.Tip="{Binding RepositoryPath}" AutomationProperties.Name="Switch repository">
+     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+      <TextBlock Text="{Binding RepositoryTitle}" TextTrimming="CharacterEllipsis"/>
+      <PathIcon Grid.Column="1" Data="{StaticResource IconChevronDown}" Width="9" Height="6" Foreground="{DynamicResource TextSecondaryBrush}"/>
+     </Grid>
+     <Button.Flyout>
+      <Flyout Placement="BottomEdgeAlignedLeft">
+       <StackPanel Spacing="10" Width="320">
+        <TextBlock Text="Switch repository" Classes="pane-title"/>
+        <ComboBox x:Name="RecentBox" ItemsSource="{Binding RecentRepositories}" PlaceholderText="Recent repositories"
+                  HorizontalAlignment="Stretch" SelectionChanged="RecentChanged"/>
+        <TextBox Text="{Binding RepositoryPath}" Watermark="Repository path" KeyDown="PathKeyDown" AutomationProperties.Name="Repository path"/>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+         <Button x:Name="OpenFolderButton" Content="Open folder…" Click="OpenFolderClick" Classes="outline"/>
+         <Button Content="Open demo" Click="OpenDemoClick" Classes="quiet"/>
+        </StackPanel>
+       </StackPanel>
+      </Flyout>
+     </Button.Flyout>
+    </Button>
+    <Border Grid.Column="3" Classes="segmented" VerticalAlignment="Center" HorizontalAlignment="Left">
      <StackPanel Orientation="Horizontal" Spacing="2">
       <ToggleButton x:Name="ChangesTab" Content="Changes" Click="ChangesTabClick" Classes="quiet compact segment" IsChecked="True"/>
+      <ToggleButton x:Name="WorkingTreeTab" Content="Working tree" Click="WorkingTreeClick" Classes="quiet compact segment"
+                    IsChecked="{Binding IsWorkingTreeOpen, Mode=OneWay}" IsEnabled="{Binding CanOpenWorkingTree}"/>
       <ToggleButton x:Name="HistoryTab" Content="History" IsChecked="{Binding IsHistoryOpen, Mode=OneWay}" Click="HistoryTabClick" Classes="quiet compact segment"/>
      </StackPanel>
     </Border>
-    <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-     <Button x:Name="FindButton" Content="Find" Click="FindClick" Classes="quiet" ToolTip.Tip="Find files (Cmd/Ctrl+P) or changed lines (Cmd/Ctrl+Shift+F)"/>
+    <StackPanel x:Name="PaneControls" Grid.Column="4" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+     <ToggleButton x:Name="StacksToggle" Click="ToggleStacksClick" Classes="quiet compact" AutomationProperties.Name="Browse pull requests and local stacks">
+      <StackPanel Orientation="Horizontal" Spacing="6">
+       <PathIcon Data="{StaticResource IconBranch}" Width="13" Height="13"/>
+       <TextBlock Text="Stacks"/>
+      </StackPanel>
+     </ToggleButton>
+     <ToggleButton x:Name="FilesToggle" Click="ToggleFilesClick" Classes="quiet compact" AutomationProperties.Name="Changed files">
+      <StackPanel Orientation="Horizontal" Spacing="6">
+       <PathIcon Data="{StaticResource IconFiles}" Width="13" Height="13"/>
+       <TextBlock Text="Files"/>
+      </StackPanel>
+     </ToggleButton>
+     <ToggleButton x:Name="FocusToggle" Content="Focus" Click="ToggleFocusClick" Classes="quiet compact" ToolTip.Tip="Hide navigation and review for code reading" AutomationProperties.Name="Focus mode"/>
+    </StackPanel>
+    <Border Grid.Column="5" Width="1" Height="20" IsVisible="{Binding #PaneControls.IsVisible}" Background="{DynamicResource DividerBrush}"/>
+    <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+     <Button x:Name="FindButton" Click="FindClick" Classes="quiet" AutomationProperties.Name="Find"
+             ToolTip.Tip="Find files (Cmd/Ctrl+P) or changed lines (Cmd/Ctrl+Shift+F)">
+      <StackPanel Orientation="Horizontal" Spacing="6">
+       <PathIcon Data="{StaticResource IconFind}" Width="12" Height="12"/>
+       <TextBlock Text="Find"/>
+      </StackPanel>
+     </Button>
      <Button Content="Refresh" Command="{Binding RefreshAllCommand}" Classes="quiet" ToolTip.Tip="Refresh repository and GitHub"/>
      <Button Content="Settings" Click="SettingsClick" Classes="quiet"/>
      <Button Content="More" Classes="quiet" ToolTip.Tip="Logs, workspace maintenance and help">
@@ -109,6 +181,22 @@
    </Grid>
   </Border>
   <StackPanel Grid.Row="3" Spacing="2">
+   <Border IsVisible="{Binding HasGhStackRecovery}" Classes="notice" Padding="14,8">
+    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+     <StackPanel Spacing="3" VerticalAlignment="Center">
+      <TextBlock Text="GitHub CLI operation" Classes="pane-title"/>
+      <ScrollViewer MaxHeight="54" HorizontalScrollBarVisibility="Disabled">
+       <SelectableTextBlock Text="{Binding GhStackRecovery.Message}" TextWrapping="Wrap"/>
+      </ScrollViewer>
+     </StackPanel>
+     <Button Grid.Column="1" Content="Continue rebase" Click="ContinueGhStackClick"
+             IsVisible="{Binding GhStackRecovery.CanAbort}" IsEnabled="{Binding CanContinueGhStack}" Classes="primary" VerticalAlignment="Top"/>
+     <Button Grid.Column="2" Content="Abort rebase…" Click="AbortGhStackClick"
+             IsVisible="{Binding GhStackRecovery.CanAbort}" IsEnabled="{Binding CanAbortGhStack}" Classes="outline" VerticalAlignment="Top"/>
+     <Button Grid.Column="3" Content="Mark reviewed" Click="AcknowledgeGhStackClick"
+             IsVisible="{Binding GhStackRecovery.CanAcknowledge}" IsEnabled="{Binding CanAcknowledgeGhStack}" Classes="quiet" VerticalAlignment="Top"/>
+    </Grid>
+   </Border>
    <Border IsVisible="{Binding HasRecovery}" Classes="notice" Padding="16,8">
     <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
      <SelectableTextBlock Text="{Binding RecoverySummary}" TextWrapping="Wrap" VerticalAlignment="Center"/>
@@ -126,10 +214,13 @@
    </Border>
   </StackPanel>
   <Grid Grid.Row="4" x:Name="Workspace" IsVisible="{Binding IsChangesOpen}" ColumnDefinitions="240,4,*">
-   <Grid x:Name="StacksPane" RowDefinitions="Auto,*,Auto" Background="{DynamicResource PanelBrush}">
-    <Border Padding="10,12,10,8" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
-     <StackPanel Spacing="8">
-      <TextBlock Text="Stacks &amp; PRs" Classes="pane-title" Margin="2,0"/>
+   <Grid x:Name="StacksPane" RowDefinitions="Auto,*,Auto,Auto" Background="{DynamicResource PanelBrush}">
+    <Border Padding="10,12,10,10" Classes="pane-heading">
+     <StackPanel Spacing="9">
+      <StackPanel Orientation="Horizontal" Spacing="7" Margin="2,0">
+       <PathIcon Data="{StaticResource IconBranch}" Width="13" Height="13" Foreground="{DynamicResource TextSecondaryBrush}"/>
+       <TextBlock Text="Stacks &amp; PRs" Classes="pane-title"/>
+      </StackPanel>
       <Border Classes="segmented"><UniformGrid Columns="2" ColumnSpacing="2">
        <ToggleButton x:Name="PullRequestsTab" Content="Pull requests" IsChecked="True" Click="PullRequestsTabClick"
                      Classes="quiet compact segment" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
@@ -140,8 +231,8 @@
     </Border>
     <Grid x:Name="PullRequestsPane" Grid.Row="1">
      <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-      <StackPanel Margin="8,10" Spacing="6">
-       <TextBlock Text="Stacked" Classes="label" Margin="6,2" IsVisible="{Binding HasRemoteGroups}"/>
+      <StackPanel Margin="8,10" Spacing="4">
+       <TextBlock Text="PR stacks" Classes="label" Margin="6,2" IsVisible="{Binding HasRemoteGroups}"/>
        <ItemsControl ItemsSource="{Binding RemoteGroups}" ItemTemplate="{StaticResource StackGroupTemplate}"/>
        <TextBlock Text="Standalone" Classes="label" Margin="6,2" IsVisible="{Binding HasOtherGroups}"/>
        <ItemsControl ItemsSource="{Binding OtherGroups}" ItemTemplate="{StaticResource StackGroupTemplate}"/>
@@ -154,21 +245,54 @@
      </ScrollViewer>
     </Grid>
     <Grid x:Name="LocalStacksPane" Grid.Row="1" RowDefinitions="Auto,*" IsVisible="False">
-     <Button Content="New stack…" Click="NewStackClick" IsEnabled="{Binding CanEdit}" Classes="outline"
-             Margin="12,10,12,6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+     <StackPanel Margin="10,10,10,6" Spacing="6">
+      <ToggleButton x:Name="GhStackBackendToggle" Content="GitHub CLI backend" IsChecked="{Binding UsesGhStack, Mode=OneWay}"
+                    IsVisible="{Binding HasGhStackBackend}" IsEnabled="{Binding CanChooseStackBackend}" Click="GhStackBackendClick"
+                    Classes="quiet compact" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"/>
+      <Button Content="+  New stack…" Click="NewStackClick" IsEnabled="{Binding CanEdit}" IsVisible="{Binding CanManageStackerStacks}"
+              Classes="outline" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" AutomationProperties.Name="New stack"/>
+      <StackPanel IsVisible="{Binding UsesGhStack}" Spacing="6">
+       <TextBlock Text="{Binding GhStackStatus}" Classes="muted" TextWrapping="Wrap" Margin="2,0"/>
+       <Button Content="Load current CLI stack" Click="LoadGhStackClick" IsEnabled="{Binding CanLoadGhStack}"
+               Classes="outline compact" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+       <WrapPanel ItemSpacing="4" LineSpacing="4">
+        <Button Content="Create stack…" Click="CreateGhStackClick" IsEnabled="{Binding CanCreateGhStack}" Classes="quiet compact"/>
+        <Button Content="Add layer…" Click="AddGhLayerClick" IsEnabled="{Binding CanAddGhLayer}" Classes="quiet compact"/>
+        <Button Content="Rebase upper layers…" Click="PreviewGhStackClick" IsEnabled="{Binding CanRebaseGhStack}" Classes="quiet compact"/>
+       </WrapPanel>
+      </StackPanel>
+     </StackPanel>
      <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
       <StackPanel Margin="8,4">
-       <ItemsControl x:Name="LocalStackList" ItemsSource="{Binding LocalGroups}" ItemTemplate="{StaticResource StackGroupTemplate}"/>
-       <TextBlock Text="Create a stack from branches in this repository." Classes="muted" Margin="6,4"
-                  TextWrapping="Wrap" IsVisible="{Binding !#LocalStackList.ItemCount}"/>
+       <ContentControl Content="{Binding GhStackGroup}" ContentTemplate="{StaticResource StackGroupTemplate}"
+                       IsVisible="{Binding !!GhStackGroup}" HorizontalContentAlignment="Stretch"/>
+       <StackPanel IsVisible="{Binding !UsesGhStack}">
+        <ItemsControl x:Name="LocalStackList" ItemsSource="{Binding LocalGroups}" ItemTemplate="{StaticResource StackGroupTemplate}"/>
+        <TextBlock Text="Create a stack from branches in this repository." Classes="muted" Margin="6,4"
+                   TextWrapping="Wrap" IsVisible="{Binding !#LocalStackList.ItemCount}"/>
+       </StackPanel>
       </StackPanel>
      </ScrollViewer>
     </Grid>
-    <Border Grid.Row="2" Padding="12,8" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}">
+    <Border Grid.Row="2" Padding="12,7" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}"
+            IsVisible="{Binding #PullRequestsPane.IsVisible}">
      <StackPanel Spacing="4">
-      <TextBlock Text="{Binding GitHubStatus}" Classes="muted" FontSize="11" TextWrapping="Wrap" MaxHeight="44" ToolTip.Tip="{Binding GitHubStatus}"/>
+      <TextBlock Text="{Binding GitHubStatus}" Classes="muted" FontSize="{StaticResource StackerCaptionFontSize}"
+                 TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding GitHubStatus}"/>
       <ProgressBar Height="2" IsIndeterminate="True" IsVisible="{Binding GitHubBusy}"/>
      </StackPanel>
+    </Border>
+    <Border Grid.Row="3" Padding="12,9" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}"
+            Background="{DynamicResource HeaderBrush}">
+     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+      <StackPanel Spacing="3" VerticalAlignment="Center">
+       <TextBlock Text="{Binding WorkingTreeLabel}" Classes="pane-title" TextTrimming="CharacterEllipsis"/>
+       <TextBlock Text="{Binding CheckoutLabel}" Classes="code-meta" FontSize="11"
+                  TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CheckoutLabel}"/>
+      </StackPanel>
+      <Button x:Name="WorkingTreeButton" Grid.Column="1" Content="Inspect…" Click="WorkingTreeClick" Classes="quiet compact"
+              IsEnabled="{Binding CanOpenWorkingTree}" VerticalAlignment="Center" AutomationProperties.Name="Inspect working tree"/>
+     </Grid>
     </Border>
    </Grid>
    <GridSplitter x:Name="StacksSplitter" Grid.Column="1" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" Classes="workspace-splitter"/>
@@ -176,26 +300,51 @@
     <local:FileNavigatorView x:Name="SharedFiles" Grid.Column="0"/>
     <GridSplitter x:Name="FilesSplitter" Grid.Column="1" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" Classes="workspace-splitter"/>
     <Grid x:Name="DiffWorkspace" Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*">
-     <Border IsVisible="{Binding !HasNoSections}" MinHeight="52" Background="{DynamicResource HeaderBrush}" Padding="12,5" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
-      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-       <StackPanel Spacing="2" VerticalAlignment="Center">
-        <TextBlock Text="{Binding ComparisonTitle}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ComparisonTitle}"/>
-        <TextBlock Text="{Binding ComparisonDetail}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ComparisonDetail}"/>
+     <Border IsVisible="{Binding !HasNoSections}" MinHeight="54" Classes="pane-heading" Padding="14,4">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+       <StackPanel Spacing="1" VerticalAlignment="Center">
+        <TextBlock Text="{Binding ComparisonTitle}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ComparisonTitle}"/>
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+         <Button x:Name="ActiveStackButton" Click="OpenActiveStackClick" Classes="quiet"
+                 IsVisible="{Binding !!StackPositionLabel}" MinHeight="19" Padding="4,1" MaxWidth="156"
+                 HorizontalContentAlignment="Stretch" ToolTip.Tip="{Binding StackPositionLabel}" AutomationProperties.Name="Show active stack">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+           <PathIcon Data="{StaticResource IconBranch}" Width="10" Height="10" Foreground="{DynamicResource PrimaryBrush}"/>
+           <TextBlock Grid.Column="1" Text="{Binding StackPositionLabel}" FontSize="11" TextTrimming="CharacterEllipsis"/>
+          </Grid>
+         </Button>
+         <TextBlock Grid.Column="1" Text="{Binding ComparisonDetail}" Classes="code-meta" FontSize="11"
+                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ComparisonDetail}"/>
+        </Grid>
        </StackPanel>
-       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
         <Border Classes="segmented" IsVisible="{Binding ShowLayerModes}"><StackPanel Orientation="Horizontal" Spacing="2">
          <ToggleButton Content="This layer" IsChecked="{Binding IsSingleLayer, Mode=OneWay}" Click="ThisLayerClick" Classes="quiet compact segment"/>
          <ToggleButton Content="Through this layer" IsChecked="{Binding IsThroughLayer, Mode=OneWay}" Click="ThroughLayerClick" Classes="quiet compact segment"/>
         </StackPanel></Border>
         <Button x:Name="DiscussionButton" Content="Discussion" Click="PrCommentsClick" IsVisible="{Binding HasPrDiscussion}" Classes="quiet compact"/>
         <Button x:Name="ReviewButton" Content="{Binding ReviewLabel}" Click="ReviewPrClick" IsVisible="{Binding CanReview}" Classes="primary compact"/>
+        <Button x:Name="SyncStackButton" Content="Sync stack…" Click="RestackClick" IsVisible="{Binding CanEditStackerSelection}"
+                Classes="compact" Classes.primary="{Binding !HasPrDiscussion}" Classes.outline="{Binding HasPrDiscussion}">
+         <Button.IsEnabled>
+          <MultiBinding Converter="{x:Static converters:BoolConverters.And}">
+           <Binding Path="CanRestackActiveStack"/><Binding Path="!IsBusy"/>
+          </MultiBinding>
+         </Button.IsEnabled>
+        </Button>
         <Button x:Name="ComparisonActionsButton" Content="PR tools" Classes="quiet compact" AutomationProperties.Name="Comparison actions">
+         <Button.IsVisible>
+          <MultiBinding Converter="{x:Static converters:BoolConverters.Or}">
+           <Binding Path="IsLocalSelected"/><Binding Path="IsRemoteStackSelected"/><Binding Path="HasClassDiagram"/>
+          </MultiBinding>
+         </Button.IsVisible>
          <Button.Flyout>
           <MenuFlyout Placement="BottomEdgeAlignedRight">
-           <MenuItem x:Name="AddLayerButton" Header="Add layer…" Click="AddLayerClick" IsVisible="{Binding IsLocalSelected}" IsEnabled="{Binding !IsSyncing}"/>
+           <MenuItem x:Name="AddLayerButton" Header="Add layer…" Click="AddLayerClick" IsVisible="{Binding CanEditStackerSelection}" IsEnabled="{Binding !IsSyncing}"/>
            <MenuItem x:Name="CommitStackButton" Header="Commit…" Click="CommitClick" IsVisible="{Binding IsLocalSelected}" IsEnabled="{Binding !IsSyncing}" ToolTip.Tip="{Binding CheckoutLabel}"/>
-           <MenuItem x:Name="EditStackButton" Header="Edit stack…" Click="EditStackClick" IsVisible="{Binding IsLocalSelected}" IsEnabled="{Binding !IsSyncing}"/>
-           <MenuItem x:Name="PreviewRestackButton" Header="Preview restack…" Click="RestackClick" IsVisible="{Binding IsLocalSelected}" IsEnabled="{Binding CanRestackActiveStack}"/>
+           <MenuItem x:Name="CheckoutLayerButton" Header="Check out selected branch" Click="CheckoutLayerClick" IsVisible="{Binding !!CheckoutLayer}"
+                     IsEnabled="{Binding !IsBusy}" ToolTip.Tip="{Binding CheckoutLayer}"/>
+           <MenuItem x:Name="EditStackButton" Header="Edit stack…" Click="EditStackClick" IsVisible="{Binding CanEditStackerSelection}" IsEnabled="{Binding !IsSyncing}"/>
            <MenuItem Header="-" IsVisible="{Binding IsLocalSelected}"/>
            <MenuItem Header="Save as local stack" Click="SaveAsLocalClick" IsVisible="{Binding IsRemoteStackSelected}" IsEnabled="{Binding !IsBusy}"/>
            <MenuItem x:Name="OpenClassDiagramButton" Header="Class diagram" Click="ClassDiagramClick" IsVisible="{Binding HasClassDiagram}"/>
@@ -205,15 +354,33 @@
        </StackPanel>
       </Grid>
      </Border>
-    <Border Grid.Row="1" IsVisible="{Binding IsSearchOpen}" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}"><StackPanel Spacing="8">
+    <Border Grid.Row="1" IsVisible="{Binding IsSearchOpen}" Padding="14,10" Classes="pane-heading"><StackPanel Spacing="8">
      <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Find in this comparison" FontSize="17" FontWeight="SemiBold"/><Button Grid.Column="1" Content="Close" Click="CloseSearchClick" Classes="quiet"/></Grid>
      <Grid ColumnDefinitions="150,*,Auto,Auto" ColumnSpacing="8"><StackPanel Spacing="4"><TextBlock Text="Search in" Classes="section-title"/><ComboBox ItemsSource="{Binding SearchScopes}" SelectedItem="{Binding SearchScope}" HorizontalAlignment="Stretch" AutomationProperties.Name="Search scope"/></StackPanel><StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="Query" Classes="section-title"/><TextBox x:Name="SearchBox" Text="{Binding SearchQuery}" Watermark="File name or changed text" KeyDown="SearchKeyDown" AutomationProperties.Name="Search query"/></StackPanel><CheckBox Grid.Column="2" Content="Regex" IsChecked="{Binding SearchRegex}" VerticalAlignment="Bottom"/><Button Grid.Column="3" Content="Search" Command="{Binding SearchCommand}" Classes="primary" VerticalAlignment="Bottom"/></Grid>
-     <TextBlock Text="{Binding SearchStatus}" Classes="muted" FontSize="11"/><ProgressBar IsIndeterminate="True" IsVisible="{Binding IsSearchBusy}" Height="2"/>
-     <ListBox ItemsSource="{Binding SearchResults}" MaxHeight="190" SelectionChanged="SearchResultSelected" Background="Transparent" BorderThickness="0"><ListBox.ItemTemplate><DataTemplate><StackPanel Margin="2,4" Spacing="2"><TextBlock Text="{Binding Path}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Preview}" Classes="muted" FontFamily="Menlo,Consolas,monospace" FontSize="11" TextTrimming="CharacterEllipsis"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
+     <TextBlock Text="{Binding SearchStatus}" Classes="muted" TextWrapping="Wrap"/><ProgressBar IsIndeterminate="True" IsVisible="{Binding IsSearchBusy}" Height="2"/>
+     <ListBox ItemsSource="{Binding SearchResults}" MaxHeight="190" SelectionChanged="SearchResultSelected" Background="Transparent" BorderThickness="0"><ListBox.ItemTemplate><DataTemplate><StackPanel Margin="2,4" Spacing="2"><TextBlock Text="{Binding Path}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Preview}" Classes="code-meta" TextTrimming="CharacterEllipsis"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
     </StackPanel></Border>
     <Border Grid.Row="2" IsVisible="{Binding HasPendingChanges}" Classes="notice" Padding="14,8"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="New changes available · your current view is preserved" VerticalAlignment="Center" TextWrapping="Wrap"/><Button Grid.Column="1" Content="Update changes" Command="{Binding UpdateChangesCommand}" Classes="quiet"/></Grid></Border>
-    <StackPanel Grid.Row="3" IsVisible="{Binding ShowEmptyState}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="32" Spacing="12" MaxWidth="420"><TextBlock Text="{Binding WorkspaceEmptyTitle}" FontSize="24" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding EmptyMessage}" TextWrapping="Wrap" Classes="muted"/><WrapPanel><Button x:Name="BrowsePullRequestsButton" Content="Browse pull requests" Click="BrowsePullRequestsClick" IsVisible="{Binding CanEdit}" Classes="primary" Margin="0,0,8,8"/><Button Content="New stack…" Click="NewStackClick" IsVisible="{Binding CanEdit}" Classes="outline" Margin="0,0,8,8"/><Button Content="Open repository" Click="OpenFolderClick" IsVisible="{Binding !CanEdit}" Classes="primary" Margin="0,0,8,8"/><Button Content="Open demo" Click="OpenDemoClick" Classes="quiet" Margin="0,0,8,8"/><Button Content="GitHub connection…" Click="GitHubSettingsClick" IsVisible="{Binding CanEdit}" Classes="quiet" Margin="0,0,8,8"/></WrapPanel></StackPanel>
-    <StackPanel Grid.Row="3" IsVisible="{Binding ShowLoadingState}" Margin="32" VerticalAlignment="Center" Spacing="8"><TextBlock Text="Loading workspace…" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="Reading repository and comparison details." Classes="muted"/></StackPanel>
+    <StackPanel Grid.Row="3" IsVisible="{Binding ShowEmptyState}" HorizontalAlignment="Left" VerticalAlignment="Center"
+                Margin="40,24" Spacing="12" MaxWidth="440">
+     <Border HorizontalAlignment="Left" Background="{DynamicResource PanelBrush}" BorderThickness="1"
+             BorderBrush="{DynamicResource DividerBrush}" CornerRadius="{StaticResource OverlayCornerRadius}" Padding="10">
+      <PathIcon Data="{StaticResource IconBranch}" Width="20" Height="20" Foreground="{DynamicResource TextSecondaryBrush}"/>
+     </Border>
+     <TextBlock Text="{Binding WorkspaceEmptyTitle}" FontSize="26" FontWeight="SemiBold" TextWrapping="Wrap"/>
+     <TextBlock Text="{Binding EmptyMessage}" TextWrapping="Wrap" Classes="muted"/>
+     <WrapPanel ItemSpacing="8" LineSpacing="8">
+      <Button x:Name="BrowsePullRequestsButton" Content="Browse pull requests" Click="BrowsePullRequestsClick" IsVisible="{Binding CanEdit}" Classes="primary"/>
+      <Button Content="New stack…" Click="NewStackClick" IsVisible="{Binding CanEdit}" Classes="outline"/>
+      <Button Content="Open repository" Click="OpenFolderClick" IsVisible="{Binding !CanEdit}" Classes="primary"/>
+      <Button Content="Open demo" Click="OpenDemoClick" Classes="quiet"/>
+      <Button Content="GitHub connection…" Click="GitHubSettingsClick" IsVisible="{Binding CanEdit}" Classes="quiet"/>
+     </WrapPanel>
+    </StackPanel>
+    <StackPanel Grid.Row="3" IsVisible="{Binding ShowLoadingState}" Margin="40,24" VerticalAlignment="Center" Spacing="8">
+     <TextBlock Text="Loading workspace…" Classes="view-title"/>
+     <TextBlock Text="Reading repository and comparison details." Classes="muted"/>
+    </StackPanel>
     <ScrollViewer Grid.Row="3" IsVisible="{Binding !HasNoSections}" x:Name="SectionScroll" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"><ItemsControl ItemsSource="{Binding Sections}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel>
      <ToggleButton Content="{Binding Title}" IsChecked="{Binding IsExpanded}" IsVisible="{Binding ShowSectionHeader}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Classes="quiet" Margin="12,4"/>
      <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsContentVisible}"><SelectableTextBlock Text="{Binding Warning}" IsVisible="{Binding HasWarning}" Foreground="{DynamicResource WarningBrush}" Margin="16,8" TextWrapping="Wrap"/><local:DiffSectionView Grid.Row="1" Height="{Binding PanelHeight}" ShowFileNavigator="False"/></Grid>
@@ -222,22 +389,26 @@
     </Grid>
     <Border x:Name="ReviewHost" Grid.Column="3" IsVisible="False" ClipToBounds="True" Background="{DynamicResource PanelBrush}"
             BorderThickness="1,0,0,0" BorderBrush="{DynamicResource DividerBrush}">
-     <Grid x:Name="ReviewContent" RowDefinitions="44,*">
-      <Border Padding="12,4" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
-       <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Text="Pull request" Classes="pane-title" VerticalAlignment="Center"/>
+     <Grid x:Name="ReviewContent" RowDefinitions="46,*">
+      <Border Padding="14,4" Classes="pane-heading">
+       <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+        <TextBlock Text="{Binding ActiveReview.Title}" Classes="pane-title" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ActiveReview.Title}"/>
         <Button x:Name="CloseReviewButton" Grid.Column="1" Content="Close review" Click="CloseReviewClick" Classes="quiet compact"/>
        </Grid>
       </Border>
       <local:ReviewPanel Grid.Row="1" DataContext="{Binding ActiveReview}"/>
      </Grid>
     </Border>
+    <local:WorkingTreeView x:Name="WorkingTreeWorkspace" Grid.ColumnSpan="4"
+                           IsVisible="{Binding $parent[Window].DataContext.IsWorkingTreeOpen, FallbackValue=False}"
+                           DataContext="{Binding WorkingTreeEditor}"/>
     <Border Grid.Column="0" Grid.ColumnSpan="4" IsVisible="{Binding IsHistoryOpen}" Background="{DynamicResource CanvasBrush}">
     <Grid RowDefinitions="Auto,Auto,*">
-     <Border Padding="8,2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="4">
-       <Button Content="← Back to changes" Command="{Binding CloseHistoryCommand}" Classes="quiet"/>
-       <TextBlock Grid.Column="1" Text="Review history" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0"/>
+     <Border Padding="12,4" Classes="pane-heading">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="4">
+       <TextBlock Text="Review history" Classes="pane-title" VerticalAlignment="Center" Margin="2,0"/>
+       <Button Grid.Column="1" Content="Back to changes" Command="{Binding CloseHistoryCommand}" Classes="quiet"/>
        <Button Grid.Column="2" Content="Back" Command="{Binding ActiveHistory.BackCommand}" Classes="quiet" ToolTip.Tip="Previous history view"/>
        <Button Grid.Column="3" Content="Forward" Command="{Binding ActiveHistory.ForwardCommand}" Classes="quiet" ToolTip.Tip="Next history view"/>
       </Grid>
@@ -253,26 +424,76 @@
     </Border>
    </Grid>
   </Grid>
-  <Grid Grid.Row="4" IsVisible="{Binding IsGitLogOpen}" RowDefinitions="Auto,*" Margin="20,16">
-   <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,10">
-    <StackPanel Spacing="4"><TextBlock Text="Command log" Classes="view-title"/><TextBlock Text="Current session · newest first" Classes="muted"/></StackPanel>
-    <CheckBox Grid.Column="1" Content="GitHub only" IsChecked="{Binding GitHubLogsOnly}" VerticalAlignment="Top"/>
-    <Button Grid.Column="2" Content="Saved operations" Command="{Binding ShowOperationsCommand}" Classes="quiet"/>
-    <Button Grid.Column="3" Content="Copy" Click="CopyGitLogClick" Classes="quiet"/>
-    <Button Grid.Column="4" Content="Clear" Command="{Binding ClearGitLogCommand}" Classes="quiet"/>
-   </Grid>
-   <TextBlock Grid.Row="1" Text="No commands to show." Classes="muted" IsVisible="{Binding !VisibleGitLogEntries.Count}" Margin="10"/>
-   <ListBox Grid.Row="1" ItemsSource="{Binding VisibleGitLogEntries}" IsVisible="{Binding !!VisibleGitLogEntries.Count}" Background="Transparent" BorderThickness="0">
+  <Grid Grid.Row="4" IsVisible="{Binding IsGitLogOpen}" RowDefinitions="Auto,*">
+   <Border Classes="pane-heading" Padding="20,12">
+    <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="8">
+     <StackPanel Spacing="4">
+      <TextBlock Text="Command log" Classes="view-title"/>
+      <TextBlock Text="Current session · newest first" Classes="muted"/>
+     </StackPanel>
+     <CheckBox Grid.Column="1" Content="GitHub only" IsChecked="{Binding GitHubLogsOnly}" VerticalAlignment="Center"/>
+     <Button Grid.Column="2" Content="Saved operations" Command="{Binding ShowOperationsCommand}" Classes="outline" VerticalAlignment="Center"/>
+     <Button Grid.Column="3" Content="Copy" Click="CopyGitLogClick" Classes="quiet" IsEnabled="{Binding !!VisibleGitLogEntries.Count}" VerticalAlignment="Center"/>
+     <Button Grid.Column="4" Content="Clear" Command="{Binding ClearGitLogCommand}" Classes="quiet" VerticalAlignment="Center"/>
+    </Grid>
+   </Border>
+   <StackPanel Grid.Row="1" IsVisible="{Binding !VisibleGitLogEntries.Count}" Spacing="6" Margin="20">
+    <TextBlock Text="No matching commands" Classes="pane-title"/>
+    <TextBlock Text="Command results appear here as you use the workspace." Classes="muted" TextWrapping="Wrap"
+               IsVisible="{Binding !GitHubLogsOnly}"/>
+    <TextBlock Text="Clear GitHub only to see Git commands from this session." Classes="muted" TextWrapping="Wrap"
+               IsVisible="{Binding GitHubLogsOnly}"/>
+   </StackPanel>
+   <ListBox Grid.Row="1" ItemsSource="{Binding VisibleGitLogEntries}" IsVisible="{Binding !!VisibleGitLogEntries.Count}"
+            Background="Transparent" BorderThickness="0" Margin="12,0" AutomationProperties.Name="Command results">
     <ListBox.ItemTemplate><DataTemplate><Border Padding="10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
      <StackPanel Spacing="4">
-      <SelectableTextBlock Text="{Binding Summary}" TextWrapping="Wrap" FontFamily="Menlo,Consolas,monospace" FontSize="11"/>
+      <SelectableTextBlock Text="{Binding Summary}" TextWrapping="Wrap" FontFamily="{StaticResource CodeFontFamily}" FontSize="12"/>
       <TextBlock Text="{Binding WorkingDirectory}" IsVisible="{Binding !!WorkingDirectory}" Classes="muted" FontSize="11" TextWrapping="Wrap"/>
       <SelectableTextBlock Text="{Binding Detail}" IsVisible="{Binding !!Detail}" TextWrapping="Wrap" FontSize="11"/>
      </StackPanel>
     </Border></DataTemplate></ListBox.ItemTemplate>
    </ListBox>
   </Grid>
-  <Border Grid.Row="4" IsVisible="{Binding IsOperationsOpen}" Background="{DynamicResource CanvasBrush}" Padding="20"><Grid RowDefinitions="Auto,*" RowSpacing="16"><Grid ColumnDefinitions="*,Auto"><StackPanel Spacing="6"><TextBlock Text="Operations and recovery" Classes="view-title"/><TextBlock Text="Saved Git and GitHub write attempts for this workspace." Classes="muted" TextWrapping="Wrap"/></StackPanel><Button Grid.Column="1" Content="Close" Command="{Binding CloseOperationsCommand}" Classes="quiet"/></Grid><ListBox Grid.Row="1" ItemsSource="{Binding OperationItems}" Background="Transparent" BorderThickness="0"><ListBox.ItemTemplate><DataTemplate><Border Padding="12" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1"><StackPanel Spacing="6"><TextBlock Text="{Binding Status}" FontWeight="SemiBold"/><SelectableTextBlock Text="{Binding Message}" TextWrapping="Wrap"/><TextBlock Text="{Binding OperationId}" Classes="muted"/><ItemsControl ItemsSource="{Binding Effects}"><ItemsControl.ItemTemplate><DataTemplate><SelectableTextBlock Text="{Binding}" TextWrapping="Wrap"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel></Border></DataTemplate></ListBox.ItemTemplate></ListBox></Grid></Border>
-  <Border Grid.Row="5" Padding="14,3" Background="{DynamicResource HeaderBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Status}" FontSize="11" Classes="muted" TextTrimming="CharacterEllipsis"/><TextBlock Grid.Column="1" Text="{Binding ProductVersion}" FontSize="11" Classes="muted"/></Grid></Border>
+  <Grid Grid.Row="4" IsVisible="{Binding IsOperationsOpen}" Background="{DynamicResource CanvasBrush}" RowDefinitions="Auto,*">
+   <Border Classes="pane-heading" Padding="20,12">
+    <Grid ColumnDefinitions="*,Auto">
+     <StackPanel Spacing="4">
+      <TextBlock Text="Operations and recovery" Classes="view-title"/>
+      <TextBlock Text="Saved Git and GitHub operations for this workspace." Classes="muted" TextWrapping="Wrap"/>
+     </StackPanel>
+     <Button Grid.Column="1" Content="Close" Command="{Binding CloseOperationsCommand}" Classes="quiet" VerticalAlignment="Center"/>
+    </Grid>
+   </Border>
+   <TextBlock Grid.Row="1" Text="No saved operations in this workspace." IsVisible="{Binding !OperationItems.Count}"
+              Classes="muted" Margin="20"/>
+   <ListBox Grid.Row="1" ItemsSource="{Binding OperationItems}" IsVisible="{Binding !!OperationItems.Count}" Background="Transparent"
+            BorderThickness="0" Margin="12,0" AutomationProperties.Name="Saved operations">
+    <ListBox.ItemTemplate>
+     <DataTemplate>
+      <Border Padding="12,10" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+       <StackPanel Spacing="6">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+         <TextBlock Text="{Binding Status}" FontWeight="SemiBold"/>
+         <SelectableTextBlock Grid.Column="1" Text="{Binding OperationId}" Classes="code-meta"/>
+        </Grid>
+        <SelectableTextBlock Text="{Binding Message}" TextWrapping="Wrap"/>
+        <ItemsControl ItemsSource="{Binding Effects}">
+         <ItemsControl.ItemTemplate>
+          <DataTemplate><SelectableTextBlock Text="{Binding}" TextWrapping="Wrap" Classes="code-meta"/></DataTemplate>
+         </ItemsControl.ItemTemplate>
+        </ItemsControl>
+       </StackPanel>
+      </Border>
+     </DataTemplate>
+    </ListBox.ItemTemplate>
+   </ListBox>
+  </Grid>
+  <Border Grid.Row="5" Padding="12,2" Classes="dialog-footer">
+   <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+    <TextBlock Text="{Binding Status}" FontSize="11" Classes="muted" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Status}"/>
+    <TextBlock Grid.Column="1" Text="{Binding ProductVersion}" FontSize="11" Classes="muted"/>
+   </Grid>
+  </Border>
  </Grid>
 </Window>

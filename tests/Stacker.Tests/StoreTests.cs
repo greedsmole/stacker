@@ -161,6 +161,7 @@ public sealed partial class StoreTests
         var store = new JsonSettingsStore(directory);
         var migrated = await store.LoadAsync();
         Assert.True(migrated.StacksHidden);
+        Assert.False(migrated.FilesHidden);
         Assert.Equal(expectedFilesWidth, migrated.FilesWidth);
         Assert.Equal(344, migrated.NavigationWidth);
         Assert.Equal("Light", migrated.Theme);
@@ -168,10 +169,12 @@ public sealed partial class StoreTests
         Assert.Equal(AppSettings.CurrentSchema, migrated.SchemaVersion);
 
         migrated.StacksHidden = false;
+        migrated.FilesHidden = true;
         migrated.FilesWidth = 310;
         await store.SaveAsync(migrated);
         var reopened = await store.LoadAsync();
         Assert.False(reopened.StacksHidden);
+        Assert.True(reopened.FilesHidden);
         Assert.Equal(310, reopened.FilesWidth);
     }
 

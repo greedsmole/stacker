@@ -2,10 +2,12 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Stacker.Core;
+using Stacker.Core.Framework;
 namespace Stacker.Desktop.ViewModels;
 /// <summary>Presentation state for a local or remote stack group.</summary>
 public sealed partial class StackGroupViewModel : ObservableObject
 {
+    public bool UsesGhStack { get; init; }
     /// <summary>Definition supplying stable identity, name and base.</summary>
     public StackDefinition Definition
     {
@@ -26,7 +28,10 @@ public sealed partial class StackGroupViewModel : ObservableObject
     public string ExpandLabel => (IsExpanded ? "Collapse " : "Expand ") + Name;
     public string Summary => IsSinglePr ? $"#{PullRequests[0].Number} · {PullRequests[0].HeadRef}{(PullRequests[0].IsDraft ? " · Draft" : "")}"
         : $"{Layers.Count} {(IsRemote ? "PRs" : "layers")}{(SharedPrefix ? " · shared foundation" : "")}";
-    public string BaseLabel => "Base: " + (IsRemote ? PullRequests[0].BaseRef : Definition.Base.Replace("refs/heads/", "").Replace("refs/remotes/", ""));
+    public string BaseName => IsRemote ? PullRequests[0].BaseRef : StackRefs.Short(Definition.Base);
+    public string? LocalBaseBranchName => !IsRemote && Definition.Base.StartsWith(LocalBranch.Prefix, StringComparison.Ordinal)
+        ? BaseName : null;
+    public string BaseLabel => "Base: " + BaseName;
     /// <summary>Whether remote pull requests share a common foundation.</summary>
     public bool SharedPrefix
     {
@@ -35,7 +40,7 @@ public sealed partial class StackGroupViewModel : ObservableObject
     /// <summary>True when this stack's last restack can still be undone.</summary>
     [ObservableProperty] private bool _undoAvailable;
     /// <summary>Whether the layer list is expanded.</summary>
-    [ObservableProperty] private bool _isExpanded = true;
+    [ObservableProperty] private bool _isExpanded;
     partial void OnIsExpandedChanged(bool value)
     {
         OnPropertyChanged(nameof(ShowLayers));

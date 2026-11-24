@@ -10,6 +10,8 @@ internal sealed partial class NavigationController
 {
     public void SetActiveGroup(StackGroupViewModel group)
     {
+        if (group.IsStack && runtime._activeGroup?.Definition.Id != group.Definition.Id)
+            group.IsExpanded = true;
         runtime.Session.Select(new(group.Definition.Id, null, null));
         runtime._comparison?.Cancel();
         foreach (var g in owner.LocalGroups.Concat(owner.RemoteGroups).Concat(owner.OtherGroups))
@@ -21,6 +23,15 @@ internal sealed partial class NavigationController
                 l.IsChecked = false;
             }
         }
+        if (owner.GhStackGroup is { } cliGroup)
+        {
+            cliGroup.IsSelected = ReferenceEquals(cliGroup, group);
+            foreach (var layer in cliGroup.Layers)
+            {
+                layer.IsSelected = false;
+                layer.IsChecked = false;
+            }
+        }
         runtime._activeGroup = group;
         runtime._suppress = true;
         owner.SelectedStack = group.Definition;
@@ -30,6 +41,7 @@ internal sealed partial class NavigationController
             owner.Layers.Add(layer);
         owner.Notify(nameof(owner.BaseLabel));
         owner.Notify(nameof(owner.IsLocalSelected));
+        owner.Notify(nameof(MainViewModel.CanEditStackerSelection));
         owner.Notify(nameof(owner.IsRemoteStackSelected));
         owner.Notify(nameof(owner.ShowLayerModes));
         owner.Notify(nameof(owner.CanRestackActiveStack));
@@ -116,6 +128,8 @@ internal sealed partial class NavigationController
         owner.Notify(nameof(owner.HasPrDiscussion));
         owner.Notify(nameof(owner.CanReview));
         owner.Notify(nameof(MainViewModel.ReviewLabel));
+        owner.Notify(nameof(MainViewModel.StackPositionLabel));
+        owner.Notify(nameof(MainViewModel.CheckoutLayer));
         owner.IsBusy = true;
         owner.Error = "";
         try

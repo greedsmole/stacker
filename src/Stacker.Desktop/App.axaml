@@ -3,14 +3,15 @@
   <ResourceDictionary>
    <ResourceDictionary.MergedDictionaries>
     <ResourceInclude Source="avares://Stacker/Design/FluentTokens.axaml"/>
+    <ResourceInclude Source="avares://Stacker/Design/WorkbenchIcons.axaml"/>
    </ResourceDictionary.MergedDictionaries>
   </ResourceDictionary>
  </Application.Resources>
  <Application.Styles>
   <FluentTheme DensityStyle="Compact">
    <FluentTheme.Palettes>
-    <ColorPaletteResources x:Key="Dark" Accent="#0F6CBD" RegionColor="#1F1F1F"/>
-    <ColorPaletteResources x:Key="Light" Accent="#0F6CBD" RegionColor="#FAFAFA"/>
+    <ColorPaletteResources x:Key="Dark" Accent="#A3D5ED" RegionColor="#15171B"/>
+    <ColorPaletteResources x:Key="Light" Accent="#165B7D" RegionColor="#FDFDFC"/>
    </FluentTheme.Palettes>
   </FluentTheme>
   <StyleInclude Source="avares://Stacker/Design/FluentControls.axaml"/>

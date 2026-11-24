@@ -88,15 +88,15 @@ public sealed class AppSettings
     /// the column. The pane enforces the same limits while the user resizes it.</remarks>
     public const double DefaultNavigationWidth = 240;
     public double NavigationWidth { get; set; } = DefaultNavigationWidth;
-    /// <summary>Stacks open on request so the selected comparison gets the main workspace.</summary>
-    public bool StacksHidden { get; set; } = true;
+    /// <summary>Hides the stack graph in Changes.</summary>
+    public bool StacksHidden { get; set; }
     /// <summary>Width of the shared file column in logical pixels; default 220.</summary>
     /// <remarks>Loading clamps the stored value to 200-600 and falls back to 220 when it is not finite. The pane saves the width the user actually dragged to,
     /// which is why the stored value is re-clamped on the next load.</remarks>
     public const double DefaultFilesWidth = 220;
     public double FilesWidth { get; set; } = DefaultFilesWidth;
-    /// <summary>Hides the shared file navigator in Changes.</summary>
-    public bool FilesHidden { get; set; }
+    /// <summary>Hides the shared file navigator until requested.</summary>
+    public bool FilesHidden { get; set; } = true;
     /// <summary>Initial window width in logical pixels; default 1400.</summary>
     /// <remarks>Loading clamps the stored value to 1000-4000 and falls back to 1400 when it is not finite, so a window cannot be restored below the layout's
     /// minimum or wider than a practical desktop.</remarks>

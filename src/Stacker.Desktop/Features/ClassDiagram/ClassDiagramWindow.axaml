@@ -2,12 +2,9 @@
         x:Class="Stacker.Desktop.ClassDiagramWindow" Title="C# class diagram"
         Width="1280" Height="800" MinWidth="940" MinHeight="600" WindowStartupLocation="CenterOwner">
  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
-  <Border Background="{DynamicResource PanelBrush}" Padding="24,16" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+  <Border Classes="dialog-heading" Padding="24,16">
    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="{DynamicResource StackerSpace16}">
-    <StackPanel Spacing="{DynamicResource StackerSpace4}">
-     <TextBlock Text="C# class diagram" Classes="view-title"/>
-     <TextBlock Text="Inspect types, declarations and relationships across revisions." Classes="muted" FontSize="{DynamicResource StackerCaptionFontSize}"/>
-    </StackPanel>
+    <TextBlock Text="C# class diagram" Classes="view-title" VerticalAlignment="Center"/>
     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="{DynamicResource StackerSpace8}">
      <Button x:Name="RefreshButton" Content="Refresh revisions" Click="RefreshClick" Classes="quiet"/>
      <Button Content="Close" Click="CloseClick" IsCancel="True" Classes="quiet"/>
@@ -33,7 +30,7 @@
    </Grid>
   </Border>
   <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="24,8" ColumnSpacing="{DynamicResource StackerSpace12}">
-   <SelectableTextBlock x:Name="Range" TextWrapping="Wrap" VerticalAlignment="Center" FontFamily="Menlo,Consolas,monospace" FontSize="{DynamicResource StackerCaptionFontSize}"/>
+   <SelectableTextBlock x:Name="Range" TextWrapping="Wrap" VerticalAlignment="Center" Classes="code-meta"/>
    <Button Grid.Column="1" x:Name="CoverageButton" Content="Analysis details" Click="CoverageClick" Classes="quiet" IsEnabled="False"/>
   </Grid>
   <ProgressBar Grid.Row="2" x:Name="Progress" Height="2" IsIndeterminate="True" IsVisible="False"/>
@@ -49,9 +46,13 @@
    <Grid Grid.Column="1" RowDefinitions="Auto,*" Background="{DynamicResource CanvasBrush}">
     <WrapPanel Margin="12,8" ItemSpacing="{DynamicResource StackerSpace4}" LineSpacing="{DynamicResource StackerSpace4}">
      <ComboBox x:Name="EdgeKinds" SelectionChanged="EdgeFilterChanged" AutomationProperties.Name="Relationship kind"/>
-     <Button Content="−" Click="ZoomOut" Classes="quiet compact" AutomationProperties.Name="Zoom out"/>
-     <Button x:Name="ZoomReset" Content="100%" Click="ResetZoom" Classes="quiet compact" AutomationProperties.Name="Reset zoom"/>
-     <Button Content="+" Click="ZoomIn" Classes="quiet compact" AutomationProperties.Name="Zoom in"/>
+     <Border Classes="segmented">
+      <StackPanel Orientation="Horizontal" Spacing="2">
+       <Button Content="−" Click="ZoomOut" Classes="quiet compact" AutomationProperties.Name="Zoom out"/>
+       <Button x:Name="ZoomReset" Content="100%" Click="ResetZoom" Classes="quiet compact" AutomationProperties.Name="Reset zoom"/>
+       <Button Content="+" Click="ZoomIn" Classes="quiet compact" AutomationProperties.Name="Zoom in"/>
+      </StackPanel>
+     </Border>
      <Button x:Name="ExpandButton" Content="Expand neighbors" Click="ExpandClick" Classes="quiet" IsEnabled="False"/>
      <Button x:Name="MoreButton" Content="More changes" Click="MoreClick" Classes="quiet" IsVisible="False"/>
     </WrapPanel>

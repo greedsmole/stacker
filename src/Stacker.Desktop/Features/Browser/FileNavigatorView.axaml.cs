@@ -177,10 +177,15 @@ public sealed partial class FileNavigatorView : UserControl
     private void UpdateLabels()
     {
         var hasProgress = !_groupBySection && _items.Length > 0 && _items.All(item => item.ReviewRow?.HasReviewStatus == true);
+        var reviewed = hasProgress ? _items.Count(item => item.ReviewRow!.IsReviewed) : 0;
         UnreviewedOnly.IsVisible = hasProgress;
         FilesHeading.Text = $"Files ({_items.Length})";
-        FileProgress.Text = hasProgress ? $"{_items.Count(item => item.ReviewRow!.IsReviewed)} of {_items.Length} reviewed here"
+        FileProgress.Text = hasProgress ? $"{reviewed}/{_items.Length} reviewed"
             : _visible.Length != _items.Length ? $"{_visible.Length} matching" : "";
+        FileProgress.IsVisible = FileProgress.Text.Length > 0;
+        ReviewedProgress.IsVisible = hasProgress;
+        ReviewedProgress.Maximum = Math.Max(1, _items.Length);
+        ReviewedProgress.Value = reviewed;
         ClearFilter.IsVisible = _query.Length > 0 || UnreviewedOnly.IsChecked == true;
         FilesMessage.Text = _items.Length == 0 ? "No changed files in this comparison."
             : _visible.Length == 0 ? "No files match. Clear filters to see all changed files." : "";

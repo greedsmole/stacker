@@ -12,7 +12,8 @@ FluentAvaloniaUI was also evaluated. Its 2.5.1 release supports Avalonia 11.3.12
 
 - `src/Stacker.Desktop/App.axaml` configures the native Compact theme and imports the system.
 - `src/Stacker.Desktop/Design/FluentTokens.axaml` owns the spacing/type/shape ramp, semantic colors and bridges to Avalonia's native resource keys.
-- `src/Stacker.Desktop/Design/FluentControls.axaml` owns Stacker's component appearances and compact workbench exceptions.
+- `src/Stacker.Desktop/Design/FluentControls.axaml` owns component appearances, pane and dialog surfaces, and the branch graph treatment.
+- `src/Stacker.Desktop/Design/WorkbenchIcons.axaml` contains the shared Git, file, search, and disclosure glyphs.
 - `DESIGN.md` defines the product-specific layout and code-space acceptance criteria.
 
 The native resource names are verified against the pinned framework's [base resources](https://raw.githubusercontent.com/AvaloniaUI/Avalonia/11.3.22/src/Avalonia.Themes.Fluent/Accents/BaseResources.xaml) and [control resources](https://raw.githubusercontent.com/AvaloniaUI/Avalonia/11.3.22/src/Avalonia.Themes.Fluent/Accents/FluentControlResources.xaml).
@@ -21,19 +22,19 @@ The native resource names are verified against the pinned framework's [base reso
 | --- | --- | --- |
 | Spacing | `StackerSpace4/8/12/16/24` | A consistent 4 px ramp connects fields and separates tasks |
 | Type | `StackerBodyFontSize`, `StackerCaptionFontSize`, `StackerTitleFontSize` | 13 px compact body, 12 px supporting copy, 20 px dialog titles |
-| Shape | `ControlCornerRadius`, `OverlayCornerRadius` | 4 px controls, 8 px transient surfaces |
-| Surfaces | `CanvasBrush`, `PanelBrush`, `ChromeBrush`, `HeaderBrush`, `InputBrush` | Code, supporting navigation, application frame and inputs have clear roles |
+| Shape | `ControlCornerRadius`, `OverlayCornerRadius` | 5 px controls, 9 px larger transient surfaces |
+| Surfaces | `CanvasBrush`, `PanelBrush`, `ChromeBrush`, `HeaderBrush`, `InputBrush`, `RaisedBrush` | Code and navigation form distinct planes. Menus and the selected stack group use a raised surface |
 | Content | `TextPrimaryBrush`, `TextSecondaryBrush`, `OnAccentBrush` | Theme-aware text and readable primary actions |
 | Interaction | `Primary*Brush`, `HoverBrush`, `PressedBrush`, `Selection*Brush` | One accent for the primary task and separate selection feedback |
-| Code semantics | `DiffAdded*Brush`, `DiffRemoved*Brush`, `DiffHunkBrush`, `File*Brush` | Git information keeps its own semantic colors and textual markers |
+| Code semantics | `CodeFontFamily`, `Diff*GutterBrush`, `DiffAddedBrush`, `DiffRemovedBrush`, `File*Brush` | Code and Git coordinates share a monospace stack. Change fills are backed by explicit markers |
 
 Fluent's spacing guidance uses a 4 px base with smaller optical-alignment exceptions. Native control padding can retain those exceptions; section and field relationships use the shared ramp. [Fluent layout](https://fluent2.microsoft.design/layout)
 
 ## UX rules
 
-The default task is reading code. Keep the measured viewport limits in `DESIGN.md`; supporting panels open on request. `PRs & stacks` exposes both navigation sources, and the empty repository offers a direct Browse pull requests action.
+The main workbench shows the stack graph and the selected comparison. The graph starts at the base and uses connected branch nodes for dependency order. Inspecting a layer selects its row. HEAD is the local checkout marker. The comparison header can restore the graph from a hidden state. **Stacks** switches between PRs and local stacks, and the empty repository offers **Browse pull requests** directly.
 
-Toolbars remain one line. Group commands by the object they affect: comparison tools in Stack actions or PR tools, file navigation and display commands in File actions. Frequent review and comparison-mode controls stay visible. [Fluent toolbar guidance](https://fluent2.microsoft.design/components/web/react/core/toolbar/usage)
+Toolbars remain compact. Keep **Sync stack**, **Discussion**, **Review**, and the comparison mode near the selected change. Group supporting actions in **Stack actions**, **PR tools**, and **File actions**. [Fluent toolbar guidance](https://fluent2.microsoft.design/components/web/react/core/toolbar/usage)
 
 Command lists use native `MenuFlyout` and `MenuItem`, including a checked menu item for Wrap code. Native menu navigation, activation and Escape dismissal belong to the framework. Inputs and repository selection remain form flyouts because they collect information. [Fluent menu guidance](https://fluent2.microsoft.design/components/web/react/core/menu/usage), [Avalonia MenuFlyout](https://docs.avaloniaui.net/controls/menus/menuflyout)
 

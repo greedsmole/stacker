@@ -57,7 +57,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     [ObservableProperty] internal string _error = "";
     [ObservableProperty] internal string _emptyMessage = "Open a repository or explore the demo.";
     [ObservableProperty] internal bool _isBusy;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(WorkspaceEmptyTitle), nameof(IsLocalSelected), nameof(PullRequestsEmptyMessage))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(WorkspaceEmptyTitle), nameof(IsLocalSelected), nameof(PullRequestsEmptyMessage), nameof(CanOpenWorkingTree))]
     internal bool _canEdit;
     [ObservableProperty] internal StackDefinition? _selectedStack;
     [ObservableProperty] internal DiffMode _mode = DiffMode.FullStack;
@@ -85,7 +85,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
         IGitBranchWriter? branchWriter = null, IGitHubPullRequestWriter? pullRequestWriter = null, IEditorLauncher? editorLauncher = null,
         CommandBus? commands = null, IHistoryStore? historyStore = null, IHistoryGit? historyObjects = null,
         ChangeGraphService? historyGraph = null, VersionComparisonService? historyComparisons = null, ReviewProgressService? historyProgress = null, IWorkspaceBackupService? backupService = null, IChangeIdentityService? identities = null, IDiagnosticSink? diagnostics = null,
-        ISymbolNavigation? symbolNavigation = null, ICSharpGraphReader? csharpGraph = null)
+        ISymbolNavigation? symbolNavigation = null, ICSharpGraphReader? csharpGraph = null,
+        IWorkingTreeAuthoring? authoring = null, IGhStackClient? ghStacks = null)
     {
         _backupService = backupService;
         _runtime.Identities = identities;
@@ -101,6 +102,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
         _workspaceController = new(this, _runtime);
         _gitHubController = new(this, _runtime);
         _workingTreeController = new(this, _runtime);
+        WorkingTreeEditor = authoring is null ? null : new(this, authoring);
+        _ghStacks = ghStacks;
         _searchController = new(this, _runtime);
         _navigationController = new(this, _runtime);
         _gitLogController = new(this, _runtime);
@@ -218,6 +221,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     public void DisposeViews() => _navigationController.DisposeViews();
     public void Dispose()
     {
+        WorkingTreeEditor?.Close();
+        _ghStackLoad?.Cancel();
         ActiveHistory?.Dispose();
         ActiveHistory = null;
         _runtime.Session.Suspend();

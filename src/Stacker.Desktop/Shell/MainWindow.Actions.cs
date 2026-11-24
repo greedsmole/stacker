@@ -77,7 +77,13 @@ public partial class MainWindow
     /// <summary>Opens the conflicted files in the editor the user configured.</summary>
     private void ResolveConflictsClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await Vm.OpenConflictsInEditorAsync(); }, message => AsyncHandler.Report(this, message));
     /// <summary>Opens the sync window, whose conflict panel covers Continue, Skip and Abort.</summary>
-    private void ReviewConflictsClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await ShowSyncWindowAsync(); }, message => AsyncHandler.Report(this, message));
+    private void ReviewConflictsClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm.UsesGhStack || Vm.HasGhStackRecovery)
+            WorkingTreeClick(sender, e);
+        else
+            AsyncHandler.Run(ShowSyncWindowAsync, message => AsyncHandler.Report(this, message));
+    }
     /// <summary>Restores what an interrupted run moved; the result is always reported.</summary>
     private void RestoreRecoveryClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
@@ -116,7 +122,7 @@ public partial class MainWindow
     private void AddLayerClick(object? sender, RoutedEventArgs e)
 => AsyncHandler.Run(async () =>
 {
-    if (!Vm.IsLocalSelected || Vm.SelectedStack is not { } stack)
+    if (!Vm.CanEditStackerSelection || Vm.SelectedStack is not { } stack)
         return;
     try
     {
@@ -128,7 +134,7 @@ public partial class MainWindow
     private void EditStackClick(object? sender, RoutedEventArgs e) => AsyncHandler.Run(async () => { await EditAsync(true); }, message => AsyncHandler.Report(this, message));
     private async Task EditAsync(bool existing)
     {
-        if (Vm.Repository is null || existing && Vm.SelectedStack is null)
+        if (Vm.Repository is null || !Vm.CanManageStackerStacks || existing && !Vm.CanEditStackerSelection)
             return;
         try
         {
@@ -157,5 +163,12 @@ public partial class MainWindow
         }, sender as Control, animate), message => AsyncHandler.Report(this, message));
     }
     private void OverviewClick(object? sender, RoutedEventArgs e)
-=> AsyncHandler.Run(async () => { if (sender is Control { DataContext: StackGroupViewModel group }) await Vm.SelectOverviewAsync(group); }, message => AsyncHandler.Report(this, message));
+=> AsyncHandler.Run(async () =>
+{
+    if (sender is Control { DataContext: StackGroupViewModel group })
+    {
+        Vm.CloseWorkingTree();
+        await Vm.SelectOverviewAsync(group);
+    }
+}, message => AsyncHandler.Report(this, message));
 }

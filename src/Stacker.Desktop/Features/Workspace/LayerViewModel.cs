@@ -1,6 +1,6 @@
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Stacker.Core;
+using Stacker.Core.Framework;
 namespace Stacker.Desktop.ViewModels;
 
 /// <summary>Presentation state for one numbered stack layer and optional pull request.</summary>
@@ -23,10 +23,13 @@ public sealed partial class LayerViewModel : ObservableObject
     }
     /// <summary>One-based layer number for display.</summary>
     public int Number => Snapshot.Position + 1;
-    public string Name => Snapshot.Branch.Replace("refs/heads/", "").Replace("refs/remotes/", "");
+    public bool IsTip => Number == Group?.Definition.Branches.Count;
+    public string Name => StackRefs.Short(Snapshot.Branch);
+    public string? LocalBranchName => Snapshot.Branch.StartsWith(LocalBranch.Prefix, StringComparison.Ordinal) ? Name : null;
     public string Title => PullRequest?.Title ?? Name;
     public string CheckLabel => $"Include layer {Number}: {Title}";
-    public string Detail => PullRequest is null ? $"↑{Snapshot.Ahead}  ↓{Snapshot.Behind}" : $"#{PullRequest.Number} · {PullRequest.HeadRef}{(PullRequest.IsDraft ? " · Draft" : "")}";
+    public string Detail => PullRequest is null ? (HasWarning ? "" : $"↑{Snapshot.Ahead}  ↓{Snapshot.Behind}")
+        : $"#{PullRequest.Number} · {PullRequest.HeadRef}{(PullRequest.IsDraft ? " · Draft" : "")}";
     public string? Warning => Snapshot.Warning;
     public bool HasWarning => Warning is not null;
     [ObservableProperty] private bool _isChecked;

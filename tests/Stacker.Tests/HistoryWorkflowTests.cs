@@ -93,6 +93,9 @@ public sealed class HistoryWorkflowTests
                 var selected = section.SelectedFile;
                 Assert.Equal("C.txt", selected?.NewPath);
                 var pane = window.FindControl<FileNavigatorView>("SharedFiles")!;
+                Assert.False(pane.IsVisible);
+                window.FindControl<ToggleButton>("FilesToggle")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.True(pane.IsVisible);
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
                 var checkbox = await ClickCheckpointAsync(pane.FindControl<ListBox>("FileList")!);
                 var file = Assert.IsType<DiffFileRow>(checkbox.DataContext);

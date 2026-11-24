@@ -1,0 +1,105 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Stacker.Desktop" x:Class="Stacker.Desktop.WorkingTreeView"
+             Background="{DynamicResource CanvasBrush}">
+ <UserControl.Styles>
+  <Style Selector="Grid.worktree-line.added"><Setter Property="Background" Value="{DynamicResource DiffAddedBrush}"/></Style>
+  <Style Selector="Grid.worktree-line.removed"><Setter Property="Background" Value="{DynamicResource DiffRemovedBrush}"/></Style>
+  <Style Selector="Grid.worktree-line.hunk"><Setter Property="Background" Value="{DynamicResource DiffHunkBrush}"/></Style>
+  <Style Selector="Border.line-gutter"><Setter Property="Background" Value="{DynamicResource DiffGutterBrush}"/></Style>
+  <Style Selector="Grid.worktree-line.added > Border.line-gutter"><Setter Property="Background" Value="{DynamicResource DiffAddedGutterBrush}"/></Style>
+  <Style Selector="Grid.worktree-line.removed > Border.line-gutter"><Setter Property="Background" Value="{DynamicResource DiffRemovedGutterBrush}"/></Style>
+  <Style Selector="ListBox.worktree-lines ListBoxItem">
+   <Setter Property="Padding" Value="0"/>
+   <Setter Property="MinHeight" Value="0"/>
+   <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+  </Style>
+ </UserControl.Styles>
+ <Grid RowDefinitions="Auto,Auto,*,Auto">
+  <Border Classes="pane-heading" Padding="14,9">
+   <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+    <StackPanel Spacing="3">
+     <TextBlock Text="Working tree" Classes="view-title"/>
+     <TextBlock Text="{Binding Checkout}" Classes="code-meta" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Checkout}"/>
+    </StackPanel>
+    <Button Grid.Column="1" Content="Refresh files" Classes="quiet" Click="RefreshClick" IsEnabled="{Binding !IsWriting}"
+            VerticalAlignment="Center"/>
+   </Grid>
+  </Border>
+  <StackPanel Grid.Row="1">
+   <ProgressBar Height="2" IsIndeterminate="True" IsVisible="{Binding IsLoading}"/>
+   <SelectableTextBlock Text="{Binding Message}" IsVisible="{Binding HasMessage}" TextWrapping="Wrap"
+                        Margin="14,8" Classes="muted" AutomationProperties.LiveSetting="Polite"/>
+  </StackPanel>
+  <Grid Grid.Row="2" ColumnDefinitions="238,*">
+   <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,1,0">
+    <Grid RowDefinitions="Auto,*,Auto" Margin="8" RowSpacing="8">
+     <UniformGrid Columns="2" ColumnSpacing="2">
+      <ToggleButton x:Name="UnstagedButton" Content="{Binding UnstagedLabel}" IsChecked="{Binding ShowUnstaged, Mode=OneWay}"
+                    Click="UnstagedClick" Classes="quiet compact" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+      <ToggleButton x:Name="StagedButton" Content="{Binding StagedLabel}" IsChecked="{Binding ShowStaged, Mode=OneWay}"
+                    Click="StagedClick" Classes="quiet compact" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+     </UniformGrid>
+     <Grid Grid.Row="1">
+      <ListBox x:Name="WorktreeFiles" Classes="file-list" ItemsSource="{Binding Files}" SelectedItem="{Binding SelectedFile, Mode=TwoWay}"
+               SelectionMode="Multiple" SelectionChanged="SelectionChanged" Background="Transparent" BorderThickness="0"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Working tree files">
+       <ListBox.ItemTemplate>
+        <DataTemplate>
+         <Grid ColumnDefinitions="20,*" ColumnSpacing="6" Margin="0,2" ToolTip.Tip="{Binding DisplayPath}">
+          <TextBlock Text="{Binding Status}" Classes="code-meta" VerticalAlignment="Center"/>
+          <TextBlock Grid.Column="1" Text="{Binding DisplayPath}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+         </Grid>
+        </DataTemplate>
+       </ListBox.ItemTemplate>
+      </ListBox>
+      <TextBlock Text="{Binding EmptyFiles}" IsVisible="{Binding ShowEmptyFiles}" Classes="muted" TextWrapping="Wrap" Margin="6,6"/>
+     </Grid>
+     <Button Grid.Row="2" x:Name="ChangeIndexButton" Content="{Binding IndexAction}" Command="{Binding ChangeIndexCommand}"
+             Classes="outline" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+    </Grid>
+   </Border>
+   <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
+    <Border Classes="pane-heading" Padding="12,8">
+     <TextBlock Text="{Binding PatchTitle}" Classes="code-meta" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding PatchTitle}"/>
+    </Border>
+    <StackPanel Grid.Row="1" IsVisible="{Binding HasConflicts}" Spacing="6" Margin="12,10">
+     <TextBlock Text="Conflicted files" Classes="pane-title"/>
+     <ListBox ItemsSource="{Binding Conflicts}" MaxHeight="108" ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+     <WrapPanel ItemSpacing="8" LineSpacing="6" IsEnabled="{Binding !IsWriting}">
+      <Button Content="Open conflicts in editor" Command="{Binding OpenConflictsCommand}" Classes="outline"/>
+      <Button Content="Stage resolved files" Command="{Binding StageResolvedCommand}" Classes="quiet"/>
+     </WrapPanel>
+    </StackPanel>
+    <Grid Grid.Row="2">
+     <ProgressBar VerticalAlignment="Top" Height="2" IsIndeterminate="True" IsVisible="{Binding IsLoadingPatch}"/>
+     <TextBlock Text="{Binding PatchMessage}" IsVisible="{Binding HasPatchMessage}" Classes="muted" TextWrapping="Wrap" Margin="12,12"/>
+     <ListBox x:Name="WorktreeDiffLines" Classes="worktree-lines" ItemsSource="{Binding Lines}" IsVisible="{Binding HasLines}"
+              Background="Transparent" BorderThickness="0" Padding="0" FontFamily="{StaticResource CodeFontFamily}" FontSize="13"
+              ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Working tree diff">
+      <ListBox.ItemTemplate>
+       <DataTemplate>
+        <Grid ColumnDefinitions="40,40,18,*" MinHeight="{DynamicResource DiffLineHeight}" Classes="worktree-line"
+              Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Classes.hunk="{Binding IsHunk}">
+         <Border Grid.ColumnSpan="3" Classes="line-gutter" IsHitTestVisible="False"/>
+         <TextBlock Text="{Binding OldLineNumber}" Classes="muted" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+         <TextBlock Grid.Column="1" Text="{Binding NewLineNumber}" Classes="muted" HorizontalAlignment="Right" Margin="0,0,8,0"/>
+         <TextBlock Grid.Column="2" Text="{Binding Marker}"/>
+         <local:SyntaxText Grid.Column="3" Line="{Binding}" TextWrapping="{Binding TextWrapping}"
+                           LineHeight="{DynamicResource DiffLineHeight}" Margin="8,0,16,0"/>
+        </Grid>
+       </DataTemplate>
+      </ListBox.ItemTemplate>
+     </ListBox>
+    </Grid>
+   </Grid>
+  </Grid>
+  <Border Grid.Row="3" Classes="dialog-footer" Padding="12,8">
+   <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+    <TextBox x:Name="WorktreeCommitMessage" Text="{Binding CommitMessage}" AcceptsReturn="True" MaxHeight="80" TextWrapping="Wrap"
+             Watermark="Commit message" AutomationProperties.Name="Commit message" IsEnabled="{Binding !IsWriting}"/>
+    <Button Grid.Column="1" x:Name="CommitStagedButton" Content="Commit staged" Command="{Binding CommitStagedCommand}"
+            VerticalAlignment="Bottom" Classes="primary"/>
+   </Grid>
+  </Border>
+ </Grid>
+</UserControl>

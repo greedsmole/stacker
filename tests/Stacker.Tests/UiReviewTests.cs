@@ -73,16 +73,20 @@ public sealed class UiReviewTests
 
             var statuses = new[]
             {
-                (FileChangeKind.Added, "A", "#8BD7A0", "#276642"),
-                (FileChangeKind.Modified, "M", "#91C7FF", "#005A9E"),
-                (FileChangeKind.Deleted, "D", "#FF9FA6", "#A6273A"),
-                (FileChangeKind.Renamed, "R", "#D1B8FC", "#673D9A")
+                (FileChangeKind.Added, "A", "FileAddedBrush"),
+                (FileChangeKind.Modified, "M", "FileModifiedBrush"),
+                (FileChangeKind.Deleted, "D", "FileDeletedBrush"),
+                (FileChangeKind.Renamed, "R", "FileRelocatedBrush")
             };
-            foreach (var (kind, letter, dark, light) in statuses)
+            var statusColors = new HashSet<Color>();
+            foreach (var (kind, letter, resourceKey) in statuses)
             {
                 var badge = flat.GetVisualDescendants().OfType<FileChangeBadge>().First(control => control.Change?.Kind == kind);
                 Assert.Equal(letter, Assert.IsType<TextBlock>(badge.Child).Text);
-                Assert.Equal(Color.Parse(theme == "Light" ? light : dark), Assert.IsAssignableFrom<ISolidColorBrush>(badge.BorderBrush).Color);
+                Assert.True(window.TryFindResource(resourceKey, window.ActualThemeVariant, out var resource));
+                var color = Assert.IsAssignableFrom<ISolidColorBrush>(badge.BorderBrush).Color;
+                Assert.Equal(Assert.IsAssignableFrom<ISolidColorBrush>(resource).Color, color);
+                Assert.True(statusColors.Add(color), $"The {kind} badge should have its own semantic color.");
                 Assert.Contains(kind.ToString(), Assert.IsType<string>(ToolTip.GetTip(badge)));
             }
 
@@ -196,7 +200,7 @@ public sealed class UiReviewTests
             Assert.Equal(11, gaps[0].ContextGap!.Count);
             Assert.Equal(12, section.Lines.First(line => line.IsExpandedContext).NewLineNumber);
             Assert.NotEmpty(section.Lines.First(line => line.IsExpandedContext).Tokens);
-            await ClickGap(gaps[1], "↑");
+            await ClickGap(gaps[1], "Show context above the next change");
             Assert.Equal(18, gaps[1].ContextGap!.Count);
             Assert.False(gaps[1].ShowExpandUp);
             Assert.Contains(section.Lines, line => line.IsExpandedContext && line.OldLineNumber == 57 && line.NewLineNumber == 58);
@@ -256,7 +260,8 @@ public sealed class UiReviewTests
                 {
                     window.UpdateLayout();
                     var button = view.GetVisualDescendants().OfType<Button>().SingleOrDefault(item =>
-                        ReferenceEquals(item.DataContext, gap) && item.IsEffectivelyVisible && Equals(item.Content, label));
+                        ReferenceEquals(item.DataContext, gap) && item.IsEffectivelyVisible &&
+                        (Equals(item.Content, label) || Avalonia.Automation.AutomationProperties.GetName(item) == label));
                     // ScrollIntoView can leave the bottom of the gap under the overlay scrollbar.
                     position = button?.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 4), window);
                     return position is Point point && window.InputHitTest(point) is Visual hit &&
@@ -335,7 +340,7 @@ public sealed class UiReviewTests
         await store.SaveAsync(fixture.Root, [fixture.Stack], null);
         var settings = new JsonSettingsStore(Path.Combine(fixture.Root, "settings"));
         var appData = new ApplicationStore(Path.Combine(fixture.Root, "app-data"));
-        await settings.SaveAsync(new AppSettings { Theme = theme, LastRepository = fixture.Root, WindowWidth = 1060, WindowHeight = 640, StacksHidden = false });
+        await settings.SaveAsync(new AppSettings { Theme = theme, LastRepository = fixture.Root, WindowWidth = 1060, WindowHeight = 640, FilesHidden = false });
 
         using var vm = CreateViewModel();
         var window = new MainWindow { DataContext = vm };
@@ -481,6 +486,8 @@ public sealed class UiReviewTests
             var workspace = window.FindControl<Grid>("DiffWorkspace")!;
             var stacks = window.FindControl<Grid>("StacksPane")!;
             var files = window.FindControl<FileNavigatorView>("SharedFiles")!;
+            var stacksToggle = window.FindControl<ToggleButton>("StacksToggle")!;
+            var filesToggle = window.FindControl<ToggleButton>("FilesToggle")!;
             var reviewButton = window.FindControl<Button>("ReviewButton")!;
             var focus = window.FindControl<ToggleButton>("FocusToggle")!;
             var diff = window.GetVisualDescendants().OfType<DiffSectionView>().Single(view => ReferenceEquals(view.DataContext, section));
@@ -491,6 +498,24 @@ public sealed class UiReviewTests
             await ResizeWindowAsync(1400, 880);
             Capture(window, theme, "code-pr-default");
             AssertDefaultCodeLayout();
+            var stackContext = window.FindControl<Button>("ActiveStackButton")!;
+            Assert.True(stackContext.IsEffectivelyVisible);
+            Assert.EndsWith("2/3", vm.StackPositionLabel);
+            Assert.True(group.IsExpanded);
+            ClickAt(window, stacksToggle);
+            Assert.False(stacks.IsVisible);
+            ClickAt(window, stackContext);
+            await Until(() => stacks.GetVisualDescendants().OfType<Button>().Any(button => button.IsFocused
+                && button.DataContext is LayerViewModel layer && layer.PullRequest?.Number == 102));
+            Press(window, Key.Up);
+            Assert.Contains(stacks.GetVisualDescendants().OfType<Button>(), button => button.IsFocused
+                && button.DataContext is LayerViewModel layer && layer.PullRequest?.Number == 101);
+            Assert.Equal(102L, vm.SelectedPrForDiscussion?.Number);
+            Assert.Same(selected, section.SelectedFile);
+            ClickAt(window, filesToggle);
+            Assert.True(stacks.IsVisible && files.IsVisible);
+            Capture(window, theme, "files-and-stack");
+            ClickAt(window, filesToggle);
             await ResizeWindowAsync(1450, 880);
             Capture(window, theme, "code-pr-wide");
             AssertDefaultCodeLayout();
@@ -540,7 +565,8 @@ public sealed class UiReviewTests
             await Until(() => review.PanelTab == 3 && inspector.IsVisible);
             Capture(window, theme, "pr-explicit-review-wide");
             Assert.True(workspace.IsVisible, $"Window {window.ClientSize}; workspace {window.FindControl<Grid>("Workspace")!.Bounds}; files {vm.Settings.FilesWidth}; stacks hidden {vm.Settings.StacksHidden}; review {inspector.Bounds}.");
-            Assert.True(files.IsVisible);
+            Assert.True(stacks.IsVisible);
+            Assert.False(files.IsVisible);
             Capture(window, theme, "pr-explicit-review-wide");
             var line = section.Lines.First(row => row.CanComment && row.NewLineNumber is not null);
             review.SetSelection([line]);
@@ -554,15 +580,15 @@ public sealed class UiReviewTests
             Assert.True(workspace.IsVisible);
             ClickAt(window, focus);
             Assert.True(inspector.IsVisible);
-            Assert.True(files.IsVisible);
-            Assert.False(stacks.IsVisible);
+            Assert.False(files.IsVisible);
+            Assert.True(stacks.IsVisible);
 
             await ResizeWindowAsync(1060, 640);
             Capture(window, theme, "pr-explicit-review-compact");
             Assert.True(inspector.IsVisible);
             Assert.False(workspace.IsVisible);
-            Assert.True(files.IsVisible);
-            Assert.False(stacks.IsVisible);
+            Assert.False(files.IsVisible);
+            Assert.True(stacks.IsVisible);
             Assert.Same(review, vm.ActiveReview);
             Assert.Equal(3, review.PanelTab);
             Assert.Equal("Keep this local draft when changing the layout.", Assert.Single(review.DraftComments).Body);
@@ -612,10 +638,10 @@ public sealed class UiReviewTests
                 window.UpdateLayout();
                 Assert.False(inspector.IsVisible);
                 Assert.True(workspace.IsVisible);
-                Assert.False(stacks.IsVisible);
-                Assert.True(files.IsVisible);
-                Assert.False(window.FindControl<ToggleButton>("StacksToggle")!.IsChecked);
-                Assert.True(window.FindControl<ToggleButton>("FilesToggle")!.IsChecked);
+                Assert.True(stacks.IsVisible);
+                Assert.False(files.IsVisible);
+                Assert.True(stacksToggle.IsChecked);
+                Assert.False(filesToggle.IsChecked);
                 var sectionScroll = window.FindControl<ScrollViewer>("SectionScroll")!;
                 var visible = new Rect(viewport.TranslatePoint(default, window)!.Value, viewport.Bounds.Size)
                     .Intersect(new Rect(sectionScroll.TranslatePoint(default, window)!.Value, sectionScroll.Bounds.Size))
@@ -707,7 +733,25 @@ public sealed class UiReviewTests
             Capture(window, theme, "search-no-comparison");
             vm.CloseSearch();
             await vm.OpenDemoAsync();
-            await vm.SelectGroupAsync(vm.LocalGroups[0]);
+            var localStack = vm.LocalGroups[0];
+            await vm.SelectGroupAsync(localStack);
+            var previousCheckout = vm.CheckedOutBranch;
+            var localLayer = localStack.Layers.First(layer => layer.LocalBranchName is not null && layer.LocalBranchName != previousCheckout);
+            await vm.SelectLayerAsync(localLayer, false);
+            Assert.Equal(previousCheckout, vm.CheckedOutBranch);
+            Assert.Equal(localLayer.LocalBranchName, vm.CheckoutLayer);
+            OpenComparisonActions(window);
+            ClickAt(window, window.FindControl<MenuItem>("CheckoutLayerButton")!);
+            await Until(() => !vm.IsSyncing && vm.CheckedOutBranch == localLayer.LocalBranchName);
+            Assert.True((await vm.RefreshWorkingTreeAsync()).Ok);
+            Assert.Equal(localLayer.LocalBranchName, vm.WorkingTree?.Branch);
+            Assert.Null(vm.CheckoutLayer);
+            var stackPane = window.FindControl<Grid>("StacksPane")!;
+            Assert.Contains(stackPane.GetVisualDescendants().OfType<TextBlock>(), label =>
+                label is { Text: "HEAD", IsEffectivelyVisible: true } && label.DataContext is LayerViewModel layer
+                && layer.LocalBranchName == vm.CheckedOutBranch);
+            Capture(window, theme, "local-checkout");
+            await vm.SelectOverviewAsync(vm.LocalGroups[0]);
             vm.OpenSearch("Files");
             vm.SearchQuery = "Auth";
             await vm.SearchAsync();
@@ -805,6 +849,12 @@ public sealed class UiReviewTests
             Assert.True(delete.IsEffectivelyVisible);
             Assert.InRange(delete.TranslatePoint(default, edit)!.Value.Y, 0, edit.ClientSize.Height - delete.Bounds.Height);
             edit.Close();
+            ClickAt(window, window.FindControl<Button>("WorkingTreeButton")!);
+            await Until(() => vm.IsWorkingTreeOpen && vm.WorkingTreeEditor is { IsLoading: false });
+            var workingTree = window.FindControl<WorkingTreeView>("WorkingTreeWorkspace")!;
+            Assert.False(workingTree.FindControl<Button>("CommitStagedButton")!.IsEffectivelyEnabled);
+            Capture(window, theme, "worktree-clean");
+            ClickAt(window, window.FindControl<ToggleButton>("ChangesTab")!);
             OpenComparisonActions(window);
             ClickAt(window, window.FindControl<MenuItem>("CommitStackButton")!);
             await Until(() => window.OwnedWindows.OfType<CommitWindow>().Any());
@@ -823,15 +873,208 @@ public sealed class UiReviewTests
             Capture(dirtyCommit, theme, "commit-validation");
             Assert.Equal("Enter a commit message.", dirtyCommit.FindControl<SelectableTextBlock>("ErrorLabel")!.Text);
             dirtyCommit.Close();
-            OpenComparisonActions(window);
-            ClickAt(window, window.FindControl<MenuItem>("PreviewRestackButton")!);
+            ClickAt(window, window.FindControl<Button>("SyncStackButton")!);
             await Until(() => window.OwnedWindows.OfType<SyncPreviewWindow>().Any());
             var sync = window.OwnedWindows.OfType<SyncPreviewWindow>().Single();
             Minimum(sync);
             Capture(sync, theme, "sync-preview");
             sync.Close();
+            await Until(() => !vm.IsSyncing);
+            vm.IsGitLogOpen = true;
+            Assert.NotEmpty(vm.VisibleGitLogEntries);
+            Capture(window, theme, "command-log");
+            vm.ShowOperationsCommand.Execute(null);
+            Assert.True(vm.IsOperationsOpen);
+            Capture(window, theme, "operations");
         }
         finally { await vm.PrepareCloseAsync(); window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public async Task Working_tree_stages_unstages_and_commits_at_minimum_size(string theme)
+    {
+        await using var fixture = new GitFixture();
+        await fixture.Linear();
+        await new YamlStackStore().SaveAsync(fixture.Root, [fixture.Stack], null);
+        await fixture.Commit("Save stack definition");
+        var app = Directory.CreateTempSubdirectory("stacker-authoring-");
+        using var services = Composition.Build(app.FullName);
+        var vm = services.GetRequiredService<MainViewModel>();
+        vm.Settings.Theme = theme;
+        vm.Settings.WindowWidth = 1060;
+        vm.Settings.WindowHeight = 640;
+        await vm.SaveSettingsAsync();
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
+        try
+        {
+            await Until(() => (bool)typeof(MainWindow).GetField("_ready", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
+            await vm.OpenRepositoryAsync(fixture.Root);
+            await vm.SelectLayerAsync(Assert.Single(vm.LocalGroups).Layers[2], false);
+            var originalSelection = vm.Sections.Single().SelectedFile;
+
+            await fixture.Write("C.txt", "Change in the worktree\n");
+            ClickAt(window, window.FindControl<ToggleButton>("WorkingTreeTab")!);
+            var tree = window.FindControl<WorkingTreeView>("WorkingTreeWorkspace")!;
+            var editor = vm.WorkingTreeEditor!;
+            await Until(() => vm.IsWorkingTreeOpen && !editor.IsLoading && editor.Lines.Any(line => line.IsAdded));
+            Assert.Contains(editor.Lines, line => line.Text == "Change in the worktree");
+            Capture(window, theme, "worktree-unstaged");
+            var stage = tree.FindControl<Button>("ChangeIndexButton")!;
+            Assert.True(stage.Focus());
+            Press(window, Key.Space);
+            await Until(() => !vm.IsSyncing && editor.StagedLabel == "Staged (1)");
+            ClickAt(window, tree.FindControl<ToggleButton>("StagedButton")!);
+            await Until(() => editor.ShowStaged && editor.Lines.Any(line => line.IsAdded));
+            ClickAt(window, stage);
+            await Until(() => !vm.IsSyncing && editor.UnstagedLabel == "Unstaged (1)");
+            Assert.Equal("Change in the worktree\n", await File.ReadAllTextAsync(Path.Combine(fixture.Root, "C.txt")));
+            ClickAt(window, tree.FindControl<ToggleButton>("UnstagedButton")!);
+            ClickAt(window, stage);
+            await Until(() => !vm.IsSyncing && editor.StagedLabel == "Staged (1)");
+            ClickAt(window, tree.FindControl<ToggleButton>("StagedButton")!);
+            tree.FindControl<TextBox>("WorktreeCommitMessage")!.Text = "Commit from the worktree";
+            await Until(() => editor.CanCommitStaged);
+            Capture(window, theme, "worktree-staged");
+            ClickAt(window, tree.FindControl<Button>("CommitStagedButton")!);
+            await Until(() => !vm.IsSyncing && editor.StagedLabel == "Staged (0)");
+            Assert.Equal("Commit from the worktree", await fixture.Git("log", "-1", "--format=%s"));
+            ClickAt(window, window.FindControl<ToggleButton>("ChangesTab")!);
+            Assert.False(vm.IsWorkingTreeOpen);
+            Assert.Equal(originalSelection?.NewPath, vm.Sections.Single().SelectedFile?.NewPath);
+        }
+        finally
+        {
+            window.Close();
+            await Until(() => !window.IsVisible);
+            services.Dispose();
+            GitFixture.DeleteDirectory(app.FullName);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task GitHub_CLI_backend_loads_a_stack_and_remembers_its_repository()
+    {
+        await using var fixture = new GitFixture();
+        await fixture.Linear();
+        var definitions = new YamlStackStore();
+        await definitions.SaveAsync(fixture.Root, [fixture.Stack], null);
+        await fixture.Commit("Save stack definition");
+        var directory = Directory.CreateTempSubdirectory("stacker-backend-");
+        var app = new ApplicationStore(directory.FullName);
+        var settings = new JsonSettingsStore(Path.Combine(directory.FullName, "settings"));
+        var journal = fixture.CreateJournal();
+        var authoring = new WorkingTreeAuthoring(fixture.Runner, new GitExecutable(), fixture.Reader, new(new(journal)), journal);
+        MainViewModel CreateViewModel() => new(fixture.Reader, definitions, settings, new GitExecutable(), new(fixture.Reader), new(fixture.Reader),
+            applicationStore: app, branchWriter: fixture.Writer(), authoring: authoring, ghStacks: GhStackClientTests.ScriptedClient(fixture, journal));
+        try
+        {
+            using var first = CreateViewModel();
+            var window = new MainWindow { DataContext = first };
+            window.Show();
+            try
+            {
+                await Until(() => (bool)typeof(MainWindow).GetField("_ready", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
+                await first.OpenRepositoryAsync(fixture.Root);
+                Assert.True(first.CanEditStackerSelection);
+                ClickAt(window, window.FindControl<ToggleButton>("GhStackBackendToggle")!);
+                await Until(() => first.UsesGhStack && first.GhStackGroup is { IsSelected: true } && !first.IsGhStackBusy);
+                Assert.Equal(new[] { "A", "B", "C" }, first.GhStackGroup!.Layers.Select(layer => layer.Name));
+                Assert.True(first.CanAddGhLayer);
+                Assert.True(first.CanRebaseGhStack);
+                Assert.False(first.CanEditStackerSelection);
+                Assert.False(window.FindControl<Button>("SyncStackButton")!.IsEffectivelyVisible);
+                Capture(window, "Dark", "managed-stack");
+            }
+            finally { window.Close(); await Until(() => !window.IsVisible); }
+
+            using var reopened = CreateViewModel();
+            await reopened.OpenRepositoryAsync(fixture.Root);
+            Assert.True(reopened.UsesGhStack);
+            Assert.Null(reopened.GhStackGroup);
+            await reopened.LoadGhStackAsync();
+            Assert.NotNull(reopened.GhStackGroup);
+            await reopened.ChooseStackBackendAsync(StackBackend.Stacker);
+            Assert.False(reopened.UsesGhStack);
+            Assert.Equal(fixture.Stack.Branches, Assert.Single((await definitions.LoadAsync(fixture.Root)).Stacks).Branches);
+        }
+        finally { GitFixture.DeleteDirectory(directory.FullName); }
+    }
+
+    [AvaloniaFact]
+    public async Task Managed_stack_controls_create_layers_and_resume_a_conflict()
+    {
+        var release = Environment.GetEnvironmentVariable("STACKER_GH_STACK_TEST_RELEASE");
+        if (string.IsNullOrEmpty(release))
+            return;
+        await using var fixture = new GitFixture();
+        await fixture.Init();
+        var directory = Directory.CreateTempSubdirectory("stacker-managed-");
+        var journal = fixture.CreateJournal();
+        var commands = new Stacker.Core.Framework.CommandBus(new(journal));
+        var authoring = new WorkingTreeAuthoring(fixture.Runner, new GitExecutable(), fixture.Reader, commands, journal);
+        var settings = new JsonSettingsStore(Path.Combine(directory.FullName, "settings"));
+        await settings.SaveAsync(new AppSettings { Theme = "Dark", WindowWidth = 1060, WindowHeight = 640 });
+        using var vm = new MainViewModel(fixture.Reader, new YamlStackStore(), settings, new GitExecutable(), new(fixture.Reader),
+            new(fixture.Reader), applicationStore: new ApplicationStore(directory.FullName), branchWriter: fixture.Writer(),
+            commands: commands, authoring: authoring, ghStacks: GhStackClientTests.ReleaseClient(release, fixture, journal, commands));
+        var window = new MainWindow { DataContext = vm };
+        window.Show();
+        try
+        {
+            await Until(() => (bool)typeof(MainWindow).GetField("_ready", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
+            await vm.OpenRepositoryAsync(fixture.Root);
+            ClickAt(window, window.FindControl<ToggleButton>("LocalStacksTab")!);
+            ClickAt(window, window.FindControl<ToggleButton>("GhStackBackendToggle")!);
+            await Until(() => vm.CanCreateGhStack);
+
+            await CreateBranch("Create stack…", "Create stack", "first");
+            await fixture.Write("base.txt", "first\n");
+            await fixture.Commit("first change");
+            await CreateBranch("Add layer…", "Add layer", "second");
+            await fixture.Write("base.txt", "second\n");
+            await fixture.Commit("second change");
+            await fixture.Git("checkout", "first");
+            await fixture.Write("base.txt", "first changed\n");
+            await fixture.Commit("first changed");
+
+            Click(window, "Load current CLI stack");
+            await Until(() => vm.CanRebaseGhStack && vm.CheckedOutBranch == "first");
+            Click(window, "Rebase upper layers…");
+            await Until(() => window.OwnedWindows.Any());
+            var preview = Assert.Single(window.OwnedWindows);
+            Capture(preview, "Dark", "managed-rebase-preview");
+            Click(preview, "Rebase locally");
+            await Until(() => !vm.IsSyncing && vm.CanAbortGhStack && vm.HasConflicts);
+            Click(window, "Review conflicts…");
+            await Until(() => vm.WorkingTreeEditor is { IsLoading: false, HasConflicts: true });
+            Capture(window, "Dark", "managed-rebase-conflict");
+            await fixture.Write("base.txt", "resolved\n");
+            var tree = window.FindControl<WorkingTreeView>("WorkingTreeWorkspace")!;
+            ClickAt(window, tree.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Content, "Stage resolved files")));
+            await Until(() => vm.CanContinueGhStack);
+            Click(window, "Continue rebase");
+            await Until(() => !vm.IsSyncing && !vm.HasGhStackRecovery && !vm.HasOperation);
+            Assert.Equal(0, await fixture.ExitCode("merge-base", "--is-ancestor", "first", "second"));
+
+            async Task CreateBranch(string entry, string action, string name)
+            {
+                Click(window, entry);
+                await Until(() => window.OwnedWindows.Any());
+                var form = Assert.Single(window.OwnedWindows);
+                Assert.Single(form.GetLogicalDescendants().OfType<TextBox>()).Text = name;
+                Click(form, action);
+                await Until(() => !window.OwnedWindows.Any() && !vm.IsSyncing && vm.CheckedOutBranch == name && vm.CanAddGhLayer);
+            }
+        }
+        finally
+        {
+            window.Close();
+            await Until(() => !window.IsVisible);
+            GitFixture.DeleteDirectory(directory.FullName);
+        }
     }
     private static void Minimum(Window window)
     {

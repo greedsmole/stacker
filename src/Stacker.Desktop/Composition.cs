@@ -50,6 +50,8 @@ public static class Composition
             .AddSingleton<ICSharpGraphReader, RoslynGraphReader>()
             .AddSingleton<IGitRepositoryReader>(s => new CachingGitReader(s.GetRequiredService<GitRepositoryReader>(), diagnostics: s.GetRequiredService<IDiagnosticSink>(), repositoryGit: s.GetRequiredService<RepositoryGit>()))
             .AddSingleton<IGitBranchWriter, LocalGitClient>()
+            .AddSingleton<IWorkingTreeAuthoring, WorkingTreeAuthoring>()
+            .AddSingleton<IGhStackClient, GhStackClient>()
             .AddSingleton(s => new YamlStackStore(s.GetRequiredService<IAtomicFile>(), s.GetRequiredService<IFileLockFactory>()))
             .AddSingleton<IStackStore, CommandStackStore>()
             .AddSingleton<ISettingsStore>(_ => new JsonSettingsStore(Path.Combine(root, "settings")))

@@ -28,7 +28,7 @@ internal sealed class FileFolderTree
                 var (index, title) = sectionFor(item);
                 if (!sections.TryGetValue(index, out var section))
                 {
-                    section = new(title, "", parent) { IsExpanded = true };
+                    section = new(title, "", parent) { IsComparisonSection = true, IsExpanded = true };
                     sections.Add(index, section);
                     parent.Add(section);
                 }

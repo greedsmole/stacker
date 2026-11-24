@@ -7,8 +7,8 @@ namespace Stacker.Infrastructure;
 /// <remarks>The flags are computed from Git's two status characters rather than from a second status call, so one
 /// snapshot cannot disagree with itself. The NUL delimiter is what makes paths with spaces, quotes and non-ASCII
 /// characters safe, and it is also why a rename or copy occupies two fields: Git emits the destination path with the
-/// entry and appends the original path as the next field, which this parser consumes so the following entry is not
-/// misread. Only these characters decide the flags, so an unmerged code can never be mistaken for a staged change and
+/// entry and appends the original path as the next field, which this parser retains. Only these characters decide the flags,
+/// so an unmerged code can never be mistaken for a staged change and
 /// an untracked path can never block a rewrite.</remarks>
 public static class WorkingTreeParser
 {
@@ -26,10 +26,9 @@ public static class WorkingTreeParser
     /// <remarks>Each field is <c>XY path</c>, where the first character describes the index and the second the working
     /// tree; a field shorter than three characters is skipped, which drops the empty field after the final delimiter
     /// and any truncated record. The rename and copy codes are the only ones that occupy a second field, so the index
-    /// advances by one to discard the original path, and the entry keeps the destination. A path is staged when its
+    /// advances by one to read the original path. A path is staged when its
     /// index column is neither a space nor <c>?</c> and its code is not unmerged, conflicted when its code is in
-    /// <see cref="Unmerged"/>, and untracked only for <c>??</c>. The original text is not retained, so callers cannot
-    /// recover a rename's source path from the result.</remarks>
+    /// <see cref="Unmerged"/>, and untracked only for <c>??</c>.</remarks>
     /// <param name="porcelain">Output of <c>git status --porcelain=v1 -z</c>, already decoded as text.</param>
     /// <returns>One entry per reported path, in the order Git reported them; empty when nothing changed.</returns>
     public static IReadOnlyList<WorkingTreeEntry> Parse(string porcelain)
@@ -43,12 +42,14 @@ public static class WorkingTreeParser
                 continue;
             var staged = field[0];
             var worktree = field[1];
-            if (staged is 'R' or 'C' || worktree is 'R' or 'C')
-                index++;
+            var originalPath = staged is 'R' or 'C' || worktree is 'R' or 'C' ? fields.ElementAtOrDefault(++index) : null;
             var code = new string([staged, worktree]);
             var conflicted = Unmerged.Contains(code);
             var untracked = staged == '?' && worktree == '?';
-            entries.Add(new(field[3..], code, staged is not (' ' or '?') && !conflicted, conflicted, untracked));
+            entries.Add(new(field[3..], code, staged is not (' ' or '?') && !conflicted, conflicted, untracked)
+            {
+                OriginalPath = string.IsNullOrEmpty(originalPath) ? null : originalPath
+            });
         }
         return entries;
     }

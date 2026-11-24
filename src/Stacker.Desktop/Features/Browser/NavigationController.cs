@@ -97,7 +97,7 @@ internal sealed partial class NavigationController(INavigationPresentation owner
                 foreach (var stack in document.Stacks)
                     groups.Add(new(stack, await runtime._stacks.SnapshotAsync(repo, stack, refresh.Token))
                     {
-                        IsExpanded = !sameRepo || owner.LocalGroups.FirstOrDefault(g => g.Definition.Id == stack.Id)?.IsExpanded != false
+                        IsExpanded = sameRepo && owner.LocalGroups.FirstOrDefault(g => g.Definition.Id == stack.Id)?.IsExpanded == true
                     });
             refresh.Token.ThrowIfCancellationRequested();
             var previousGroup = runtime._activeGroup;
@@ -114,6 +114,7 @@ internal sealed partial class NavigationController(INavigationPresentation owner
                 runtime._remoteSnapshot = null;
                 runtime._historyRemoteGraph = null;
                 runtime._activeGroup = null;
+                owner.WorkingTree = null;
                 owner.GitHubStatus = "Not connected";
             }
             runtime._repository = repo;
@@ -131,7 +132,9 @@ internal sealed partial class NavigationController(INavigationPresentation owner
             }
             owner.Settings.LastRepository = repo.Root;
             owner.IsDemo = repo.IsDemo;
-            owner.RepositoryTitle = Path.GetFileName(repo.Root) + (owner.IsDemo ? " · Demo / offline" : "");
+            if (!sameRepo)
+                await owner.LoadRepositoryAuthoringAsync(repo, refresh.Token);
+            owner.RepositoryTitle = owner.IsDemo ? "Demo / offline" : Path.GetFileName(repo.Root);
             owner.Status = $"Working tree: {repo.ChangedFiles} changed entries · Updated {DateTime.Now:HH:mm:ss}";
             owner.CanEdit = true;
             if (!unchanged)
@@ -151,7 +154,7 @@ internal sealed partial class NavigationController(INavigationPresentation owner
                 }
                 await owner.RefreshSyncAvailabilityAsync(refresh.Token);
                 // Navigation saves the view being left. A refresh should prefer the group currently on screen.
-                var selected = sameRepo && previousGroup?.IsRemote == true
+                var selected = sameRepo && previousGroup is { IsRemote: true } or { UsesGhStack: true }
                     ? previousGroup
                     : (sameRepo ? groups.FirstOrDefault(g => g.Definition.Id == previousGroup?.Definition.Id) : null)
                         ?? groups.FirstOrDefault(g => owner.GroupKey(g) == runtime._workspace.ActiveGroup)

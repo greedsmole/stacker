@@ -63,9 +63,11 @@ public partial class MainWindow
             case nameof(MainViewModel.ActiveReview):
             case nameof(MainViewModel.HasPrDiscussion):
             case nameof(MainViewModel.HasNoSections):
+            case nameof(MainViewModel.CanEdit):
             case nameof(MainViewModel.AreFilesVisible):
             case nameof(MainViewModel.IsHistoryOpen):
             case nameof(MainViewModel.IsChangesOpen):
+            case nameof(MainViewModel.IsWorkingTreeOpen):
             case nameof(MainViewModel.IsOperationsOpen):
             case nameof(MainViewModel.Settings):
                 ApplyWorkspaceLayout();
@@ -86,8 +88,9 @@ public partial class MainWindow
         try
         {
             var width = Workspace.Bounds.Width > 0 ? Workspace.Bounds.Width : Width;
-            var changes = Vm.IsChangesOpen && !Vm.IsHistoryOpen && !Vm.IsOperationsOpen;
-            var showStacks = !_focusMode && Vm.IsChangesOpen && !Vm.Settings.StacksHidden;
+            var workspaceVisible = Vm.IsChangesOpen && !Vm.IsHistoryOpen && !Vm.IsOperationsOpen;
+            var changes = workspaceVisible && !Vm.IsWorkingTreeOpen;
+            var showStacks = !_focusMode && workspaceVisible && Vm.CanEdit && !Vm.Settings.StacksHidden;
             var showFiles = !_focusMode && changes && Vm.AreFilesVisible && !Vm.HasNoSections;
             var stacksWidth = showStacks ? Vm.Settings.NavigationWidth : 0;
             var filesWidth = showFiles ? Vm.Settings.FilesWidth : 0;
@@ -125,13 +128,15 @@ public partial class MainWindow
             ReviewHost.IsVisible = showReview;
             ReviewButton.Classes.Set("primary", !showReview);
             ReviewButton.Classes.Set("outline", showReview);
-            DiffWorkspace.IsVisible = !compact && !Vm.IsHistoryOpen;
+            DiffWorkspace.IsVisible = changes && !compact;
             CloseReviewButton.Content = compact ? "Back to diff" : "Close review";
 
             ChangesTab.IsChecked = changes;
             ComparisonActionsButton.Content = Vm.IsLocalSelected ? "Stack actions" : "PR tools";
-            PaneControls.IsVisible = Vm.IsChangesOpen && !Vm.IsOperationsOpen;
+            PaneControls.IsVisible = workspaceVisible && Vm.CanEdit;
             StacksToggle.IsChecked = showStacks;
+            StacksToggle.IsEnabled = workspaceVisible && Vm.CanEdit;
+            FilesToggle.IsVisible = changes;
             FilesToggle.IsChecked = showFiles;
             FilesToggle.IsEnabled = changes && !Vm.HasNoSections;
             FocusToggle.IsVisible = changes;

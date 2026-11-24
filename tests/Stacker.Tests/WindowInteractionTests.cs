@@ -27,11 +27,14 @@ public sealed partial class WindowInteractionTests
             await WaitUntilAsync(() => vm.Repository is not null && !vm.IsBusy);
             window.UpdateLayout();
             var browse = window.FindControl<Button>("BrowsePullRequestsButton")!;
+            var stacks = window.FindControl<Grid>("StacksPane")!;
             Assert.True(browse.IsEffectivelyVisible);
-            Assert.False(window.FindControl<Grid>("StacksPane")!.IsVisible);
+            Assert.True(stacks.IsVisible);
+            window.FindControl<ToggleButton>("StacksToggle")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(stacks.IsVisible);
             browse.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             window.UpdateLayout();
-            Assert.True(window.FindControl<Grid>("StacksPane")!.IsVisible);
+            Assert.True(stacks.IsVisible);
             Assert.True(window.FindControl<Grid>("PullRequestsPane")!.IsVisible);
             Assert.True(window.FindControl<ToggleButton>("PullRequestsTab")!.IsChecked);
             Assert.False(window.FindControl<Grid>("LocalStacksPane")!.IsVisible);
@@ -43,17 +46,18 @@ public sealed partial class WindowInteractionTests
     public async Task Stack_panel_can_be_hidden_and_restored_at_its_previous_width()
     {
         await using var fixture = new GitFixture();
+        await fixture.Init();
         using var vm = CreateVm(fixture);
         var window = new PickerWindow { DataContext = vm };
         window.Show();
         try
         {
-            await DrainUiAsync();
+            await vm.OpenRepositoryAsync(fixture.Root);
+            await WaitUntilAsync(() => vm.Repository is not null && !vm.IsBusy);
             var workspace = window.FindControl<Grid>("Workspace")!;
             var pane = window.FindControl<Grid>("StacksPane")!;
             var toggle = window.FindControl<ToggleButton>("StacksToggle")!;
-            Assert.False(pane.IsVisible);
-            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(pane.IsVisible);
             window.UpdateLayout();
             workspace.ColumnDefinitions[0].Width = new(344);
             window.UpdateLayout();

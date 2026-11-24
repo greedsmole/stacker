@@ -15,6 +15,15 @@ public sealed partial class MainViewModel
     /// <summary>Shown in the main window whenever an operation or a conflict needs the user.</summary>
     public bool HasOperation => WorkingTree is { NeedsAttention: true };
     public string OperationSummary => WorkingTree?.Summary ?? "";
+    public string? CheckedOutBranch => WorkingTree?.Branch;
+    public string WorkingTreeLabel => WorkingTree switch
+    {
+        null => "Working tree",
+        { NeedsAttention: true } => "Working tree needs attention",
+        { Entries.Count: 0 } => "Working tree clean",
+        { Entries.Count: 1 } => "1 uncommitted path",
+        { Entries.Count: var count } => $"{count} uncommitted paths"
+    };
     public string CheckoutLabel => WorkingTree switch
     {
         { Branch: { } branch } => $"Checked out: {branch}",
@@ -26,7 +35,8 @@ public sealed partial class MainViewModel
     public bool HasConflicts => WorkingTree is { HasConflicts: true };
     public bool CanRestoreStash => _runtime._pendingStash is not null;
     /// <summary>An interrupted run from an earlier session that the user still has to finish or undo.</summary>
-    public bool HasRecovery => _runtime._activeEntry is { NeedsAttention: true } && !HasOperation;
+    public bool HasRecovery => _runtime._activeEntry is { NeedsAttention: true } entry &&
+        !entry.Kind.StartsWith("gh-stack.", StringComparison.Ordinal) && !HasOperation;
     public bool CanRestoreRecovery => _runtime._activeEntry is { Kind: "restack", NeedsAttention: true } && _runtime._activeEntry.Restorable.Count > 0;
     public string RecoverySummary => _runtime._activeEntry is null ? "" : string.Join(" · ", _runtime._activeEntry.Kind, _runtime._activeEntry.Phase.ToString(),
         _runtime._activeEntry.Moved.Count + (_runtime._activeEntry.Kind == "restack" ? " branch(es)" : " effect(s)"), _runtime._activeEntry.Message);
@@ -36,19 +46,35 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(HasOperation));
         OnPropertyChanged(nameof(OperationSummary));
         OnPropertyChanged(nameof(CheckoutLabel));
+        OnPropertyChanged(nameof(CheckedOutBranch));
+        OnPropertyChanged(nameof(WorkingTreeLabel));
+        OnPropertyChanged(nameof(CheckoutLayer));
         OnPropertyChanged(nameof(CanContinueOperation));
         OnPropertyChanged(nameof(CanAbortOperation));
         OnPropertyChanged(nameof(HasConflicts));
+        NotifyGhStackActions();
     }
 
     /// <summary>Reads the working tree and any stack write that still needs the user.</summary>
-    public Task<(bool Ok, string Message)> RefreshWorkingTreeAsync(CancellationToken ct = default) => _workingTreeController.RefreshWorkingTreeAsync(ct);
+    public async Task<(bool Ok, string Message)> RefreshWorkingTreeAsync(CancellationToken ct = default)
+    {
+        var result = await _workingTreeController.RefreshWorkingTreeAsync(ct);
+        if (UsesGhStack || GhStackRecovery is not null)
+            await RefreshGhStackRecoveryAsync(ct);
+        return result;
+    }
 
     /// <summary>Opens the conflicted files in the editor the user chose.</summary>
     public Task<(bool Ok, string Message)> OpenConflictsInEditorAsync() => _workingTreeController.OpenConflictsInEditorAsync();
 
     /// <summary>Stages the conflicted files so the rebase can continue.</summary>
-    public Task<(bool Ok, string Message)> StageConflictsAsync() => _workingTreeController.StageConflictsAsync();
+    public async Task<(bool Ok, string Message)> StageConflictsAsync()
+    {
+        var result = await _workingTreeController.StageConflictsAsync();
+        if (GhStackRecovery is not null)
+            await RefreshGhStackRecoveryAsync();
+        return result;
+    }
 
     /// <summary>Resumes the interrupted rebase, using the configured editor for the commit message.</summary>
     public Task<(bool Ok, string Message)> ContinueOperationAsync() => _workingTreeController.ContinueOperationAsync();
