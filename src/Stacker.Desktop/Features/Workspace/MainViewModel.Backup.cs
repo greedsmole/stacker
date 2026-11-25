@@ -18,7 +18,7 @@ public sealed partial class MainViewModel
         }
         await SaveWorkspaceAsync();
         await FlushReviewsAsync();
-        if (_runtime._workspacePersistence.LastProblem is { } problem)
+        if (_runtime.WorkspaceSaveProblem is { } problem)
             throw new StackerException(problem);
         if (_backupService is null)
         {
@@ -65,7 +65,7 @@ public sealed partial class MainViewModel
             await SaveWorkspaceAsync().WaitAsync(TimeSpan.FromSeconds(5));
         }
         catch (Exception ex) { problems.Add(ex.Message); }
-        if (_runtime._workspacePersistence.LastProblem is { } workspaceError)
+        if (_runtime.WorkspaceSaveProblem is { } workspaceError)
             problems.Add("Workspace: " + workspaceError.Message);
         foreach (var review in _runtime._reviews.Values.ToArray())
             try

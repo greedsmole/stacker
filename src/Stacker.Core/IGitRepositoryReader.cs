@@ -18,6 +18,8 @@ public interface IGitRepositoryReader
     /// <param name="ct">Cancels the underlying reads.</param>
     /// <returns>The root, refs, working-tree summary and, when available, the registered repository identity.</returns>
     Task<Result<RepositorySnapshot>> OpenAsync(string path, CancellationToken ct = default);
+    /// <summary>Opens the repository metadata when the caller reads working-tree state separately.</summary>
+    Task<Result<RepositorySnapshot>> OpenRefsAsync(string path, CancellationToken ct = default) => OpenAsync(path, ct);
     /// <summary>Returns every best common ancestor; callers reject zero or ambiguous results.</summary>
     /// <remarks>More than one entry means the histories meet at several equally good points, so any single choice would make a
     /// comparison arbitrary; an empty list means the two commits share no history. The caller decides whether ambiguity is

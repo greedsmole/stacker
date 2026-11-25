@@ -76,28 +76,52 @@ internal sealed class GitRunner(IProcessRunner runner, GitExecutable executable)
         }
     }
 
-    public async Task<WorkingTreeState> StatusAsync(string root, CancellationToken ct, bool allUntracked = false)
+    public async Task<WorkingTreeState> StatusAsync(string root, CancellationToken ct) => (await ReadStatusAsync(root, ct)).State;
+
+    internal async Task<(string? Head, WorkingTreeState State, string GitDirectory)> ReadStatusAsync(string root, CancellationToken ct, bool allUntracked = false)
     {
-        var porcelain = (await Run(root, ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v1", "-z",
-            allUntracked ? "--untracked-files=all" : "--untracked-files=normal"], ct)).StdOut;
-        var head = await Run(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], ct, allowFailure: true);
-        var branch = head.ExitCode == 0 && head.StdOut.Trim().Length > 0 ? head.StdOut.Trim() : null;
-        return new(branch, await OperationAsync(root, ct), WorkingTreeParser.Parse(porcelain));
+        var status = Run(root, ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "--branch", "--no-ahead-behind", "-z",
+            allUntracked ? "--untracked-files=all" : "--untracked-files=normal"], ct);
+        var gitDirectory = GitDirectoryAsync(root, ct);
+        await Task.WhenAll(status, gitDirectory);
+        var (head, branch, entries) = WorkingTreeParser.ParseWithBranch((await status).StdOut);
+        var directory = await gitDirectory;
+        if (branch is null && await CheckoutBranchAsync(root, directory, ct) == "(detached)")
+            branch = "(detached)";
+        return (head, new(branch, Operation(directory), entries), directory);
     }
 
-    public async Task<WorkingOperation> OperationAsync(string root, CancellationToken ct)
+    internal async Task<string?> CheckoutBranchAsync(string root, string directory, CancellationToken ct)
     {
-        foreach (var (name, operation) in new[] { ("rebase-merge", WorkingOperation.Rebase), ("rebase-apply", WorkingOperation.Rebase), ("MERGE_HEAD", WorkingOperation.Merge), ("CHERRY_PICK_HEAD", WorkingOperation.CherryPick), ("REVERT_HEAD", WorkingOperation.Revert) })
-        {
-            var path = await GitPathAsync(root, name, ct);
-            if (path is not null && (File.Exists(path) || Directory.Exists(path)))
-            {
-                // git am shares rebase-apply with the apply backend; only it leaves an "applying" marker.
-                if (name == "rebase-apply" && await GitPathAsync(root, "rebase-apply/applying", ct) is { } applying && File.Exists(applying))
-                    return WorkingOperation.Am;
-                return operation;
-            }
-        }
+        var path = Path.Combine(directory, "HEAD");
+        var value = File.Exists(path) ? (await File.ReadAllTextAsync(path, ct)).TrimEnd('\r', '\n') : "";
+        const string localRef = "ref: refs/heads/";
+        if (value.StartsWith(localRef, StringComparison.Ordinal) && value.Length > localRef.Length && value[localRef.Length] != '.')
+            return value[localRef.Length..];
+        if (value.Length is 40 or 64 && value.All(Uri.IsHexDigit) && new FileInfo(path).LinkTarget is null)
+            return null;
+        var result = await Run(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], ct, allowFailure: true);
+        return result.ExitCode == 0 ? result.StdOut.TrimEnd('\r', '\n') : null;
+    }
+
+    public async Task<WorkingOperation> OperationAsync(string root, CancellationToken ct) => Operation(await GitDirectoryAsync(root, ct));
+
+    private async Task<string> GitDirectoryAsync(string root, CancellationToken ct) =>
+        (await Run(root, ["rev-parse", "--absolute-git-dir"], ct)).StdOut.TrimEnd('\r', '\n');
+
+    private static WorkingOperation Operation(string directory)
+    {
+        if (Path.Exists(Path.Combine(directory, "rebase-merge")))
+            return WorkingOperation.Rebase;
+        var apply = Path.Combine(directory, "rebase-apply");
+        if (Path.Exists(apply))
+            return File.Exists(Path.Combine(apply, "applying")) ? WorkingOperation.Am : WorkingOperation.Rebase;
+        if (Path.Exists(Path.Combine(directory, "MERGE_HEAD")))
+            return WorkingOperation.Merge;
+        if (Path.Exists(Path.Combine(directory, "CHERRY_PICK_HEAD")))
+            return WorkingOperation.CherryPick;
+        if (Path.Exists(Path.Combine(directory, "REVERT_HEAD")))
+            return WorkingOperation.Revert;
         return WorkingOperation.None;
     }
 

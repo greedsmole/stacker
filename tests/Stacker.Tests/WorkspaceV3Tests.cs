@@ -100,6 +100,36 @@ public sealed partial class WorkspaceV3Tests
         await vm.FlushReviewsAsync();
     }
     [AvaloniaFact]
+    public async Task A_pr_diff_remains_usable_while_discussion_is_waiting()
+    {
+        await using var fixture = new GitFixture();
+        await fixture.Linear();
+        var hub = new FakeGitHub
+        {
+            Current = DiscoveryTests.Pr(42, "main", "A") with
+            {
+                BaseSha = await fixture.Git("rev-parse", "main"),
+                HeadSha = await fixture.Git("rev-parse", "A")
+            },
+            DiscussionGate = new(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+        using var vm = Create(fixture, new ApplicationStore(Path.Combine(fixture.Root, "app")), hub);
+        await vm.OpenRepositoryAsync(fixture.Root);
+        var selecting = vm.SelectLayerAsync(Assert.Single(vm.OtherGroups).Layers[0], false);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        while (vm.Sections.Count == 0 || vm.Sections[0].Lines.Count == 0)
+            await Task.Delay(10, timeout.Token);
+        Assert.False(selecting.IsCompleted);
+        Assert.False(vm.IsBusy);
+        Assert.Contains(vm.Sections[0].Lines, line => line.IsAdded && line.Text == "A");
+
+        hub.DiscussionGate.SetResult(new([], [], []));
+        await selecting.WaitAsync(timeout.Token);
+        Assert.NotNull(vm.ActiveReview);
+        await vm.ShutdownAsync();
+    }
+
+    [AvaloniaFact]
     public async Task Line_editors_are_separate_from_PR_and_drafts_are_visible_inline()
     {
         await using var f = new GitFixture();

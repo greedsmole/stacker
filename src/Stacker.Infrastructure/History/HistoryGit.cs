@@ -22,8 +22,15 @@ public sealed class HistoryGit(IProcessRunner runner, GitExecutable executable, 
             return _database.RepositoryContentStatus(repository, canonical) == ContentAvailability.Available ? ContentAvailability.Unavailable : ContentAvailability.NeedsDownload;
         return (await _git.MissingAsync(repository, refs.Values, ct)).Count == 0 ? ContentAvailability.Available : ContentAvailability.Unavailable;
     }, ProblemCodes.GitFailed);
-    public Task<Result<Unit>> CaptureAsync(RepositoryIdentity repository, string scope, IReadOnlyList<string> commits, CancellationToken ct = default) => Boundary.CaptureAsync(async () =>
+    public Task<Result<Unit>> CaptureAsync(RepositoryIdentity repository, string scope, IReadOnlyList<string> commits, CancellationToken ct = default) =>
+        Boundary.CaptureAsync(async () => { await CaptureAsync(repository, scope, commits, requireAll: true, ct); }, ProblemCodes.GitFailed);
+    public Task<Result<IReadOnlyList<string>>> CaptureAvailableAsync(RepositoryIdentity repository, string scope, IReadOnlyList<string> commits, CancellationToken ct = default) =>
+        Boundary.CaptureAsync(() => CaptureAsync(repository, scope, commits, requireAll: false, ct), ProblemCodes.GitFailed);
+
+    private async Task<IReadOnlyList<string>> CaptureAsync(RepositoryIdentity repository, string scope, IReadOnlyList<string> commits, bool requireAll, CancellationToken ct)
     {
+        if (commits.Count == 0)
+            return [];
         using var gate = await _git.LockAsync(repository, ct);
         var canonical = Scope(scope);
         var prefix = RepositoryGit.Prefix(repository, "history", canonical);
@@ -37,11 +44,17 @@ public sealed class HistoryGit(IProcessRunner runner, GitExecutable executable, 
             foreach (var source in _database.LegacySources(repository, canonical, state.Root))
                 if (Directory.Exists(source) || File.Exists(source))
                     _database.MarkImported(repository, source);
-        if ((await _git.MissingAsync(repository, commits, ct)).Count > 0)
+        var missing = await _git.MissingAsync(repository, commits, ct);
+        if (requireAll && missing.Count > 0)
             throw new StackerException("Historical commits are missing from the opened repository. Load the current PR changes first.");
-        await _git.PinAsync(repository, prefix, commits, ct);
-        _database.RecordRepositoryContents(repository, canonical, ContentAvailability.Available);
-    }, ProblemCodes.GitFailed);
+        var available = commits.Except(missing, StringComparer.OrdinalIgnoreCase).ToArray();
+        if (available.Length > 0)
+        {
+            await _git.PinAsync(repository, prefix, available, ct);
+            _database.RecordRepositoryContents(repository, canonical, ContentAvailability.Available);
+        }
+        return available;
+    }
     public async Task<Result<ObjectSnapshotLease>> AcquireAsync(RepositoryIdentity repository, string scope, CancellationToken ct = default)
     {
         var status = await AvailabilityAsync(repository, scope, ct);

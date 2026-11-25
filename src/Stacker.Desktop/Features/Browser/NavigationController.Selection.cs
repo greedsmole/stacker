@@ -14,24 +14,16 @@ internal sealed partial class NavigationController
             group.IsExpanded = true;
         runtime.Session.Select(new(group.Definition.Id, null, null));
         runtime._comparison?.Cancel();
-        foreach (var g in owner.LocalGroups.Concat(owner.RemoteGroups).Concat(owner.OtherGroups))
+        if (runtime._activeGroup is { } previous)
         {
-            g.IsSelected = ReferenceEquals(g, group);
-            foreach (var l in g.Layers)
-            {
-                l.IsSelected = false;
-                l.IsChecked = false;
-            }
-        }
-        if (owner.GhStackGroup is { } cliGroup)
-        {
-            cliGroup.IsSelected = ReferenceEquals(cliGroup, group);
-            foreach (var layer in cliGroup.Layers)
+            previous.IsSelected = false;
+            foreach (var layer in previous.Layers)
             {
                 layer.IsSelected = false;
                 layer.IsChecked = false;
             }
         }
+        group.IsSelected = true;
         runtime._activeGroup = group;
         runtime._suppress = true;
         owner.SelectedStack = group.Definition;
@@ -50,7 +42,7 @@ internal sealed partial class NavigationController
     public async Task SelectGroupAsync(StackGroupViewModel group, bool saveCurrent = true)
     {
         if (saveCurrent)
-            await owner.SaveWorkspaceAsync();
+            owner.QueueWorkspaceSave();
         if (group.IsSinglePr)
         {
             SetActiveGroup(group);
@@ -82,7 +74,7 @@ internal sealed partial class NavigationController
 
     public async Task SelectLayerAsync(LayerViewModel layer, bool toggle, CancellationToken ct = default)
     {
-        await owner.SaveWorkspaceAsync();
+        owner.QueueWorkspaceSave();
         ct.ThrowIfCancellationRequested();
         var group = layer.Group!;
         if (!ReferenceEquals(runtime._activeGroup, group))
@@ -136,11 +128,12 @@ internal sealed partial class NavigationController
         {
             var comparisonRepository = repo;
             var stack = group.Definition;
+            var requestedPositions = positions;
             if (group.IsRemote)
             {
                 if (runtime._remoteSnapshot is null)
                     throw new StackerException("Refresh to load this stack.");
-                comparisonRepository = await owner.PrepareRemoteAsync(group, mode, positions, compare.Token);
+                comparisonRepository = await owner.PrepareRemoteAsync(group, mode, positions, compare.Token, ensureObjects: false);
                 stack = new(group.Definition.Id, group.Name, RemoteRefs.BaseRef(group.PullRequests[0]), group.PullRequests.Select(RemoteRefs.HeadRef).ToArray());
                 // For a single PR's review use its declared server base, even if the discovered parent has moved.
                 if (mode == DiffMode.Layer && positions.Length == 1)
@@ -153,13 +146,17 @@ internal sealed partial class NavigationController
             var key = WorkspaceRuntime.ComparisonKey(comparisonRepository, stack, mode, positions) + "|" + owner.Settings.Theme + (group.IsRemote ? "|" + runtime._remoteSnapshot?.Context.Identity : "");
             if (!runtime._views.TryGetValue(key, out var sections))
             {
+                if (group.IsRemote && !owner.IsDemo)
+                    await owner.PrepareRemoteAsync(group, mode, requestedPositions, compare.Token);
+                ThrowIfComparisonChanged();
                 var results = await runtime._diff.CompareAsync(new(comparisonRepository, stack, mode, positions), compare.Token);
-                compare.Token.ThrowIfCancellationRequested();
+                ThrowIfComparisonChanged();
                 sections = results.Select(result =>
                 {
                     var pr = group.IsRemote ? group.PullRequests.FirstOrDefault(p => RemoteRefs.HeadRef(p) == result.Layer) : owner.FindLocalPr(result.Layer);
-                    return new DiffSectionViewModel(runtime._git, comparisonRepository.Root, result, runtime._highlighter, owner.Settings.Theme)
+                    return new DiffSectionViewModel(runtime._git, comparisonRepository.Root, result, runtime._highlighter, owner.Settings.Theme, selectFirstFile: false)
                     {
+                        DeferFileLoad = true,
                         AssociatedPr = pr,
                         GitHubContext = runtime._remoteSnapshot?.Context,
                         IsPrSnapshot = group.IsRemote && mode == DiffMode.Layer,
@@ -168,9 +165,19 @@ internal sealed partial class NavigationController
                         GroupFilesByFolder = owner.Settings.GroupFilesByFolder
                     };
                 }).ToList();
-                if (group.IsRemote && runtime._prObjects is not null && !owner.IsDemo)
+                try
+                {
+                    if (group.IsRemote && runtime._prObjects is not null && !owner.IsDemo)
+                        foreach (var section in sections)
+                            section.ContentLease = (await runtime._prObjects.AcquireAsync(repo.Identity!, compare.Token)).OrThrow();
+                    ThrowIfComparisonChanged();
+                }
+                catch
+                {
                     foreach (var section in sections)
-                        section.ContentLease = (await runtime._prObjects.AcquireAsync(repo.Identity!, compare.Token)).OrThrow();
+                        section.Dispose();
+                    throw;
+                }
                 // Carry file/filter/scroll state across a changed snapshot of the same comparison.
                 foreach (var section in sections)
                 {
@@ -212,15 +219,24 @@ internal sealed partial class NavigationController
             owner.Notify(nameof(owner.ComparisonDetail));
             owner.RestoreSections();
             foreach (var section in sections)
+            {
                 section.ShowSectionHeader = sections.Count > 1;
+                section.StartFileLoad();
+            }
+            owner.Notify(nameof(owner.HasSelectedLayer));
+            owner.Notify(nameof(owner.ShowLayerModes));
+            owner.EmptyMessage = sections.Count == 0 ? "This stack has no layers. Edit it to add branches." : "";
+            ThrowIfComparisonChanged();
+            owner.IsBusy = false;
             if (mode == DiffMode.Layer)
                 foreach (var section in sections)
                     await owner.CaptureHistorySectionAsync(section, compare.Token);
+            ThrowIfComparisonChanged();
             var prSection = sections.FirstOrDefault(s => s.IsPrSnapshot);
             if (prSection is not null)
             {
                 var review = await owner.EnsureReviewAsync(prSection, compare.Token);
-                compare.Token.ThrowIfCancellationRequested();
+                ThrowIfComparisonChanged();
                 if (!ReferenceEquals(owner.ActiveReview, review))
                 {
                     owner.IsReviewOpen = false;
@@ -237,13 +253,16 @@ internal sealed partial class NavigationController
                 owner.ActiveReview = null;
                 owner.IsReviewOpen = false;
             }
-            compare.Token.ThrowIfCancellationRequested();
-            owner.Notify(nameof(owner.HasSelectedLayer));
-            owner.Notify(nameof(owner.ShowLayerModes));
-            owner.EmptyMessage = sections.Count == 0 ? "This stack has no layers. Edit it to add branches." : "";
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { if (!compare.IsCancellationRequested) owner.Error = ex.Message; }
         finally { if (ReferenceEquals(runtime._comparison, compare)) { runtime._comparison = null; owner.IsBusy = false; } compare.Dispose(); }
+
+        void ThrowIfComparisonChanged()
+        {
+            compare.Token.ThrowIfCancellationRequested();
+            if (!runtime.Session.IsCurrent(ticket))
+                throw new OperationCanceledException();
+        }
     }
 }

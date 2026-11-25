@@ -30,6 +30,7 @@ public sealed partial class MainViewModel
         : "Open a repository to see its pull requests.";
     [RelayCommand] public Task OpenDemoAsync() => _gitHubController.OpenDemoAsync();
     [RelayCommand] public Task RefreshGitHubAsync() => _gitHubController.RefreshGitHubAsync();
+    Task INavigationPresentation.RefreshGitHubAsync(CancellationToken ct) => _gitHubController.RefreshGitHubAsync(ct);
     Task ISyncPresentation.RefreshGitHubAfterPublicationAsync() => _gitHubController.RefreshAfterPublicationAsync();
     public Task RefreshGitHubCoreAsync(CancellationToken ct, bool background) => _gitHubController.RefreshGitHubCoreAsync(ct, background);
     public void BuildDiscoveredGroups() => _gitHubController.BuildDiscoveredGroups();
@@ -42,7 +43,8 @@ public sealed partial class MainViewModel
         return new(definition, layers, prs, shared);
     }
     public PullRequest? FindLocalPr(string branch) => _gitHubController.FindLocalPr(branch);
-    public Task<RepositorySnapshot> PrepareRemoteAsync(StackGroupViewModel group, DiffMode mode, int[] positions, CancellationToken ct) => _gitHubController.PrepareRemoteAsync(group, mode, positions, ct);
+    public Task<RepositorySnapshot> PrepareRemoteAsync(StackGroupViewModel group, DiffMode mode, int[] positions, CancellationToken ct, bool ensureObjects = true) =>
+        _gitHubController.PrepareRemoteAsync(group, mode, positions, ct, ensureObjects);
     public Task SaveGitHubPreferencesAsync(RepositoryPreferences preferences) => _gitHubController.SaveGitHubPreferencesAsync(preferences);
     public Task ClearGitHubCacheAsync() => _gitHubController.ClearGitHubCacheAsync();
     public Task SaveRemoteAsLocalAsync() => _gitHubController.SaveRemoteAsLocalAsync();

@@ -11,7 +11,7 @@ public sealed partial class HistoryWorkspaceViewModel
     {
         get; private set;
     }
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasDocumentFiles))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasDocumentFiles), nameof(CanBrowseFiles))]
     private IReadOnlyList<HistoryDocumentFile> _documentFiles = [];
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ActiveDocumentSection)), NotifyPropertyChangedFor(nameof(HasActiveDocumentSection))]
     private HistoryDocumentFile? _selectedDocumentFile;
@@ -70,7 +70,7 @@ public sealed partial class HistoryWorkspaceViewModel
 
     private async Task ShowDocumentAsync(DiffDocument document, string? path = null, string? versionId = null, int? preferredSection = null)
     {
-        var layerPath = SelectedFile?.Change.NewPath;
+        var layerPath = SelectedFile?.Change.NewPath ?? (document.Mode == DiffDocumentMode.Current ? path : null);
         var wasLoading = _loadingSelection;
         _loadingSelection = true;
         try
@@ -110,7 +110,7 @@ public sealed partial class HistoryWorkspaceViewModel
         }
         OnPropertyChanged(nameof(Document));
         if (ActiveDocumentSection is { } section)
-            await section.SelectedFileLoad;
+            await section.PatchReady;
     }
 
     partial void OnSelectedDocumentFileChanged(HistoryDocumentFile? value)

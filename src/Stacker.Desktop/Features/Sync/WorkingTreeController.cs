@@ -7,6 +7,7 @@ namespace Stacker.Desktop.ViewModels;
 /// <remarks>Mutations are serialized through IsSyncing, state is refreshed after operations, and conflicts remain visible.</remarks>
 internal sealed class WorkingTreeController(IWorkingTreePresentation owner, WorkspaceRuntime runtime)
 {
+    private int _refreshRevision;
     /// <summary>Replaces the journal entry shown by the recovery banner.</summary>
     /// <param name="entry">Current unfinished entry, or null when none exists.</param>
     public void SetActiveEntry(JournalEntry? entry)
@@ -23,15 +24,22 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
 
     /// <summary>Reads the working tree, active journal and saved stashes as refreshed UI state.</summary>
     /// <param name="ct">Cancellation requested by the owning session.</param>
-    public async Task<(bool Ok, string Message)> RefreshWorkingTreeAsync(CancellationToken ct = default)
+    public async Task<(bool Ok, string Message)> RefreshWorkingTreeAsync(CancellationToken ct = default, WorkingTreeState? state = null)
     {
-        if (runtime._branchWriter is null || runtime._repository is null)
+        if (runtime._branchWriter is not { } writer || runtime._repository is not { } repository)
             return (false, "Open a repository first.");
+        var revision = ++_refreshRevision;
         try
         {
-            owner.WorkingTree = (await runtime._branchWriter.StateAsync(runtime._repository.Root, ct)).OrThrow();
-            var entry = (await runtime._branchWriter.ActiveJournalAsync(runtime._repository.Root, ct)).OrThrow();
-            owner.SavedStashes = (await runtime._branchWriter.SavedStashesAsync(runtime._repository.Root, ct)).OrThrow();
+            state ??= (await writer.StateAsync(repository.Root, ct)).OrThrow();
+            if (!IsCurrent())
+                return (false, "Working tree changed.");
+            owner.WorkingTree = state;
+            var entry = (await writer.ActiveJournalAsync(repository.Root, ct)).OrThrow();
+            var stashes = (await writer.SavedStashesAsync(repository.Root, ct)).OrThrow();
+            if (!IsCurrent())
+                return (false, "Working tree changed.");
+            owner.SavedStashes = stashes;
             runtime._pendingStash = owner.SavedStashes.FirstOrDefault()?.Sha ?? entry?.StashRef;
             owner.Notify(nameof(owner.SavedStashes));
             SetActiveEntry(entry);
@@ -40,9 +48,12 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
             owner.Notify(nameof(owner.RecoverySummary));
             owner.Notify(nameof(owner.RecoveryAction));
             owner.Notify(nameof(owner.CanRestoreRecovery));
-            return (true, owner.WorkingTree.Summary);
+            return (true, state.Summary);
         }
-        catch (Exception ex) { owner.Error = ex.Message; return (false, ex.Message); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { return (false, "Working tree refresh cancelled."); }
+        catch (Exception ex) { if (IsCurrent()) owner.Error = ex.Message; return (false, ex.Message); }
+
+        bool IsCurrent() => !ct.IsCancellationRequested && revision == _refreshRevision && runtime._repository?.Root == repository.Root;
     }
 
     public async Task<(bool Ok, string Message)> OpenConflictsInEditorAsync()
@@ -72,7 +83,7 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
         try
         {
             (await runtime._branchWriter.StageAsync(runtime._repository.Root, files)).OrThrow();
-            await RefreshWorkingTreeAsync();
+            await owner.RefreshWorkingTreeAsync();
             return (true, $"{files.Count} file(s) staged. Continue when the resolution is complete.");
         }
         catch (Exception ex) { owner.Error = ex.Message; return (false, ex.Message); }
@@ -174,7 +185,7 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
         {
             StashRef = stash
         });
-        await RefreshWorkingTreeAsync();
+        await owner.RefreshWorkingTreeAsync();
         var tail = " Your changes are stashed; restore them once the stack is settled.";
         return outcome is { Conflicted: true } ? (false, (outcome.Message + tail)) : (outcome?.Applied == true, (outcome?.Message ?? "The restack did not run.") + tail);
     }
@@ -219,7 +230,7 @@ internal sealed class WorkingTreeController(IWorkingTreePresentation owner, Work
         try
         {
             (await runtime._branchWriter.DismissAsync(runtime._repository.Root)).OrThrow();
-            await RefreshWorkingTreeAsync();
+            await owner.RefreshWorkingTreeAsync();
             return (true, "The interrupted run was dismissed. The branches were left exactly as they are.");
         }
         catch (Exception ex) { owner.Error = ex.Message; return (false, ex.Message); }

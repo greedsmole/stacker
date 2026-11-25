@@ -28,21 +28,27 @@ public sealed class ChangeGraphService(IHistoryStore store, IHistoryRemoteReader
         var observed = new List<ChangeVersion>();
         var nodes = new Dictionary<string, ChangeNode>();
         var edges = new List<DependencyEdge>();
+        var refs = repo.Refs.ToDictionary(reference => reference.Name, reference => reference.Sha, StringComparer.Ordinal);
+        var byReference = new Dictionary<string, ChangeNode>(StringComparer.Ordinal);
         foreach (var stack in stacks)
         {
             ChangeNode? previous = null;
             foreach (var reference in stack.Branches)
             {
-                var node = (await store.FindNodeAsync(scope, reference, ct: ct)).OrThrow() ?? new ChangeNode(StableIdentity.For(scope, reference), scope, reference.Replace("refs/heads/", ""), reference);
+                if (!byReference.TryGetValue(reference, out var node))
+                {
+                    node = (await store.FindNodeAsync(scope, reference, ct: ct)).OrThrow() ?? new ChangeNode(StableIdentity.For(scope, reference), scope, reference.Replace("refs/heads/", ""), reference);
+                    byReference[reference] = node;
+                }
                 nodes[node.Id] = node with
                 {
-                    State = repo.Refs.Any(r => r.Name == reference) ? "Open" : "Missing"
+                    State = refs.ContainsKey(reference) ? "Open" : "Missing"
                 };
                 if (previous is not null)
                     edges.Add(new(previous.Id, node.Id, "local-definition"));
-                var head = repo.Refs.FirstOrDefault(r => r.Name == reference)?.Sha;
+                var head = refs.GetValueOrDefault(reference);
                 var parentRef = previous?.Reference ?? stack.Base;
-                var basis = repo.Refs.FirstOrDefault(r => r.Name == parentRef)?.Sha;
+                var basis = refs.GetValueOrDefault(parentRef);
                 if (head is not null && basis is not null)
                 {
                     var version = new ChangeVersion(StableIdentity.For(node.Id + "|" + basis + "|" + head), node.Id, basis, head, null, DateTimeOffset.UtcNow);
@@ -89,9 +95,10 @@ public sealed class ChangeGraphService(IHistoryStore store, IHistoryRemoteReader
             observed.Add(version);
             currentVersions[nodes[pr.Number].Id] = version.Id;
         }
+        var byHead = snapshot.PullRequests.ToLookup(pr => (pr.HeadRepositoryId, pr.HeadRef));
         foreach (var pr in snapshot.PullRequests.Where(p => !boundaries.Contains(p.BaseRef)))
         {
-            var candidates = snapshot.PullRequests.Where(p => p.Number != pr.Number && p.HeadRepositoryId == pr.BaseRepositoryId && p.HeadRef == pr.BaseRef).ToArray();
+            var candidates = byHead[(pr.BaseRepositoryId, pr.BaseRef)].Where(candidate => candidate.Number != pr.Number).Take(2).ToArray();
             if (candidates.Length == 1)
                 edges.Add(new(nodes[candidates[0].Number].Id, nodes[pr.Number].Id, "github"));
             else if (candidates.Length > 1)

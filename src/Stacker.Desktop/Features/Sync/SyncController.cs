@@ -280,7 +280,6 @@ internal sealed partial class SyncController(ISyncPresentation owner, WorkspaceR
         {
             await owner.RefreshAsync();
             await RefreshSyncAvailabilityAsync();
-            await owner.RefreshWorkingTreeAsync();
         }
         finally { runtime._applyingChanges = false; }
     }

@@ -172,7 +172,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     }
     /// <summary>Restores preferences and the last workspace once when the application starts.</summary>
     public Task InitializeAsync() => _navigationController.InitializeAsync();
-    [RelayCommand] public Task OpenAsync() => _navigationController.OpenAsync();
+    [RelayCommand] public Task OpenAsync() => OpenRepositoryAsync(RepositoryPath);
     [RelayCommand] public Task RefreshAsync() => _navigationController.RefreshAsync();
     /// <summary>Starts a new repository workspace; unlike refresh, this intentionally replaces the active repository.</summary>
     public Task OpenRepositoryAsync(string path)
@@ -223,8 +223,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable, ISync
     {
         WorkingTreeEditor?.Close();
         _ghStackLoad?.Cancel();
-        ActiveHistory?.Dispose();
-        ActiveHistory = null;
+        CloseHistory();
         _runtime.Session.Suspend();
         _navigationController.Dispose();
     }

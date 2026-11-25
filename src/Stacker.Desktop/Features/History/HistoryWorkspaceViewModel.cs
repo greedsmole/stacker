@@ -14,6 +14,10 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
     private readonly ReviewProgressService _progress;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly IReadOnlyList<(ChangeNode Node, ChangeVersion Version)> _path;
+    internal Func<ChangeVersion, CancellationToken, Task<ChangeVersion>>? MaterializeVersion { get; init; }
+    internal Func<ChangeVersion, IReadOnlyList<FileChange>?>? ExistingFiles { get; init; }
+    internal Func<CancellationToken, Task>? RetainLocalLayers { get; init; }
+    internal Action? GraphEdited { get; init; }
     private readonly string _root;
     private readonly RepositoryIdentity _repository;
     public IDisposable? ContentLease
@@ -43,6 +47,7 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
     partial void OnPreviousVersionChanged(ChangeVersion? value) => NotifySelectionCommands();
     /// <summary>Allows loading only when a layer is selected and no history operation is running.</summary>
     public bool CanLoadLayer => !_disposed && !IsBusy && SelectedNode is not null;
+    public bool CanBrowseFiles => HasDocumentFiles || !IsBusy && Files.Count > 0;
     /// <summary>Requires a selected file from the loaded version of the selected layer.</summary>
     public bool CanReviewFile => CanLoadLayer && _current?.ChangeId == SelectedNode?.Id && SelectedFile is not null;
     public bool CanShowCurrent => CanLoadLayer && _current?.ChangeId == SelectedNode?.Id && Files.Count > 0;
@@ -67,6 +72,7 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
         SinceReviewedCommand.NotifyCanExecuteChanged();
         EvolutionCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(EmptyDocumentMessage));
+        OnPropertyChanged(nameof(CanBrowseFiles));
     }
     private async Task SyncSelectionAsync(ChangeNode node, FileChange? file)
     {
@@ -92,7 +98,7 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
     public ObservableCollection<ChangeVersion> Versions { get; } = [];
     public ObservableCollection<FileReviewStatus> Files { get; } = [];
     public ObservableCollection<HistoryAttentionItem> Attention { get; } = [];
-    public ObservableCollection<GraphSnapshot> GraphHistory { get; } = [];
+    public BatchCollection<GraphSnapshot> GraphHistory { get; } = [];
     [ObservableProperty] private ChangeNode? _selectedNode;
     [ObservableProperty] private ChangeVersion? _previousVersion;
     [ObservableProperty] private FileReviewStatus? _selectedFile;
@@ -125,11 +131,27 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
     }
     public async Task InitializeAsync()
     {
-        foreach (var graph in (await _store.GraphsAsync(Graph.Scope, _lifetime.Token)).OrThrow())
-            GraphHistory.Add(graph);
-        HistoricalGraph = GraphHistory.LastOrDefault();
         SelectedNode = Nodes.FirstOrDefault();
         await LoadLayerDataAsync();
+        await LoadHistoryDetailsAsync();
+    }
+    internal async Task LoadHistoryDetailsAsync()
+    {
+        if (_disposed)
+            return;
+        var token = _lifetime.Token;
+        var generation = _generation;
+        try
+        {
+            if (RetainLocalLayers is not null)
+                await RetainLocalLayers(token);
+            var graphs = (await _store.GraphsAsync(Graph.Scope, token)).OrThrow();
+            token.ThrowIfCancellationRequested();
+            GraphHistory.ReplaceAll(graphs);
+            HistoricalGraph ??= GraphHistory.LastOrDefault();
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception ex) { if (!_disposed && generation == _generation && _current is not null) Message = ex.Message; }
     }
     [RelayCommand(CanExecute = nameof(CanMarkReviewed))] private async Task MarkReviewedAsync() => await SetReviewedAsync(false);
     [RelayCommand(CanExecute = nameof(CanUseCheckpoint))] private async Task UnmarkReviewedAsync() => await SetReviewedAsync(true);
@@ -268,4 +290,6 @@ public sealed partial class HistoryWorkspaceViewModel : ObservableObject, IDispo
         Preview = "";
         UpdateBusy();
     }
+
+    internal void CancelLoads() => _lifetime.Cancel();
 }

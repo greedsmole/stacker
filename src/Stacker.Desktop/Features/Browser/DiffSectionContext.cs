@@ -13,6 +13,8 @@ public sealed partial class DiffSectionViewModel
     private IReadOnlyDictionary<int, IReadOnlyList<SyntaxSpan>>? _contextTokens;
     private CancellationTokenSource? _contextExpansion;
     private int _hiddenContextLines;
+    internal event Action? ContextRowsChanging;
+    internal event Action? ContextRowsChanged;
 
     [ObservableProperty, NotifyPropertyChangedFor(nameof(ShowFullFileAction))]
     private bool _contextUnavailable;
@@ -38,7 +40,12 @@ public sealed partial class DiffSectionViewModel
         _context = context;
         ContextUnavailable = unavailable;
         _patchRows = context is null ? [] : rows;
-        Lines.ReplaceAll(context is null ? rows : FoldedRows(context));
+        if (context is { Gaps.Count: > 0 })
+        {
+            ContextRowsChanging?.Invoke();
+            Lines.ReplaceAll(FoldedRows(context));
+            ContextRowsChanged?.Invoke();
+        }
         SetHiddenContextLines(context?.HiddenLineCount ?? 0);
     }
 

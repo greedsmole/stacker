@@ -23,10 +23,16 @@ public sealed partial class MainViewModel
         WorkingTreeEditor?.Close();
     }
 
-    internal async Task RefreshAfterIndexChangeAsync(bool committed)
+    internal async Task RefreshAfterIndexChangeAsync(bool committed, string notice)
     {
         if (committed)
+        {
             await ReloadLocalAsync();
+            if (IsWorkingTreeOpen && WorkingTreeEditor is { } committedEditor)
+                committedEditor.Message = notice;
+        }
+        else if (IsWorkingTreeOpen && WorkingTreeEditor is { } editor)
+            await editor.RefreshAsync(notice);
         else
             await RefreshWorkingTreeAsync();
     }

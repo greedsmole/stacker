@@ -190,6 +190,8 @@ public sealed class CachingGitReader(IGitRepositoryReader inner, int capacity = 
     /// exception's own problem when it carries one; cancellation is rethrown. The work is the public open, which never touches the cache.</remarks>
     Task<Result<RepositorySnapshot>> IGitRepositoryReader.OpenAsync(string path, CancellationToken ct) => Boundary.CaptureAsync(() => OpenAsync(path, ct), ProblemCodes.GitFailed);
 
+    Task<Result<RepositorySnapshot>> IGitRepositoryReader.OpenRefsAsync(string path, CancellationToken ct) => inner.OpenRefsAsync(path, ct);
+
     /// <inheritdoc cref="IGitRepositoryReader.MergeBasesAsync"/>
     /// <remarks>The port member captures a thrown failure as a failed result with <see cref="ProblemCodes.GitFailed"/>; the read itself takes the
     /// leases described on <see cref="WithLeaseAsync"/> and is never cached.</remarks>

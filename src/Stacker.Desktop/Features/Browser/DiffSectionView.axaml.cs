@@ -20,6 +20,8 @@ public partial class DiffSectionView : UserControl
     private ScrollViewer? _scroll;
     private bool _restoring;
     private DiffSectionViewModel? _section;
+    private RenderedDiffLine? _contextAnchor;
+    private RenderedDiffLine[] _contextSelection = [];
     public DiffSectionView()
     {
         InitializeComponent();
@@ -58,7 +60,11 @@ public partial class DiffSectionView : UserControl
         _symbolLoad?.Cancel();
         _rangeStart = null;
         if (_section is not null)
+        {
             _section.PropertyChanged -= SectionChanged;
+            _section.ContextRowsChanging -= SaveContextSelection;
+            _section.ContextRowsChanged -= RestoreContextSelection;
+        }
         if (_scroll is not null)
             _scroll.ScrollChanged -= RememberScroll;
         _scroll = null;
@@ -66,7 +72,23 @@ public partial class DiffSectionView : UserControl
         if (section is null)
             return;
         section.PropertyChanged += SectionChanged;
+        section.ContextRowsChanging += SaveContextSelection;
+        section.ContextRowsChanged += RestoreContextSelection;
         RestoreScroll();
+    }
+    private void SaveContextSelection()
+    {
+        _contextAnchor = _scroll?.Offset.Y > 0 ? FirstVisibleCodeLine() : null;
+        _contextSelection = DiffLines.SelectedItems?.OfType<RenderedDiffLine>().ToArray() ?? [];
+    }
+    private void RestoreContextSelection()
+    {
+        foreach (var row in _contextSelection)
+            DiffLines.SelectedItems?.Add(row);
+        if (_section is { } section)
+            ScrollToContextRow(section, _contextAnchor);
+        _contextAnchor = null;
+        _contextSelection = [];
     }
     private void SectionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {

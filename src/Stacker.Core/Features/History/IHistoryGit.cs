@@ -27,6 +27,8 @@ public interface IHistoryGit
     /// <param name="commits">Commit SHAs to retain, typically the base and head of one layer.</param>
     /// <param name="ct">Cancellation for the operation.</param>
     Task<Result<Unit>> CaptureAsync(RepositoryIdentity repository, string scope, IReadOnlyList<string> commits, CancellationToken ct = default);
+    /// <summary>Pins and returns the requested commits that already exist in the opened repository.</summary>
+    Task<Result<IReadOnlyList<string>>> CaptureAvailableAsync(RepositoryIdentity repository, string scope, IReadOnlyList<string> commits, CancellationToken ct = default);
     /// <summary>Takes a read lease over the scope's history objects, failing unless the content is available.</summary>
     /// <remarks>The lease's root is the working root to pass to Git reads. It must be disposed — while it is held, removal of
     /// the pins is deferred — and acquiring it fails with a user-facing problem when the content was removed or is missing.</remarks>

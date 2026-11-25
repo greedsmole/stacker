@@ -106,12 +106,12 @@ internal interface INavigationPresentation
     {
         get;
     }
-    global::System.Threading.Tasks.Task<global::Stacker.Core.RepositorySnapshot> PrepareRemoteAsync(global::Stacker.Desktop.ViewModels.StackGroupViewModel @group, global::Stacker.Core.DiffMode @mode, global::System.Int32[] @positions, global::System.Threading.CancellationToken @ct);
+    Task<Stacker.Core.RepositorySnapshot> PrepareRemoteAsync(StackGroupViewModel group, Stacker.Core.DiffMode mode, int[] positions, CancellationToken ct, bool ensureObjects = true);
     global::System.Collections.ObjectModel.ObservableCollection<global::System.String> RecentRepositories
     {
         get;
     }
-    global::System.Threading.Tasks.Task RefreshGitHubAsync();
+    Task RefreshGitHubAsync(CancellationToken ct);
     global::System.Threading.Tasks.Task RefreshSyncAvailabilityAsync(global::System.Threading.CancellationToken @ct = default);
     global::System.Threading.Tasks.Task<(bool Ok, string Message)> RefreshWorkingTreeAsync(global::System.Threading.CancellationToken @ct = default);
     global::System.Collections.ObjectModel.ObservableCollection<global::Stacker.Desktop.ViewModels.StackGroupViewModel> RemoteGroups
@@ -128,8 +128,9 @@ internal interface INavigationPresentation
         get; set;
     }
     void ResetSearch();
+    void ResetCheckoutState();
     void RestoreSections();
-    global::System.Threading.Tasks.Task SaveWorkspaceAsync();
+    void QueueWorkspaceSave();
     global::System.Collections.ObjectModel.ObservableCollection<global::Stacker.Desktop.ViewModels.DiffSectionViewModel> Sections
     {
         get;

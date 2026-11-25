@@ -38,15 +38,15 @@ public sealed partial class MainViewModel
     [RelayCommand]
     public async Task UpdateChangesAsync()
     {
-        var reopen = ActiveHistory is not null;
         await _workspaceController.UpdateChangesAsync();
-        if (reopen)
+        if (IsHistoryOpen && !HasPendingChanges)
             await ShowHistoryAsync();
     }
     // A separate state key per repository and stack prevents one stack's file/filter/scroll choices leaking into another.
     internal void CaptureWorkspace() => _workspaceController.CaptureWorkspace();
     /// <summary>Persists the active selection and per-stack view state in the application data directory.</summary>
     public Task SaveWorkspaceAsync() => _workspaceController.SaveWorkspaceAsync();
+    public void QueueWorkspaceSave() => _workspaceController.QueueWorkspaceSave();
     public void RestoreSections() => _workspaceController.RestoreSections();
     /// <summary>Opens a stack's aggregate comparison, the top-level action for reviewing the whole change.</summary>
     public async Task SelectOverviewAsync(StackGroupViewModel group)

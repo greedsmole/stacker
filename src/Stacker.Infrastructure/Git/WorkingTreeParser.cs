@@ -12,6 +12,45 @@ namespace Stacker.Infrastructure;
 /// an untracked path can never block a rewrite.</remarks>
 public static class WorkingTreeParser
 {
+    internal static (string? Head, string? Branch, IReadOnlyList<WorkingTreeEntry> Entries) ParseWithBranch(string porcelain)
+    {
+        string? head = null;
+        string? branch = null;
+        var entries = new List<WorkingTreeEntry>();
+        var fields = porcelain.Split('\0');
+        for (var i = 0; i < fields.Length && fields[i].Length > 0; i++)
+        {
+            var record = fields[i];
+            switch (record[0])
+            {
+                case '#':
+                    if (record.StartsWith("# branch.oid ", StringComparison.Ordinal) && record[13..] != "(initial)")
+                        head = record[13..];
+                    if (record.StartsWith("# branch.head ", StringComparison.Ordinal) && record[14..] != "(detached)")
+                        branch = record[14..];
+                    break;
+                case '?':
+                    entries.Add(new(record[2..], "??", false, false, true));
+                    break;
+                case '1':
+                case '2':
+                case 'u':
+                    var tracked = record.Split(' ', record[0] == '1' ? 9 : record[0] == '2' ? 10 : 11);
+                    var code = tracked[1].Replace('.', ' ');
+                    if (code[1] == ' ' && tracked[2][0] == 'S' && tracked[2] != "S...")
+                        code = code[0] + "M";
+                    var conflicted = record[0] == 'u';
+                    var originalPath = record[0] == '2' ? fields[++i] : null;
+                    entries.Add(new(tracked[^1], code, code[0] != ' ' && !conflicted, conflicted, false)
+                    {
+                        OriginalPath = originalPath
+                    });
+                    break;
+            }
+        }
+        return (head, branch, entries);
+    }
+
     /// <summary>The porcelain v1 codes that mean the path is unmerged, which is the only state that must be resolved
     /// before a commit or a branch move.</summary>
     /// <remarks>Git's seven unmerged combinations are DD, AU, UD, UA, DU, AA and UU; every other two-character code

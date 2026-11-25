@@ -6,6 +6,7 @@ namespace Stacker.Core;
 /// states of a branch that moved during the refresh.</remarks>
 public sealed class StackService(IGitRepositoryReader git)
 {
+    private readonly ReadScheduler _reads = new();
     /// <summary>Resolves each configured layer and measures its relation to the immediately preceding ref.</summary>
     /// <remarks>A behind count warns that the displayed merge-base diff is not a prediction of the merge result. One pass runs per
     /// configured branch, in definition order: <c>Position</c> is the zero-based index, the parent is the stack base for the first
@@ -23,26 +24,26 @@ public sealed class StackService(IGitRepositoryReader git)
     public async Task<IReadOnlyList<StackLayerSnapshot>> SnapshotAsync(RepositorySnapshot repository, StackDefinition stack, CancellationToken ct = default)
     {
         var refs = repository.Refs.ToDictionary(r => r.Name, r => r.Sha, StringComparer.Ordinal);
-        var layers = new List<StackLayerSnapshot>();
-        for (var i = 0; i < stack.Branches.Count; i++)
+        return await Task.WhenAll(stack.Branches.Select((branch, index) => ReadLayerAsync(branch, index)));
+
+        async Task<StackLayerSnapshot> ReadLayerAsync(string branch, int i)
         {
             ct.ThrowIfCancellationRequested();
             var parent = i == 0 ? stack.Base : stack.Branches[i - 1];
             refs.TryGetValue(parent, out var parentSha);
-            refs.TryGetValue(stack.Branches[i], out var head);
+            refs.TryGetValue(branch, out var head);
             var ahead = 0;
             var behind = 0;
             string? warning = null;
             if (head is null || parentSha is null)
-                warning = $"Missing ref: {(head is null ? stack.Branches[i] : parent)}";
+                warning = $"Missing ref: {(head is null ? branch : parent)}";
             else
             {
-                (ahead, behind) = (await git.CountsAsync(repository.Root, parentSha, head, ct)).OrThrow();
+                (ahead, behind) = (await _reads.RunAsync(ReadWork.Metadata, token => git.CountsAsync(repository.Root, parentSha, head, token), ct)).OrThrow();
                 if (behind > 0)
                     warning = "Parent is not an ancestor. Diff uses merge-base, not a merge preview.";
             }
-            layers.Add(new(i, stack.Branches[i], parent, head, parentSha, ahead, behind, warning));
+            return new(i, branch, parent, head, parentSha, ahead, behind, warning);
         }
-        return layers;
     }
 }

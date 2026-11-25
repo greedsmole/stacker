@@ -41,6 +41,15 @@ public sealed partial class MainViewModel
     public string RecoverySummary => _runtime._activeEntry is null ? "" : string.Join(" · ", _runtime._activeEntry.Kind, _runtime._activeEntry.Phase.ToString(),
         _runtime._activeEntry.Moved.Count + (_runtime._activeEntry.Kind == "restack" ? " branch(es)" : " effect(s)"), _runtime._activeEntry.Message);
     internal void SetActiveEntry(JournalEntry? entry) => _workingTreeController.SetActiveEntry(entry);
+    void INavigationPresentation.ResetCheckoutState()
+    {
+        _runtime._pendingStash = null;
+        SavedStashes = [];
+        SetActiveEntry(null);
+        WorkingTree = null;
+        OnPropertyChanged(nameof(SavedStashes));
+        OnPropertyChanged(nameof(CanRestoreStash));
+    }
     partial void OnWorkingTreeChanged(WorkingTreeState? value)
     {
         OnPropertyChanged(nameof(HasOperation));
@@ -56,10 +65,13 @@ public sealed partial class MainViewModel
     }
 
     /// <summary>Reads the working tree and any stack write that still needs the user.</summary>
-    public async Task<(bool Ok, string Message)> RefreshWorkingTreeAsync(CancellationToken ct = default)
+    public Task<(bool Ok, string Message)> RefreshWorkingTreeAsync(CancellationToken ct = default) =>
+        IsWorkingTreeOpen && WorkingTreeEditor is { } editor ? editor.RefreshAsync(ct: ct) : RefreshWorkingTreeSummaryAsync(ct);
+
+    internal async Task<(bool Ok, string Message)> RefreshWorkingTreeSummaryAsync(CancellationToken ct, WorkingTreeState? state = null)
     {
-        var result = await _workingTreeController.RefreshWorkingTreeAsync(ct);
-        if (UsesGhStack || GhStackRecovery is not null)
+        var result = await _workingTreeController.RefreshWorkingTreeAsync(ct, state);
+        if (result.Ok && (UsesGhStack || GhStackRecovery is not null))
             await RefreshGhStackRecoveryAsync(ct);
         return result;
     }
@@ -68,13 +80,7 @@ public sealed partial class MainViewModel
     public Task<(bool Ok, string Message)> OpenConflictsInEditorAsync() => _workingTreeController.OpenConflictsInEditorAsync();
 
     /// <summary>Stages the conflicted files so the rebase can continue.</summary>
-    public async Task<(bool Ok, string Message)> StageConflictsAsync()
-    {
-        var result = await _workingTreeController.StageConflictsAsync();
-        if (GhStackRecovery is not null)
-            await RefreshGhStackRecoveryAsync();
-        return result;
-    }
+    public Task<(bool Ok, string Message)> StageConflictsAsync() => _workingTreeController.StageConflictsAsync();
 
     /// <summary>Resumes the interrupted rebase, using the configured editor for the commit message.</summary>
     public Task<(bool Ok, string Message)> ContinueOperationAsync() => _workingTreeController.ContinueOperationAsync();

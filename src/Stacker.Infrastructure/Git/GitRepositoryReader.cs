@@ -34,37 +34,32 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
         return result;
     }
     /// <summary>Captures only direct local and remote-tracking refs plus the working-tree changed-file count.</summary>
-    public async Task<RepositorySnapshot> OpenAsync(string path, CancellationToken ct = default)
+    public Task<RepositorySnapshot> OpenAsync(string path, CancellationToken ct = default) => OpenAsync(path, includeStatus: true, ct);
+
+    private async Task<RepositorySnapshot> OpenAsync(string path, bool includeStatus, CancellationToken ct)
     {
         if (!Directory.Exists(path))
             throw new StackerException("The repository folder does not exist.");
-        var root = (await Run(path, ["rev-parse", "--show-toplevel"], ct)).StdOut.TrimEnd('\r', '\n');
+        var identity = identities is null ? null : (await identities.RegisterAsync(path, ct)).OrThrow();
+        var root = identity?.Root ?? (await Run(path, ["rev-parse", "--show-toplevel"], ct)).StdOut.TrimEnd('\r', '\n');
         var output = (await Run(root, ["for-each-ref", "--format=%(refname)%00%(objectname)%00%(symref)%00", "refs/heads", "refs/remotes"], ct)).StdOut;
         var refs = new List<BranchRef>();
         var fields = output.Split('\0');
         for (var i = 0; i + 2 < fields.Length; i += 3)
             if (fields[i + 2].Length == 0)
                 refs.Add(new(fields[i].TrimStart('\n', '\r'), fields[i + 1]));
-        var status = (await Run(root, ["status", "--porcelain=v1", "-z", "--untracked-files=normal"], ct)).StdOut.Split('\0');
-        var changed = 0;
-        for (var i = 0; i < status.Length; i++)
-        {
-            if (status[i].Length < 3)
-                continue;
-            changed++;
-            if (status[i][0] is 'R' or 'C' || status[i][1] is 'R' or 'C')
-                i++;
-        }
-        RepositoryIdentity identity;
-        if (identities is not null)
-            identity = (await identities.RegisterAsync(root, ct)).OrThrow();
-        else
+        var changed = includeStatus
+            ? WorkingTreeParser.Parse((await Run(root, ["status", "--porcelain=v1", "-z", "--untracked-files=normal"], ct)).StdOut).Count : 0;
+        if (identity is null)
         {
             var common = (await Run(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"], ct)).StdOut.TrimEnd('\r', '\n');
             identity = new(new(StableIdentity.For(common)[..32]), new(StableIdentity.For(root)[..32]), root, common);
         }
         return new RepositorySnapshot(root, refs, changed) { Identity = identity, IsDemo = File.Exists(Path.Combine(root, ".stacker-demo.json")) };
     }
+
+    Task<Result<RepositorySnapshot>> IGitRepositoryReader.OpenRefsAsync(string path, CancellationToken ct) =>
+        Boundary.CaptureAsync(() => OpenAsync(path, includeStatus: false, ct), ProblemCodes.GitFailed);
     /// <summary>Returns all merge bases because more than one best ancestor makes the comparison ambiguous.</summary>
     public async Task<IReadOnlyList<string>> MergeBasesAsync(string root, string left, string right, CancellationToken ct = default)
     {
@@ -84,35 +79,21 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
         ["--no-color", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none", "--submodule=short", "--no-relative", "--src-prefix=a/", "--dst-prefix=b/"];
 
     private static string[] DiffArgs(string @base, string head) => ["diff", .. PatchOptions, "--find-renames=50%", "-l1000", @base, head];
-    // NUL-delimited name-status output keeps spaces, Unicode, and embedded newlines in paths unambiguous.
+    // Git emits raw records first, then numstat. The same invocation does rename detection for both.
     public async Task<IReadOnlyList<FileChange>> FilesAsync(string root, string @base, string head, CancellationToken ct = default)
     {
         Sha(@base);
         Sha(head);
-        var raw = (await Run(root, [.. DiffArgs(@base, head), "--raw", "--no-abbrev", "-z", "--"], ct)).StdOut.Split('\0');
-        var stats = (await Run(root, [.. DiffArgs(@base, head), "--numstat", "-z", "--"], ct)).StdOut.Split('\0');
-        var counts = new Dictionary<(string, string), (int?, int?)>();
-        for (var i = 0; i < stats.Length && stats[i].Length > 0; i++)
-        {
-            var record = stats[i].Split('\t', 3);
-            string oldPath, newPath;
-            if (record[2].Length == 0)
-            {
-                oldPath = stats[++i];
-                newPath = stats[++i];
-            }
-            else
-                oldPath = newPath = record[2];
-            counts[(oldPath, newPath)] = (ParseCount(record[0]), ParseCount(record[1]));
-        }
+        var records = (await Run(root, [.. DiffArgs(@base, head), "--raw", "--numstat", "--no-abbrev", "-z", "--"],
+            ct, 32 * 1024 * 1024)).StdOut.Split('\0');
         var files = new List<FileChange>();
-        for (var i = 0; i < raw.Length && raw[i].Length > 0; i++)
+        var index = 0;
+        while (index < records.Length && records[index].StartsWith(':'))
         {
-            var header = raw[i].Split(' ');
+            var header = records[index++].Split(' ');
             var code = header[4][0];
-            var oldPath = raw[++i];
-            var newPath = code is 'R' or 'C' ? raw[++i] : oldPath;
-            var count = counts.GetValueOrDefault((oldPath, newPath), (0, 0));
+            var oldPath = records[index++];
+            var newPath = code is 'R' or 'C' ? records[index++] : oldPath;
             var kind = code switch
             {
                 'A' => FileChangeKind.Added,
@@ -122,7 +103,26 @@ public sealed class GitRepositoryReader(IProcessRunner runner, GitExecutable exe
                 'T' => FileChangeKind.TypeChanged,
                 _ => FileChangeKind.Modified
             };
-            files.Add(new(oldPath, newPath, kind, count.Item1, count.Item2, header[0][1..], header[1]));
+            files.Add(new(oldPath, newPath, kind, 0, 0, header[0][1..], header[1]));
+        }
+        var counts = new Dictionary<(string, string), (int? Added, int? Deleted)>();
+        while (index < records.Length && records[index].Length > 0)
+        {
+            var record = records[index++].Split('\t', 3);
+            var oldPath = record[2];
+            var newPath = oldPath;
+            if (oldPath.Length == 0)
+            {
+                oldPath = records[index++];
+                newPath = records[index++];
+            }
+            counts[(oldPath, newPath)] = (ParseCount(record[0]), ParseCount(record[1]));
+        }
+        for (var i = 0; i < files.Count; i++)
+        {
+            var file = files[i];
+            if (counts.TryGetValue((file.OldPath, file.NewPath), out var count))
+                files[i] = file with { Additions = count.Added, Deletions = count.Deleted };
         }
         return files;
     }

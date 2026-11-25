@@ -421,7 +421,15 @@
        <Button Grid.Column="1" Content="Update changes" Command="{Binding UpdateChangesCommand}" Classes="quiet"/>
       </Grid>
      </Border>
-     <local:HistoryPanel Grid.Row="2" DataContext="{Binding ActiveHistory}"/>
+     <local:HistoryPanel Grid.Row="2" DataContext="{Binding ActiveHistory}"
+                         IsVisible="{Binding $parent[Window].DataContext.ActiveHistory, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+     <StackPanel Grid.Row="2" IsVisible="{Binding IsHistoryLoading}" Margin="24" Spacing="8">
+      <TextBlock Text="Loading review history…" Classes="section-title"/>
+     </StackPanel>
+     <StackPanel Grid.Row="2" IsVisible="{Binding HasHistoryError}" Margin="24" Spacing="8">
+      <SelectableTextBlock Text="{Binding HistoryError}" TextWrapping="Wrap"/>
+      <Button Content="Retry" Command="{Binding ShowHistoryCommand}" Classes="outline compact"/>
+     </StackPanel>
     </Grid>
     </Border>
    </Grid>

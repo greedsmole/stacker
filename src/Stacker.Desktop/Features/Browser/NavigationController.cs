@@ -29,8 +29,6 @@ internal sealed partial class NavigationController(INavigationPresentation owner
         catch (Exception ex) { owner.Error = "Cannot load settings: " + ex.Message; }
     }
 
-    public Task OpenAsync() => OpenRepositoryAsync(owner.RepositoryPath);
-
     public Task RefreshAsync() => ReadRepositoryAsync(runtime._repository?.Root ?? owner.RepositoryPath, false);
 
     public Task OpenRepositoryAsync(string path) => ReadRepositoryAsync(path, true);
@@ -52,17 +50,16 @@ internal sealed partial class NavigationController(INavigationPresentation owner
         try
         {
             if (opening)
-                await owner.SaveWorkspaceAsync();
-            var repo = (await runtime._git.OpenAsync(path, refresh.Token)).OrThrow();
+                owner.QueueWorkspaceSave();
+            var repo = (await runtime._git.OpenRefsAsync(path, refresh.Token)).OrThrow();
             var document = (await runtime._store.LoadAsync(repo.Root, refresh.Token)).OrThrow();
-            if (runtime.HistoryGraph is not null)
-                await runtime.HistoryGraph.ObserveLocalAsync(repo, document.Stacks, refresh.Token);
-            var sameRepo = runtime._repository?.Root == repo.Root;
+            var sameRepo = runtime._repository is { } previousRepository && previousRepository.Root == repo.Root &&
+                previousRepository.WorkspaceKey == repo.WorkspaceKey && previousRepository.Scope == repo.Scope;
             var workspace = runtime._workspace;
             string? stateNotice = null;
             if (!sameRepo)
             {
-                var loaded = await runtime._workspacePersistence.LoadAsync(repo.WorkspaceKey, refresh.Token, repo.Root);
+                var loaded = await runtime.LoadWorkspaceAsync(repo.WorkspaceKey, repo.Root, refresh.Token);
                 if (loaded.IsFailed && loaded.Problem!.Code == ProblemCodes.StoreCorrupt)
                 {
                     workspace = new();
@@ -90,15 +87,28 @@ internal sealed partial class NavigationController(INavigationPresentation owner
                 runtime._pendingLocal = true;
                 owner.HasPendingChanges = true;
                 owner.Status = "New local changes available";
+                await owner.RefreshWorkingTreeAsync(refresh.Token);
+                await runtime.ObserveLocalHistoryAsync(repo, document, refresh.Token);
                 return;
             }
             var groups = new List<StackGroupViewModel>();
             if (!unchanged)
+            {
+                var refs = repo.Refs.ToDictionary(reference => reference.Name, reference => reference.Sha, StringComparer.Ordinal);
+                var oldGroups = runtime._repository?.Scope == repo.Scope
+                    ? owner.LocalGroups.ToDictionary(group => group.Definition.Id, StringComparer.Ordinal) : [];
                 foreach (var stack in document.Stacks)
-                    groups.Add(new(stack, await runtime._stacks.SnapshotAsync(repo, stack, refresh.Token))
+                {
+                    oldGroups.TryGetValue(stack.Id, out var prior);
+                    var layers = prior is not null && SameLayerInputs(prior, stack, refs)
+                        ? prior.Layers.Select(layer => layer.Snapshot).ToArray()
+                        : await runtime._stacks.SnapshotAsync(repo, stack, refresh.Token);
+                    groups.Add(new(stack, layers)
                     {
-                        IsExpanded = sameRepo && owner.LocalGroups.FirstOrDefault(g => g.Definition.Id == stack.Id)?.IsExpanded == true
+                        IsExpanded = sameRepo ? prior?.IsExpanded == true : workspace.Stacks.GetValueOrDefault("local:" + stack.Id)?.Expanded == true
                     });
+                }
+            }
             refresh.Token.ThrowIfCancellationRequested();
             var previousGroup = runtime._activeGroup;
             var selectedBranches = previousGroup?.Layers.Where(l => runtime._selectedPositions.Contains(l.Snapshot.Position)).Select(l => l.Snapshot.Branch).ToHashSet() ?? [];
@@ -114,16 +124,21 @@ internal sealed partial class NavigationController(INavigationPresentation owner
                 runtime._remoteSnapshot = null;
                 runtime._historyRemoteGraph = null;
                 runtime._activeGroup = null;
-                owner.WorkingTree = null;
+                owner.ResetCheckoutState();
+                owner.Status = "";
                 owner.GitHubStatus = "Not connected";
             }
-            runtime._repository = repo;
-            runtime._document = document;
+            if (!unchanged)
+            {
+                runtime._repository = repo;
+                runtime._document = document;
+            }
             owner.RepositoryPath = repo.Root;
             if (!sameRepo)
             {
                 runtime._workspace = workspace;
                 runtime._displayedStateKey = null;
+                runtime._displayedGroupKey = null;
                 runtime._pendingRemote = null;
                 runtime._pendingLocal = false;
                 owner.HasPendingChanges = false;
@@ -132,11 +147,10 @@ internal sealed partial class NavigationController(INavigationPresentation owner
             }
             owner.Settings.LastRepository = repo.Root;
             owner.IsDemo = repo.IsDemo;
-            if (!sameRepo)
-                await owner.LoadRepositoryAuthoringAsync(repo, refresh.Token);
+            var authoring = !sameRepo ? owner.LoadRepositoryAuthoringAsync(repo, refresh.Token) : Task.CompletedTask;
             owner.RepositoryTitle = owner.IsDemo ? "Demo / offline" : Path.GetFileName(repo.Root);
-            owner.Status = $"Working tree: {repo.ChangedFiles} changed entries · Updated {DateTime.Now:HH:mm:ss}";
             owner.CanEdit = true;
+            var comparison = Task.CompletedTask;
             if (!unchanged)
             {
                 owner.Stacks.Clear();
@@ -152,7 +166,6 @@ internal sealed partial class NavigationController(INavigationPresentation owner
                     owner.Stacks.Add(group.Definition);
                     owner.LocalGroups.Add(group);
                 }
-                await owner.RefreshSyncAvailabilityAsync(refresh.Token);
                 // Navigation saves the view being left. A refresh should prefer the group currently on screen.
                 var selected = sameRepo && previousGroup is { IsRemote: true } or { UsesGhStack: true }
                     ? previousGroup
@@ -176,7 +189,7 @@ internal sealed partial class NavigationController(INavigationPresentation owner
                         owner.Error = "The selected layer disappeared. Showing the entire stack.";
                     }
                     runtime._suppress = false;
-                    await CompareAsync();
+                    comparison = CompareAsync(refresh.Token);
                 }
                 else
                 {
@@ -191,8 +204,14 @@ internal sealed partial class NavigationController(INavigationPresentation owner
                     owner.EmptyMessage = "Create a stack, or connect GitHub to discover PRs.";
                 }
             }
-            // The working tree can change without any ref changing, so its state is re-read on every load.
-            await owner.RefreshWorkingTreeAsync(refresh.Token);
+            if (runtime._comparison is null)
+                owner.IsBusy = false;
+            var workingTree = owner.RefreshWorkingTreeAsync(refresh.Token);
+            var history = !unchanged ? runtime.ObserveLocalHistoryAsync(repo, document, refresh.Token) : Task.CompletedTask;
+            var syncState = !unchanged ? owner.RefreshSyncAvailabilityAsync(refresh.Token) : Task.CompletedTask;
+            await Task.WhenAll(comparison, workingTree, history, syncState, authoring);
+            refresh.Token.ThrowIfCancellationRequested();
+            owner.Status = $"Working tree: {owner.WorkingTree?.Entries.Count ?? repo.ChangedFiles} changed entries · Updated {DateTime.Now:HH:mm:ss}";
             if (opening)
             {
                 owner.Settings.RecentRepositories.Remove(repo.Root);
@@ -201,16 +220,18 @@ internal sealed partial class NavigationController(INavigationPresentation owner
                 owner.RecentRepositories.Clear();
                 foreach (var recent in owner.Settings.RecentRepositories)
                     owner.RecentRepositories.Add(recent);
-                await SaveSettingsAsync();
-                if (opening)
+                var restore = runtime._workspace.ActiveGroup;
+                var selection = runtime.Session.Selection;
+                var files = owner.Sections.Select(section => section.SelectedFile).ToArray();
+                await Task.WhenAll(SaveSettingsAsync(), owner.RefreshGitHubAsync(refresh.Token));
+                refresh.Token.ThrowIfCancellationRequested();
+                foreach (var group in owner.RemoteGroups.Concat(owner.OtherGroups))
+                    if (runtime._workspace.Stacks.TryGetValue(owner.GroupKey(group), out var saved))
+                        group.IsExpanded = saved.Expanded;
+                if (selection == runtime.Session.Selection && files.SequenceEqual(owner.Sections.Select(section => section.SelectedFile)))
                 {
-                    var restore = runtime._workspace.ActiveGroup;
-                    await owner.RefreshGitHubAsync();
-                    foreach (var group in owner.LocalGroups.Concat(owner.RemoteGroups).Concat(owner.OtherGroups))
-                        if (runtime._workspace.Stacks.TryGetValue(owner.GroupKey(group), out var saved))
-                            group.IsExpanded = saved.Expanded;
                     var target = owner.LocalGroups.Concat(owner.RemoteGroups).Concat(owner.OtherGroups).FirstOrDefault(g => owner.GroupKey(g) == restore);
-                    if (target is not null)
+                    if (target is not null && !ReferenceEquals(runtime._activeGroup, target))
                         await SelectGroupAsync(target, saveCurrent: false);
                 }
                 owner.SetWindowActive(runtime._windowActive);
@@ -220,7 +241,20 @@ internal sealed partial class NavigationController(INavigationPresentation owner
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { if (!refresh.IsCancellationRequested) owner.Error = ex.Message + (runtime._repository is null ? "" : " Previous data retained."); }
-        finally { if (ReferenceEquals(runtime._refresh, refresh)) { runtime._refresh = null; owner.IsBusy = false; } refresh.Dispose(); }
+        finally
+        {
+            if (ReferenceEquals(runtime._refresh, refresh))
+            {
+                runtime._refresh = null;
+                if (runtime._comparison is null)
+                    owner.IsBusy = false;
+            }
+            refresh.Dispose();
+        }
     }
 
+    private static bool SameLayerInputs(StackGroupViewModel group, StackDefinition stack, IReadOnlyDictionary<string, string> refs) =>
+        group.Definition.Base == stack.Base && group.Definition.Branches.SequenceEqual(stack.Branches) && group.Layers.All(layer =>
+            layer.Snapshot.HeadSha == refs.GetValueOrDefault(layer.Snapshot.Branch) &&
+            layer.Snapshot.ParentSha == refs.GetValueOrDefault(layer.Snapshot.Parent));
 }

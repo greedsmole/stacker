@@ -6,30 +6,74 @@ namespace Stacker.Desktop.ViewModels;
 public sealed partial class MainViewModel
 {
     [ObservableProperty] private HistoryWorkspaceViewModel? _activeHistory;
-    private string? _historyGroup;
+    [ObservableProperty] private bool _isHistoryOpen;
+    [ObservableProperty] private bool _isHistoryLoading;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasHistoryError))] private string _historyError = "";
+    public bool HasHistoryError => HistoryError.Length > 0;
+    private CancellationTokenSource? _historyOpen;
+    private StackGroupViewModel? _historyGroup;
     private int _historySelectionsInProgress;
     private int _checkpointRevision;
-    public bool IsHistoryOpen => ActiveHistory is not null;
-    partial void OnActiveHistoryChanged(HistoryWorkspaceViewModel? value) => OnPropertyChanged(nameof(IsHistoryOpen));
+    [RelayCommand]
     public async Task ShowHistoryAsync()
     {
-        var filePath = Sections.Count == 1 ? Sections[0].SelectedFile?.NewPath : null;
-        var next = await OpenHistoryAsync();
-        if (next is null)
+        if (HasPendingChanges)
+        {
+            Error = "Apply Update changes before opening review history.";
             return;
+        }
+        _historyOpen?.Cancel();
+        using var request = new CancellationTokenSource();
+        _historyOpen = request;
+        var group = _runtime._activeGroup;
+        var selected = _runtime._selectedPositions.FirstOrDefault();
+        var filePath = Sections.Count == 1 ? Sections[0].SelectedFile?.NewPath : null;
+        IsHistoryOpen = true;
+        IsHistoryLoading = true;
+        HistoryError = "";
         ActiveHistory?.Dispose();
-        ActiveHistory = next;
-        _historyGroup = _runtime._activeGroup?.Definition.Id;
+        ActiveHistory = null;
+        _historyGroup = group;
+        try
+        {
+            var next = await CreateHistoryAsync(request.Token);
+            if (request.IsCancellationRequested || !ReferenceEquals(group, _runtime._activeGroup))
+            {
+                next.Dispose();
+                return;
+            }
+            ConnectHistory(next);
+            ActiveHistory = next;
+            IsHistoryLoading = false;
+            next.SelectedNode = next.Nodes.ElementAtOrDefault(selected) ?? next.Nodes.FirstOrDefault();
+            await next.LoadCurrentDiffAsync(filePath, synchronize: false);
+            if (!request.IsCancellationRequested)
+                _ = next.LoadHistoryDetailsAsync();
+        }
+        catch (OperationCanceledException) when (request.IsCancellationRequested) { }
+        catch (Exception ex) { if (!request.IsCancellationRequested) HistoryError = ex.Message; }
+        finally
+        {
+            if (ReferenceEquals(_historyOpen, request))
+            {
+                _historyOpen = null;
+                IsHistoryLoading = false;
+            }
+        }
+    }
+
+    private void ConnectHistory(HistoryWorkspaceViewModel next)
+    {
         next.SelectionChanged = async (node, file) =>
         {
-            if (_runtime._activeGroup is not { } group)
+            if (!ReferenceEquals(ActiveHistory, next) || _runtime._activeGroup is not { } group)
                 return;
             var token = next.LayerLoadToken;
             _historySelectionsInProgress++;
             try
             {
                 var layer = group.Layers.FirstOrDefault(l => node.PullRequest is not null ? l.PullRequest?.Number == node.PullRequest : l.Snapshot.Branch == node.Reference);
-                if (layer is not null && (!layer.IsSelected || _runtime._comparison is not null ||
+                if (layer is not null && (!layer.IsSelected ||
                     _runtime._selectedPositions.Length != 1 || _runtime._selectedPositions[0] != layer.Snapshot.Position))
                     await _navigationController.SelectLayerAsync(layer, false, token);
                 if (token.IsCancellationRequested || ActiveHistory != next || next.SelectedNode != node || _runtime._activeGroup != group)
@@ -47,24 +91,23 @@ public sealed partial class MainViewModel
             foreach (var section in Sections.ToArray())
                 await RefreshFileReviewStatusesAsync(section);
         };
-        var selected = _runtime._selectedPositions.FirstOrDefault();
-        if (selected < next.Nodes.Count)
-        {
-            next.SelectedNode = next.Nodes[selected];
-            await next.LoadCurrentDiffAsync(filePath);
-        }
     }
     [RelayCommand]
     private void CloseHistory()
     {
+        _historyOpen?.Cancel();
+        _historyOpen = null;
         ActiveHistory?.Dispose();
         ActiveHistory = null;
+        IsHistoryOpen = false;
+        IsHistoryLoading = false;
+        HistoryError = "";
     }
     private async Task SynchronizeHistoryAsync()
     {
-        if (ActiveHistory is not { } history || _historySelectionsInProgress > 0)
+        if (!IsHistoryOpen || _historySelectionsInProgress > 0)
             return;
-        if (_historyGroup != _runtime._activeGroup?.Definition.Id)
+        if (ActiveHistory is not { } history || !ReferenceEquals(_historyGroup, _runtime._activeGroup))
         {
             await ShowHistoryAsync();
             return;
@@ -77,93 +120,31 @@ public sealed partial class MainViewModel
     }
     public async Task<HistoryWorkspaceViewModel?> OpenHistoryAsync(CancellationToken ct = default)
     {
-        if (_runtime.HistoryStore is null || _runtime.HistoryObjects is null || _runtime.HistoryGraph is null || _runtime.HistoryComparisons is null || _runtime.HistoryProgress is null)
-        {
-            Error = "Review history is unavailable in this session.";
-            return null;
-        }
-        var group = _runtime._activeGroup;
-        var repo = _runtime._repository;
-        if (group is null || repo is null)
-        {
-            Error = "Select a stack or pull request first.";
-            return null;
-        }
-        if (HasPendingChanges)
-        {
-            Error = "Apply Update changes before opening review history.";
-            return null;
-        }
-        IsBusy = true;
+        HistoryWorkspaceViewModel? view = null;
         try
         {
-            var graph = group.IsRemote && _runtime._remoteSnapshot is not null
-                ? await _runtime.HistoryGraph.ObserveRemoteAsync(_runtime._remoteSnapshot, GitHubPreferences.BoundaryBranches ?? [], ct)
-                : await _runtime.HistoryGraph.ObserveLocalAsync(repo, _runtime._document?.Stacks ?? [], ct);
-            if (group.IsRemote)
-                await PrepareRemoteAsync(group, DiffMode.MultiLayer, Enumerable.Range(0, group.Layers.Count).ToArray(), ct);
-            var repository = repo.Identity ?? throw new StackerException("Repository identity is unavailable.");
-            var path = new List<(ChangeNode Node, ChangeVersion Version)>();
-            for (var i = 0; i < group.Layers.Count; i++)
-            {
-                ct.ThrowIfCancellationRequested();
-                var layer = group.Layers[i];
-                var pr = group.IsRemote ? group.PullRequests[i] : null;
-                var node = graph.Nodes.Single(n => pr is null ? n.Reference == layer.Snapshot.Branch : n.PullRequest == pr.Number);
-                var head = pr?.HeadSha ?? layer.Snapshot.HeadSha;
-                var basis = pr?.BaseSha ?? layer.Snapshot.ParentSha;
-                if (head is null || basis is null)
-                    throw new StackerException("A layer ref is missing; refresh its definition first.");
-                (await _runtime.HistoryObjects.CaptureAsync(repository, graph.Scope, [basis, head], ct)).OrThrow();
-                var bases = (await _runtime._git.MergeBasesAsync(repository.Root, basis, head, ct)).OrThrow();
-                var version = (await _runtime.HistoryStore.ObserveAsync(new("", node.Id, basis, head, bases.Count == 1 ? bases[0] : null, DateTimeOffset.UtcNow), ct)).OrThrow();
-                if (version.MergeBase is null)
-                    throw new StackerException("Layer has no unique merge-base. Its metadata was saved; code comparison is unavailable.");
-                path.Add((node, version));
-            }
-            if (path.Count == 0)
-                throw new StackerException("The stack has no layers.");
-            var context = _runtime._remoteSnapshot?.Context;
-            var demo = IsDemo;
-            var view = new HistoryWorkspaceViewModel(_runtime.HistoryStore, _runtime.HistoryObjects, _runtime._git, _runtime.HistoryComparisons, _runtime.HistoryProgress,
-                graph with
-                {
-                    Versions = graph.Versions.Concat(path.Select(p => new KeyValuePair<string, string>(p.Node.Id, p.Version.Id))).GroupBy(p => p.Key).ToDictionary(g => g.Key, g => g.Last().Value)
-                }, repository, path, group.IsRemote ? async (node, version, token) =>
-                {
-                    var pr = group.PullRequests.Single(p => p.Number == node.PullRequest) with
-                    {
-                        BaseSha = version.BaseSha,
-                        HeadSha = version.HeadSha
-                    };
-                    return demo ? DemoReviewData.Discussion(pr) : _runtime._github is null || context is null ? null : (await _runtime._github.DiscussionAsync(context, pr, token)).OrThrow();
-                }
-            : null, _runtime._highlighter, Settings.Theme)
-            {
-                WrapCode = Settings.WrapCode
-            };
-            view.ContentLease = (await _runtime.HistoryObjects.AcquireAsync(repository, graph.Scope, ct)).OrThrow();
-            try
-            {
-                await view.InitializeAsync();
-                return view;
-            }
-            catch { view.Dispose(); throw; }
+            view = await CreateHistoryAsync(ct);
+            using var cancellation = ct.Register(view.CancelLoads);
+            await view.InitializeAsync();
+            ct.ThrowIfCancellationRequested();
+            return view;
         }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex) { Error = ex.Message; return null; }
-        finally { IsBusy = false; }
+        catch (OperationCanceledException) { view?.Dispose(); throw; }
+        catch (Exception ex) { view?.Dispose(); Error = ex.Message; return null; }
     }
     public async Task CaptureHistorySectionAsync(DiffSectionViewModel section, CancellationToken ct)
     {
-        if (_runtime.HistoryStore is null || _runtime.HistoryObjects is null || _runtime._repository is null)
+        if (_runtime.HistoryStore is null || _runtime.HistoryObjects is null || _runtime._repository is not { } repo)
             return;
         var remote = section.IsPrSnapshot && section.AssociatedPr is not null && section.GitHubContext is not null;
-        var scope = remote ? section.GitHubContext!.Identity : _runtime._repository.Scope;
+        if (!remote && _runtime._document is { } document)
+            await _runtime.ObserveLocalHistoryAsync(repo, document, ct, _runtime._activeGroup is { UsesGhStack: true } group ? group.Definition : null);
+        ct.ThrowIfCancellationRequested();
+        var scope = remote ? section.GitHubContext!.Identity : repo.Scope;
         var node = (await _runtime.HistoryStore.ResolveNodeAsync(scope, remote ? section.AssociatedPr!.HeadRef : section.Result.Layer, remote ? section.AssociatedPr!.Title : section.Title,
             remote ? section.AssociatedPr!.Number : null, ct)).OrThrow();
-        var declaredBase = remote ? section.AssociatedPr!.BaseSha : _runtime._repository.Refs.FirstOrDefault(r => r.Name == section.Result.ParentRef)?.Sha ?? section.Result.BaseSha;
-        (await _runtime.HistoryObjects.CaptureAsync(_runtime._repository.Identity!, scope, [declaredBase, section.Result.HeadSha], ct)).OrThrow();
+        var declaredBase = remote ? section.AssociatedPr!.BaseSha : repo.Refs.FirstOrDefault(r => r.Name == section.Result.ParentRef)?.Sha ?? section.Result.BaseSha;
+        (await _runtime.HistoryObjects.CaptureAsync(repo.Identity!, scope, [declaredBase, section.Result.HeadSha], ct)).OrThrow();
         section.ReviewVersion = (await _runtime.HistoryStore.ObserveAsync(new("", node.Id, declaredBase, section.Result.HeadSha, section.Result.BaseSha, DateTimeOffset.UtcNow), ct)).OrThrow();
         section.ReviewScope = scope;
         try
@@ -215,7 +196,7 @@ public sealed partial class MainViewModel
     {
         if (_runtime.HistoryGraph is null || _runtime._repository is null)
             return;
-        await _runtime.HistoryGraph.ObserveLocalAsync(_runtime._repository, _runtime._document?.Stacks ?? [], ct);
+        await _runtime.ObserveLocalHistoryAsync(_runtime._repository, _runtime._document ?? new([], null), ct);
         if (_runtime._remoteSnapshot is not null)
             await _runtime.HistoryGraph.ObserveRemoteAsync(_runtime._remoteSnapshot, GitHubPreferences.BoundaryBranches ?? [], ct);
     }

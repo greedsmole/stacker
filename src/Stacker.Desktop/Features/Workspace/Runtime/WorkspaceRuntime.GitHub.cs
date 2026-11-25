@@ -20,4 +20,5 @@ internal sealed partial class WorkspaceRuntime
         get => Session.Displayed.Remote; set => Session.SetRemote(value, _historyRemoteGraph);
     }
     internal CancellationTokenSource? _githubLoad = default!;
+    internal string[] _historyRemoteBoundaries = [];
 }

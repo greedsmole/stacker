@@ -295,7 +295,7 @@ public sealed class UiReviewTests
         var head = await fixture.Git("rev-parse", "HEAD");
         var files = await fixture.Reader.FilesAsync(fixture.Root, basis, head);
         using var section = new DiffSectionViewModel(fixture.Reader, fixture.Root, new("head", "base", basis, head, null, files));
-        await Until(() => !section.IsBusy && section.Lines.Count > 0);
+        await Until(() => section.Lines.Count > 0 && section.ShowFullFileAction);
 
         var view = new DiffSectionView { DataContext = section, ShowFileNavigator = false };
         var window = new Window { Content = view, Width = 480, Height = 420 };
@@ -928,8 +928,14 @@ public sealed class UiReviewTests
             Capture(window, theme, "worktree-unstaged");
             var stage = tree.FindControl<Button>("ChangeIndexButton")!;
             Assert.True(stage.Focus());
+            var log = services.GetRequiredService<IGitDiagnosticLog>();
+            var beforeStage = log.Snapshot().Select(entry => entry.Id).ToHashSet();
             Press(window, Key.Space);
             await Until(() => !vm.IsSyncing && editor.StagedLabel == "Staged (1)");
+            var stageCommands = log.Snapshot().Where(entry => !beforeStage.Contains(entry.Id)).ToArray();
+            var stageIndex = Array.FindIndex(stageCommands, entry => entry.Command.Contains(" add -A ", StringComparison.Ordinal));
+            Assert.True(stageIndex >= 0);
+            Assert.Single(stageCommands.Skip(stageIndex + 1), entry => entry.Command.Contains(" --porcelain=v2", StringComparison.Ordinal));
             ClickAt(window, tree.FindControl<ToggleButton>("StagedButton")!);
             await Until(() => editor.ShowStaged && editor.Lines.Any(line => line.IsAdded));
             ClickAt(window, stage);

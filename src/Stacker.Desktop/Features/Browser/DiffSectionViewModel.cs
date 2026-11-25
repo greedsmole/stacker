@@ -65,6 +65,7 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
         get; set;
     }
     internal bool IsActiveFileSection { get; set; }
+    internal bool DeferFileLoad { get; set; }
     internal Task SelectedFileLoad { get; private set; } = Task.CompletedTask;
     private readonly Dictionary<FileChange, DiffFileRow> _fileRows;
     internal IEnumerable<DiffFileRow> AllFileRows => _fileRows.Values;
@@ -179,7 +180,18 @@ public sealed partial class DiffSectionViewModel : ObservableObject, IDisposable
             return;
         UpdateFolderSelection();
         ScrollX = ScrollY = 0;
-        SelectedFileLoad = LoadAsync(value);
+        if (!DeferFileLoad)
+            SelectedFileLoad = LoadAsync(value);
+    }
+    internal void StartFileLoad()
+    {
+        if (!DeferFileLoad)
+            return;
+        DeferFileLoad = false;
+        if (SelectedFile is { } selected)
+            SelectedFileLoad = LoadAsync(selected);
+        else
+            SelectedFile = Files.FirstOrDefault() ?? Result.Files.FirstOrDefault();
     }
     public void SetThreads(IEnumerable<ReviewThread> threads)
     {

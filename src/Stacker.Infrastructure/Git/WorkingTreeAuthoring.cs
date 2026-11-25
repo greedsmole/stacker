@@ -13,11 +13,10 @@ public sealed partial class WorkingTreeAuthoring(IProcessRunner processes, GitEx
 
     private async Task<WorkingTreeSnapshot> ReadSnapshotAsync(string root, CancellationToken ct)
     {
-        var head = await _git.ShaAsync(root, "HEAD", ct);
-        var state = await _git.StatusAsync(root, ct, allUntracked: true);
+        var (head, state, gitDirectory) = await _git.ReadStatusAsync(root, ct, allUntracked: true);
         var index = await _git.Run(root, ["--no-optional-locks", "diff", "--cached", "--raw", "--no-abbrev", "--no-renames",
             "--no-ext-diff", "--no-textconv", "-z", "--"], ct);
-        if (head != await _git.ShaAsync(root, "HEAD", ct))
+        if (head != await _git.ShaAsync(root, "HEAD", ct) || state.Branch != await _git.CheckoutBranchAsync(root, gitDirectory, ct))
             throw new StackerException("The checkout changed while reading the working tree. Refresh and try again.");
         return new(root, head, state, StableIdentity.For(index.StdOut));
     }
@@ -77,8 +76,8 @@ public sealed partial class WorkingTreeAuthoring(IProcessRunner processes, GitEx
     {
         if (files.Count == 0)
             throw new StackerException(Reject("Select at least one file."));
-        var entries = snapshot.State.Entries.ToHashSet();
-        if (files.Any(file => file.Side != side || !file.IsAvailable || !entries.Contains(file.Entry) ||
+        var entries = files.Count == 1 ? null : snapshot.State.Entries.ToHashSet();
+        if (files.Any(file => file.Side != side || !file.IsAvailable || !(entries?.Contains(file.Entry) ?? snapshot.State.Entries.Contains(file.Entry)) ||
             !IsRelativeGitPath(file.Path) || !IsRelativeGitPath(file.OldPath) || (file.Status is 'R' or 'C' && file.OldPath == file.Path)))
             throw new StackerException(Reject("A selected file changed. Refresh the working tree and try again."));
     }

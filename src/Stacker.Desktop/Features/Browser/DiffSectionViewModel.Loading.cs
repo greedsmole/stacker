@@ -7,6 +7,7 @@ namespace Stacker.Desktop.ViewModels;
 
 public sealed partial class DiffSectionViewModel
 {
+    internal Task PatchReady { get; private set; } = Task.CompletedTask;
     /// <summary>Loads one file's patch on demand and cancels any request for the previously selected file.</summary>
     /// <remarks>Results are applied only while this request remains current, preventing stale selections from flashing.</remarks>
     public async Task LoadAsync(FileChange? file)
@@ -14,8 +15,11 @@ public sealed partial class DiffSectionViewModel
         _load?.Cancel();
         var load = new CancellationTokenSource();
         _load = load;
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        PatchReady = ready.Task;
         ResetContext();
         Lines.Clear();
+        FileThreads.Clear();
         Patch = "";
         HasLoadError = false;
         IsBusy = file is not null;
@@ -30,9 +34,6 @@ public sealed partial class DiffSectionViewModel
             Patch = diff.Patch;
             var readContext = _git is IBlobReader && DiffContext.CanRead(file);
             var highlight = _highlighter is not null && !file.IsBinary && !file.IsSubmodule;
-            var head = readContext || (highlight && diff.Hunks.Any(hunk => hunk.NewCount > 0))
-                ? await ReadSourceBlobAsync(Result.HeadSha, file.NewPath, load.Token)
-                : null;
             var wrapping = WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap;
             var prepared = await Task.Run(() =>
             {
@@ -48,8 +49,7 @@ public sealed partial class DiffSectionViewModel
                         TextWrapping = wrapping
                     };
                 }
-                var context = readContext && head is not null ? DiffContext.Create(diff, presentation, head.Text, load.Token) : null;
-                return (presentation, rows, context);
+                return (presentation, rows);
             }, load.Token);
             if (load.IsCancellationRequested || _disposed)
                 return;
@@ -57,16 +57,34 @@ public sealed partial class DiffSectionViewModel
             if (wrapping != (WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap))
                 foreach (var row in prepared.rows)
                     row.TextWrapping = WrapCode ? TextWrapping.Wrap : TextWrapping.NoWrap;
-            SetContext(prepared.context, prepared.rows, readContext && head is null);
+            Lines.ReplaceAll(prepared.rows);
             Message = Lines.Count == 0 ? view.EmptyReason : "";
             IsBusy = false;
-            ApplyThreads();
+            if (Threads.Count > 0 || Review?.DraftComments.Count > 0)
+                ApplyThreads();
+            ready.TrySetResult();
+
+            var head = readContext || (highlight && diff.Hunks.Any(hunk => hunk.NewCount > 0))
+                ? await ReadSourceBlobAsync(Result.HeadSha, file.NewPath, load.Token)
+                : null;
+            if (readContext)
+            {
+                var context = head is null ? null
+                    : await Task.Run(() => DiffContext.Create(diff, view, head.Text, load.Token), load.Token);
+                load.Token.ThrowIfCancellationRequested();
+                SetContext(context, prepared.rows, head is null);
+            }
             if (highlight)
                 await HighlightAsync(file, head, load.Token);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { if (!load.IsCancellationRequested && !_disposed) { HasLoadError = true; Message = ex.Message; } }
-        finally { if (ReferenceEquals(_load, load)) { _load = null; IsBusy = false; } load.Dispose(); }
+        finally
+        {
+            if (ReferenceEquals(_load, load)) { _load = null; IsBusy = false; }
+            ready.TrySetResult();
+            load.Dispose();
+        }
     }
     // Old and new blobs are tokenized separately so multiline grammar state follows each side's actual source text.
     private async Task HighlightAsync(FileChange file, BlobContent? head, CancellationToken ct)

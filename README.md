@@ -1,4 +1,4 @@
-# Stacker v0.11.0
+# Stacker v0.11.1
 
 A local stacked-branch and GitHub PR review app built with C#, .NET 10 and Avalonia. Release packages cover **macOS Apple Silicon, macOS Intel, and Windows x64**.
 
@@ -14,9 +14,9 @@ dotnet run --project src/Stacker.Desktop -- --demo
 dotnet run --project src/Stacker.Desktop -- /path/to/repository
 ```
 
-Build a package for your computer with `make publish`, or choose a target with `make publish RID=win-x64`. The direct Python command `python3 scripts/package.py osx-arm64` writes `artifacts/Stacker-0.11.0-osx-arm64.tar.gz`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe` with its adjacent files. The packages include .NET. Install Git and the optional GitHub CLI separately. The macOS app bundles ship without Developer ID signing or notarization.
+Build a package for your computer with `make publish`, or choose a target with `make publish RID=win-x64`. The direct Python command `python3 scripts/package.py osx-arm64` writes `artifacts/Stacker-0.11.1-osx-arm64.tar.gz`. On Windows, extract the whole ZIP and run `Stacker/Stacker.exe` with its adjacent files. The packages include .NET. Install Git and the optional GitHub CLI separately. The macOS app bundles ship without Developer ID signing or notarization.
 
-Download the packages from [the v0.11.0 release](https://github.com/greedsmole/stacker/releases/tag/v0.11.0). See the [release notes](docs/releases/v0.11.0.md) for changes and package details.
+Download the packages from [the v0.11.1 release](https://github.com/greedsmole/stacker/releases/tag/v0.11.1). See the [release notes](docs/releases/v0.11.1.md) for changes and package details.
 
 ## Navigation and comparisons
 

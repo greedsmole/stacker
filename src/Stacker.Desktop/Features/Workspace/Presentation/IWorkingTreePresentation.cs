@@ -35,6 +35,7 @@ internal interface IWorkingTreePresentation
         get;
     }
     global::System.Threading.Tasks.Task ReloadAsync();
+    Task<(bool Ok, string Message)> RefreshWorkingTreeAsync(CancellationToken ct = default);
     global::System.Threading.Tasks.Task<global::Stacker.Core.RestackOutcome?> RestackAsync(global::Stacker.Core.RestackPlan @plan, global::System.IProgress<global::System.String>? @progress = null);
     global::System.Collections.Generic.IReadOnlyList<global::Stacker.Core.Framework.SavedStash> SavedStashes
     {

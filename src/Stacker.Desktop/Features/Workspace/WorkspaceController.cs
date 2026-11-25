@@ -68,7 +68,7 @@ internal sealed partial class WorkspaceController(IWorkspaceActionsPresentation 
             if (runtime._pendingRemote is { } snapshot)
             {
                 var graph = runtime.Session.Pending?.Graph;
-                if (runtime.HistoryGraph is not null)
+                if (graph is null && runtime.HistoryGraph is not null)
                     graph = await runtime.HistoryGraph.ObserveRemoteAsync(snapshot, owner.GitHubPreferences.BoundaryBranches ?? [], default);
                 runtime.Session.Offer(snapshot, graph);
                 runtime.Session.ApplyPending();
@@ -99,10 +99,11 @@ internal sealed partial class WorkspaceController(IWorkspaceActionsPresentation 
         if (runtime._activeGroup is null)
             return;
         var activeKey = GroupKey(runtime._activeGroup);
-        var active = runtime._workspace.Stacks[activeKey];
+        if (!runtime._workspace.Stacks.TryGetValue(activeKey, out var active))
+            runtime._workspace.Stacks[activeKey] = active = new();
         runtime._workspace.ActiveGroup = activeKey;
         active.Revision++;
-        if (runtime._displayedStateKey is not null)
+        if (runtime._displayedStateKey is not null && runtime._displayedGroupKey == activeKey)
         {
             // Stored comparison views are a cache: keep the recent ones and the one on screen.
             var current = runtime._displayedStateKey;
@@ -116,25 +117,29 @@ internal sealed partial class WorkspaceController(IWorkspaceActionsPresentation 
         }
     }
 
-    public async Task SaveWorkspaceAsync()
+    public void QueueWorkspaceSave()
     {
-        if (runtime._repository is null)
+        if (runtime._disposed || runtime._repository is null)
             return;
         CaptureWorkspace();
         var root = runtime._repository.WorkspaceKey;
         var copy = runtime._workspacePersistence.Snapshot(root, runtime._workspace);
-        var previous = runtime._workspaceSave;
-        runtime._workspaceSave = SaveAsync();
-        await runtime._workspaceSave;
-        async Task SaveAsync()
-        {
-            await previous;
-            try
-            {
-                (await runtime._workspacePersistence.SaveAsync(root, copy)).OrThrow();
-            }
-            catch (Exception ex) { owner.Error = "Cannot save workspace: " + ex.Message; }
-        }
+        _ = ReportWorkspaceSaveAsync(root, runtime.QueueWorkspaceWrite(root, copy));
+    }
+
+    private async Task ReportWorkspaceSaveAsync(string root, Task save)
+    {
+        await save;
+        if (!runtime._disposed && runtime._repository?.WorkspaceKey == root && runtime.WorkspaceSaveProblemFor(root) is { } problem)
+            owner.Error = "Cannot save workspace: " + problem.Message;
+    }
+
+    public async Task SaveWorkspaceAsync()
+    {
+        QueueWorkspaceSave();
+        await runtime.FlushWorkspaceWritesAsync();
+        if (runtime.WorkspaceSaveProblem is { } problem)
+            owner.Error = "Cannot save workspace: " + problem.Message;
     }
 
     public void RestoreSections()
@@ -145,6 +150,7 @@ internal sealed partial class WorkspaceController(IWorkspaceActionsPresentation 
         if (!runtime._workspace.Stacks.TryGetValue(key, out var state))
             runtime._workspace.Stacks[key] = state = new();
         runtime._displayedStateKey = ViewKey();
+        runtime._displayedGroupKey = key;
         state.Mode = owner.Mode;
         state.Revision++;
         state.Branches = runtime._activeGroup.Layers.Where(l => runtime._selectedPositions.Contains(l.Snapshot.Position)).Select(l => l.Snapshot.Branch).ToArray();
@@ -163,7 +169,7 @@ internal sealed partial class WorkspaceController(IWorkspaceActionsPresentation 
 
     public async Task SelectOverviewAsync(StackGroupViewModel group)
     {
-        await SaveWorkspaceAsync();
+        QueueWorkspaceSave();
         owner.SetActiveGroup(group);
         runtime._selectedPositions = [];
         runtime._suppress = true;
@@ -182,7 +188,7 @@ internal sealed partial class WorkspaceController(IWorkspaceActionsPresentation 
             await SaveWorkspaceAsync().WaitAsync(TimeSpan.FromSeconds(5));
         }
         catch (Exception ex) { problems.Add("Workspace: " + ex.Message); }
-        if (runtime._workspacePersistence.LastProblem is { } workspaceError)
+        if (runtime.WorkspaceSaveProblem is { } workspaceError)
             problems.Add("Workspace: " + workspaceError.Message);
         foreach (var review in runtime._reviews.Values.ToArray())
         {

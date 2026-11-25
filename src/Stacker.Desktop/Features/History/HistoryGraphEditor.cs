@@ -24,6 +24,7 @@ public sealed partial class HistoryWorkspaceViewModel
         await ExecuteAsync(async () =>
         {
             (await _objects.ForgetContentsAsync(_repository, Graph.Scope, _lifetime.Token)).OrThrow();
+            _historyCodeRemoved = true;
             _confirmForget = false;
             _current = null;
             Files.Clear();
@@ -54,6 +55,7 @@ public sealed partial class HistoryWorkspaceViewModel
             };
             (await _store.SaveGraphAsync(next, _lifetime.Token)).OrThrow();
             Graph = (await _store.LatestGraphAsync(Graph.Scope, _lifetime.Token)).OrThrow()!;
+            GraphEdited?.Invoke();
             OnPropertyChanged(nameof(Topology));
             Message = "Explicit parent saved. Reopen history to capture the updated graph. Stack definitions were not rewritten.";
         });
@@ -79,6 +81,7 @@ public sealed partial class HistoryWorkspaceViewModel
         await ExecuteAsync(async () =>
         {
             (await _store.RebindLocalNodeAsync(node, NewLocalRef.Trim(), _lifetime.Token)).OrThrow();
+            GraphEdited?.Invoke();
             Message = "History identity rebound. Update the local stack definition and reopen history to use this ref.";
         });
     }
@@ -92,7 +95,8 @@ public sealed partial class HistoryWorkspaceViewModel
         }
         await ExecuteAsync(async () =>
         {
-            var evolution = await new FileEvolutionService(_git).BuildAsync(_root, _path, selected.Change.NewPath, _lifetime.Token);
+            var path = await MaterializePathAsync(_lifetime.Token);
+            var evolution = await new FileEvolutionService(_git).BuildAsync(_root, path, selected.Change.NewPath, _lifetime.Token);
             var origin = await new FileEvolutionService(_git).TraceLineAsync(_root, evolution, line, _lifetime.Token);
             Message = origin;
             Preview = origin;

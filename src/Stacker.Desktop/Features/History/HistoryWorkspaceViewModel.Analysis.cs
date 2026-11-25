@@ -10,6 +10,7 @@ public sealed partial class HistoryWorkspaceViewModel
     private async Task AnalyzeAsync() => await ExecuteAsync(async () =>
     {
         ClearDocument();
+        await MaterializePathAsync(_lifetime.Token);
         var result = await new StackAnalysisService(_store, _objects, _git).AnalyzeAsync(_repository, Graph, _lifetime.Token);
         Preview = string.Join("\n\n", result.Issues.Select(i => $"{Graph.Nodes.First(n => n.Id == i.ChangeId).Title} · {i.Kind}\n{i.Message}\n{string.Join("\n", i.Paths)}"));
         Message = result.Issues.Count == 0 ? "No issues found in the captured edges. This does not prove semantic correctness." : $"{result.Issues.Count} observations for this graph snapshot.";
@@ -19,7 +20,7 @@ public sealed partial class HistoryWorkspaceViewModel
     {
         ClearDocument();
         Attention.Clear();
-        foreach (var (node, version) in _path.DistinctBy(p => p.Node.Id))
+        foreach (var (node, version) in (await MaterializePathAsync(_lifetime.Token)).DistinctBy(p => p.Node.Id))
         {
             var files = (await _git.FilesAsync(_root, version.MergeBase!, version.HeadSha, _lifetime.Token)).OrThrow();
             var statuses = await _progress.StatusAsync(_repository, Graph.Scope, version, files, _lifetime.Token);
@@ -39,7 +40,8 @@ public sealed partial class HistoryWorkspaceViewModel
         var generation = _generation;
         await ExecuteAsync(async () =>
         {
-            var evolution = await new FileEvolutionService(_git).BuildAsync(_root, _path, selected.Change.NewPath, _lifetime.Token);
+            var path = await MaterializePathAsync(_lifetime.Token);
+            var evolution = await new FileEvolutionService(_git).BuildAsync(_root, path, selected.Change.NewPath, _lifetime.Token);
             var text = new System.Text.StringBuilder();
             var sections = new List<DiffDocumentSection>();
             foreach (var step in evolution.Steps)

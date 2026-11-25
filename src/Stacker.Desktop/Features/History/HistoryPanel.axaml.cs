@@ -66,14 +66,14 @@ public sealed partial class HistoryPanel : UserControl
 
     private void SelectHistoryFile(FileNavigationItem item)
     {
-        if (DataContext is not HistoryWorkspaceViewModel { IsBusy: false } history)
+        if (DataContext is not HistoryWorkspaceViewModel history)
             return;
         switch (item.Target)
         {
             case HistoryDocumentFile document when history.DocumentFiles.Contains(document):
                 history.SelectedDocumentFile = document;
                 break;
-            case FileReviewStatus layer when history.Files.Contains(layer):
+            case FileReviewStatus layer when !history.IsBusy && history.Files.Contains(layer):
                 history.SelectedFile = layer;
                 break;
         }

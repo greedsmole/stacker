@@ -99,6 +99,7 @@ internal sealed partial class NavigationController
         runtime._comparison?.Cancel();
         runtime._githubLoad?.Cancel();
         runtime._coordinator?.Dispose();
+        runtime.StopWorkspaceWrites();
         owner.DisposeReviewSessions();
         DisposeViews();
     }
